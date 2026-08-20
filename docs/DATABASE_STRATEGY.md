@@ -24,3 +24,17 @@ Schema extraction should discover:
 - Relationships
 
 Future large-database support may use schema retrieval instead of sending every table to the model.
+
+## Untrusted Database Uploads
+Uploaded databases will eventually be treated as untrusted input. Future database handling should consider and implement:
+- file size limits
+- file type validation
+- SQLite integrity checks
+- isolated storage
+- read-only access
+- cleanup of temporary files
+- query execution limits
+- result size limits
+- database lifecycle management
+
+*(Note: Do not implement these features now.)*

@@ -1,5 +1,22 @@
 # Development Plan
 
+## Phase Lifecycle (Quality Gates)
+For EVERY future phase, establish the following mandatory lifecycle. A phase is NOT complete merely because code was generated. A phase is complete only when its acceptance criteria and tests pass.
+
+1. Implement
+2. Self-review
+3. Run automated tests
+4. Run manual verification where applicable
+5. Inspect logs/errors
+6. Fix issues
+7. Review Git diff
+8. Commit
+9. Push
+10. Verify GitHub state
+11. Phase PASS
+12. Only then begin the next phase
+
+## Planned Phases
 - **Phase 0:** Product definition and architecture
 - **Phase 1:** Development environment and application foundation
 - **Phase 2:** Realistic demo database
