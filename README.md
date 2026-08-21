@@ -45,7 +45,7 @@ npm run dev
 ```
 Frontend runs at: `http://localhost:5173`
 
-Testing and Linting:
+Testing and Linting (Oxlint):
 ```bash
 cd frontend
 npm run test
