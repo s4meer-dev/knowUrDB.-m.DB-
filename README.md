@@ -2,7 +2,7 @@
 
 **Tagline:** Natural Language Database Intelligence Platform
 
-**Current status:** Phase 0 — Architecture Foundation
+**Current status**: Phase 1 — Full-Stack Development Foundation
 
 ## Problem
 Users often have databases but need SQL knowledge to extract information.
@@ -10,7 +10,48 @@ Users often have databases but need SQL knowledge to extract information.
 ## Solution
 knowUrDB is planned to allow users to interact with databases using natural language. It is designed to safely translate questions into SQL, run queries securely, and explain the results.
 
-*(Note: Text-to-SQL functionality, database upload, and Gemini integration are planned features and do not yet exist.)*
+## Development Setup
+
+### Prerequisites
+- Node.js (v20+)
+- Python (v3.12+)
+
+### Backend
+Start the FastAPI server:
+```bash
+cd backend
+python -m venv venv
+.\venv\Scripts\Activate  # Windows
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+API runs at: `http://127.0.0.1:8000`
+Health Endpoint: `GET /api/health`
+Swagger UI: `http://127.0.0.1:8000/docs`
+
+Testing and Linting:
+```bash
+cd backend
+pytest -v
+ruff check .
+```
+
+### Frontend
+Start the React/Vite development server:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Frontend runs at: `http://localhost:5173`
+
+Testing and Linting:
+```bash
+cd frontend
+npm run test
+npm run lint
+npm run build
+```
 
 ## Architecture Overview
 - **Frontend**: React, Vite, Tailwind CSS, Recharts (Planned)
