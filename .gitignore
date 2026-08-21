@@ -21,3 +21,4 @@ build/
 *.sqlite
 *.sqlite3
 *.db
+!database/demo/knowurdb_demo.db

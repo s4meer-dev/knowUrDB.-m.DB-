@@ -3,15 +3,12 @@
 ## Initial Database
 SQLite.
 
-## Demo Database
-A realistic multi-table database will be created in a future phase. It should support:
-- Joins
-- Aggregations
-- Filtering
-- Sorting
-- Date queries
-- Foreign keys
-- Analytical queries
+## Demo Database (Phase 2 Completed)
+A completely deterministic, realistic, SQLite-based benchmark database has been implemented for evaluating the knowUrDB Text-to-SQL engine.
+See `DATABASE_DEMO.md` for full schema details, scaling information, and the benchmark dataset configuration.
+
+**Key Distinction:** 
+The demo database is *trusted, project-controlled data*. Future user-uploaded databases must still be treated as *untrusted input* subject to the constraints outlined below.
 
 ## Future Schema Intelligence
 Schema extraction should discover:

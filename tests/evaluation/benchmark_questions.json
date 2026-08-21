@@ -1,0 +1,710 @@
+[
+  {
+    "id": "Q001",
+    "difficulty": "easy",
+    "question": "How many students are in the database?",
+    "expected_sql": "SELECT COUNT(*) FROM students;",
+    "tables_used": [
+      "students"
+    ],
+    "concepts": [
+      "COUNT"
+    ]
+  },
+  {
+    "id": "Q002",
+    "difficulty": "easy",
+    "question": "How many departments exist?",
+    "expected_sql": "SELECT COUNT(*) FROM departments;",
+    "tables_used": [
+      "departments"
+    ],
+    "concepts": [
+      "COUNT"
+    ]
+  },
+  {
+    "id": "Q003",
+    "difficulty": "easy",
+    "question": "List the names of all departments.",
+    "expected_sql": "SELECT name FROM departments;",
+    "tables_used": [
+      "departments"
+    ],
+    "concepts": [
+      "SELECT"
+    ]
+  },
+  {
+    "id": "Q004",
+    "difficulty": "easy",
+    "question": "Find the student with student_id 1.",
+    "expected_sql": "SELECT * FROM students WHERE student_id = 1;",
+    "tables_used": [
+      "students"
+    ],
+    "concepts": [
+      "WHERE"
+    ]
+  },
+  {
+    "id": "Q005",
+    "difficulty": "easy",
+    "question": "How many students have the last name 'Smith'?",
+    "expected_sql": "SELECT COUNT(*) FROM students WHERE last_name = 'Smith';",
+    "tables_used": [
+      "students"
+    ],
+    "concepts": [
+      "COUNT",
+      "WHERE"
+    ]
+  },
+  {
+    "id": "Q006",
+    "difficulty": "easy",
+    "question": "Find the course with code 'CS101' if it exists, otherwise any 100 level course.",
+    "expected_sql": "SELECT name FROM courses WHERE course_code = 'CS101' OR course_code LIKE '%100%';",
+    "tables_used": [
+      "courses"
+    ],
+    "concepts": [
+      "WHERE",
+      "LIKE"
+    ]
+  },
+  {
+    "id": "Q007",
+    "difficulty": "easy",
+    "question": "How many instructors are there?",
+    "expected_sql": "SELECT COUNT(*) FROM instructors;",
+    "tables_used": [
+      "instructors"
+    ],
+    "concepts": [
+      "COUNT"
+    ]
+  },
+  {
+    "id": "Q008",
+    "difficulty": "easy",
+    "question": "List all instructors with the title 'Professor'.",
+    "expected_sql": "SELECT first_name, last_name FROM instructors WHERE title = 'Professor';",
+    "tables_used": [
+      "instructors"
+    ],
+    "concepts": [
+      "WHERE"
+    ]
+  },
+  {
+    "id": "Q009",
+    "difficulty": "easy",
+    "question": "Find instructors hired after 2010.",
+    "expected_sql": "SELECT first_name, last_name FROM instructors WHERE hire_year > 2010;",
+    "tables_used": [
+      "instructors"
+    ],
+    "concepts": [
+      "WHERE"
+    ]
+  },
+  {
+    "id": "Q010",
+    "difficulty": "easy",
+    "question": "List all courses that are worth 4 credits.",
+    "expected_sql": "SELECT name FROM courses WHERE credits = 4;",
+    "tables_used": [
+      "courses"
+    ],
+    "concepts": [
+      "WHERE"
+    ]
+  },
+  {
+    "id": "Q011",
+    "difficulty": "easy",
+    "question": "What is the total sum of all scholarship amounts awarded?",
+    "expected_sql": "SELECT SUM(amount) FROM scholarships;",
+    "tables_used": [
+      "scholarships"
+    ],
+    "concepts": [
+      "SUM"
+    ]
+  },
+  {
+    "id": "Q012",
+    "difficulty": "easy",
+    "question": "What is the average attendance percentage across all records?",
+    "expected_sql": "SELECT AVG(attendance_percentage) FROM attendance;",
+    "tables_used": [
+      "attendance"
+    ],
+    "concepts": [
+      "AVG"
+    ]
+  },
+  {
+    "id": "Q013",
+    "difficulty": "easy",
+    "question": "What is the maximum score achieved in any assessment?",
+    "expected_sql": "SELECT MAX(score) FROM marks;",
+    "tables_used": [
+      "marks"
+    ],
+    "concepts": [
+      "MAX"
+    ]
+  },
+  {
+    "id": "Q014",
+    "difficulty": "easy",
+    "question": "What is the minimum score achieved in any assessment?",
+    "expected_sql": "SELECT MIN(score) FROM marks;",
+    "tables_used": [
+      "marks"
+    ],
+    "concepts": [
+      "MIN"
+    ]
+  },
+  {
+    "id": "Q015",
+    "difficulty": "easy",
+    "question": "Find the email of the student with student_id 5.",
+    "expected_sql": "SELECT email FROM student_profiles WHERE student_id = 5;",
+    "tables_used": [
+      "student_profiles"
+    ],
+    "concepts": [
+      "WHERE"
+    ]
+  },
+  {
+    "id": "Q016",
+    "difficulty": "medium",
+    "question": "List student first names and their department names.",
+    "expected_sql": "SELECT s.first_name, d.name FROM students s JOIN departments d ON s.department_id = d.department_id;",
+    "tables_used": [
+      "students",
+      "departments"
+    ],
+    "concepts": [
+      "JOIN"
+    ]
+  },
+  {
+    "id": "Q017",
+    "difficulty": "medium",
+    "question": "List course names and their department names.",
+    "expected_sql": "SELECT c.name, d.name FROM courses c JOIN departments d ON c.department_id = d.department_id;",
+    "tables_used": [
+      "courses",
+      "departments"
+    ],
+    "concepts": [
+      "JOIN"
+    ]
+  },
+  {
+    "id": "Q018",
+    "difficulty": "medium",
+    "question": "Count the number of students in each department.",
+    "expected_sql": "SELECT department_id, COUNT(*) FROM students GROUP BY department_id;",
+    "tables_used": [
+      "students"
+    ],
+    "concepts": [
+      "GROUP BY",
+      "COUNT"
+    ]
+  },
+  {
+    "id": "Q019",
+    "difficulty": "medium",
+    "question": "What is the average score for each assessment name?",
+    "expected_sql": "SELECT assessment_name, AVG(score) FROM marks GROUP BY assessment_name;",
+    "tables_used": [
+      "marks"
+    ],
+    "concepts": [
+      "GROUP BY",
+      "AVG"
+    ]
+  },
+  {
+    "id": "Q020",
+    "difficulty": "medium",
+    "question": "What is the total scholarship amount per student?",
+    "expected_sql": "SELECT student_id, SUM(amount) FROM scholarships GROUP BY student_id;",
+    "tables_used": [
+      "scholarships"
+    ],
+    "concepts": [
+      "GROUP BY",
+      "SUM"
+    ]
+  },
+  {
+    "id": "Q021",
+    "difficulty": "medium",
+    "question": "List instructors and their department names.",
+    "expected_sql": "SELECT i.first_name, i.last_name, d.name FROM instructors i JOIN departments d ON i.department_id = d.department_id;",
+    "tables_used": [
+      "instructors",
+      "departments"
+    ],
+    "concepts": [
+      "JOIN"
+    ]
+  },
+  {
+    "id": "Q022",
+    "difficulty": "medium",
+    "question": "Count the number of courses offered by each department.",
+    "expected_sql": "SELECT department_id, COUNT(*) FROM courses GROUP BY department_id;",
+    "tables_used": [
+      "courses"
+    ],
+    "concepts": [
+      "GROUP BY",
+      "COUNT"
+    ]
+  },
+  {
+    "id": "Q023",
+    "difficulty": "medium",
+    "question": "List all students born after 2000, ordered by their date of birth.",
+    "expected_sql": "SELECT first_name, last_name, date_of_birth FROM students WHERE date_of_birth > '2000-12-31' ORDER BY date_of_birth;",
+    "tables_used": [
+      "students"
+    ],
+    "concepts": [
+      "WHERE",
+      "ORDER BY"
+    ]
+  },
+  {
+    "id": "Q024",
+    "difficulty": "medium",
+    "question": "Count the number of enrollments for each status.",
+    "expected_sql": "SELECT status, COUNT(*) FROM enrollments GROUP BY status;",
+    "tables_used": [
+      "enrollments"
+    ],
+    "concepts": [
+      "GROUP BY",
+      "COUNT"
+    ]
+  },
+  {
+    "id": "Q025",
+    "difficulty": "medium",
+    "question": "Find department IDs that have more than 100 students.",
+    "expected_sql": "SELECT department_id FROM students GROUP BY department_id HAVING COUNT(*) > 100;",
+    "tables_used": [
+      "students"
+    ],
+    "concepts": [
+      "GROUP BY",
+      "HAVING"
+    ]
+  },
+  {
+    "id": "Q026",
+    "difficulty": "medium",
+    "question": "Find the average course credits per department.",
+    "expected_sql": "SELECT department_id, AVG(credits) FROM courses GROUP BY department_id;",
+    "tables_used": [
+      "courses"
+    ],
+    "concepts": [
+      "GROUP BY",
+      "AVG"
+    ]
+  },
+  {
+    "id": "Q027",
+    "difficulty": "medium",
+    "question": "List instructors hired before 2005, ordered by hire year descending.",
+    "expected_sql": "SELECT first_name, last_name, hire_year FROM instructors WHERE hire_year < 2005 ORDER BY hire_year DESC;",
+    "tables_used": [
+      "instructors"
+    ],
+    "concepts": [
+      "WHERE",
+      "ORDER BY"
+    ]
+  },
+  {
+    "id": "Q028",
+    "difficulty": "medium",
+    "question": "Find courses with more than 3 credits in the 'Computer Science' department.",
+    "expected_sql": "SELECT c.name FROM courses c JOIN departments d ON c.department_id = d.department_id WHERE c.credits > 3 AND d.name = 'Computer Science';",
+    "tables_used": [
+      "courses",
+      "departments"
+    ],
+    "concepts": [
+      "JOIN",
+      "WHERE"
+    ]
+  },
+  {
+    "id": "Q029",
+    "difficulty": "medium",
+    "question": "List students who enrolled in the year 2021.",
+    "expected_sql": "SELECT first_name, last_name FROM students WHERE enrollment_year = 2021;",
+    "tables_used": [
+      "students"
+    ],
+    "concepts": [
+      "WHERE"
+    ]
+  },
+  {
+    "id": "Q030",
+    "difficulty": "medium",
+    "question": "Find the student ID with the highest single scholarship amount.",
+    "expected_sql": "SELECT student_id FROM scholarships ORDER BY amount DESC LIMIT 1;",
+    "tables_used": [
+      "scholarships"
+    ],
+    "concepts": [
+      "ORDER BY",
+      "LIMIT"
+    ]
+  },
+  {
+    "id": "Q031",
+    "difficulty": "hard",
+    "question": "List all course names a student with ID 10 has enrolled in.",
+    "expected_sql": "SELECT c.name FROM courses c JOIN course_offerings co ON c.course_id = co.course_id JOIN enrollments e ON co.offering_id = e.offering_id WHERE e.student_id = 10;",
+    "tables_used": [
+      "courses",
+      "course_offerings",
+      "enrollments"
+    ],
+    "concepts": [
+      "JOIN",
+      "WHERE"
+    ]
+  },
+  {
+    "id": "Q032",
+    "difficulty": "hard",
+    "question": "What is the average score for each course across all its offerings?",
+    "expected_sql": "SELECT c.name, AVG(m.score) FROM courses c JOIN course_offerings co ON c.course_id = co.course_id JOIN enrollments e ON co.offering_id = e.offering_id JOIN marks m ON e.enrollment_id = m.enrollment_id GROUP BY c.course_id, c.name;",
+    "tables_used": [
+      "courses",
+      "course_offerings",
+      "enrollments",
+      "marks"
+    ],
+    "concepts": [
+      "JOIN",
+      "GROUP BY",
+      "AVG"
+    ]
+  },
+  {
+    "id": "Q033",
+    "difficulty": "hard",
+    "question": "Which departments have an average student assessment score greater than 70?",
+    "expected_sql": "SELECT d.name FROM departments d JOIN students s ON d.department_id = s.department_id JOIN enrollments e ON s.student_id = e.student_id JOIN marks m ON e.enrollment_id = m.enrollment_id GROUP BY d.department_id, d.name HAVING AVG(m.score) > 70;",
+    "tables_used": [
+      "departments",
+      "students",
+      "enrollments",
+      "marks"
+    ],
+    "concepts": [
+      "JOIN",
+      "GROUP BY",
+      "HAVING",
+      "AVG"
+    ]
+  },
+  {
+    "id": "Q034",
+    "difficulty": "hard",
+    "question": "Find all students who have dropped at least one course.",
+    "expected_sql": "SELECT DISTINCT s.first_name, s.last_name FROM students s JOIN enrollments e ON s.student_id = e.student_id WHERE e.status = 'Dropped';",
+    "tables_used": [
+      "students",
+      "enrollments"
+    ],
+    "concepts": [
+      "JOIN",
+      "WHERE",
+      "DISTINCT"
+    ]
+  },
+  {
+    "id": "Q035",
+    "difficulty": "hard",
+    "question": "Find instructors teaching more than 2 offerings in 2023.",
+    "expected_sql": "SELECT i.first_name, i.last_name FROM instructors i JOIN course_offerings co ON i.instructor_id = co.instructor_id WHERE co.academic_year = 2023 GROUP BY i.instructor_id, i.first_name, i.last_name HAVING COUNT(*) > 2;",
+    "tables_used": [
+      "instructors",
+      "course_offerings"
+    ],
+    "concepts": [
+      "JOIN",
+      "WHERE",
+      "GROUP BY",
+      "HAVING"
+    ]
+  },
+  {
+    "id": "Q036",
+    "difficulty": "hard",
+    "question": "Find students who do not have any scholarships.",
+    "expected_sql": "SELECT s.student_id FROM students s LEFT JOIN scholarships sc ON s.student_id = sc.student_id WHERE sc.scholarship_id IS NULL;",
+    "tables_used": [
+      "students",
+      "scholarships"
+    ],
+    "concepts": [
+      "LEFT JOIN",
+      "WHERE IS NULL"
+    ]
+  },
+  {
+    "id": "Q037",
+    "difficulty": "hard",
+    "question": "List the top 5 students with the highest average score.",
+    "expected_sql": "SELECT e.student_id, AVG(m.score) as avg_score FROM enrollments e JOIN marks m ON e.enrollment_id = m.enrollment_id GROUP BY e.student_id ORDER BY avg_score DESC LIMIT 5;",
+    "tables_used": [
+      "enrollments",
+      "marks"
+    ],
+    "concepts": [
+      "JOIN",
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "AVG"
+    ]
+  },
+  {
+    "id": "Q038",
+    "difficulty": "hard",
+    "question": "Find course offerings with a capacity greater than 100 that have more than 50 enrollments.",
+    "expected_sql": "SELECT co.offering_id FROM course_offerings co JOIN enrollments e ON co.offering_id = e.offering_id WHERE co.capacity > 100 GROUP BY co.offering_id HAVING COUNT(e.enrollment_id) > 50;",
+    "tables_used": [
+      "course_offerings",
+      "enrollments"
+    ],
+    "concepts": [
+      "JOIN",
+      "WHERE",
+      "GROUP BY",
+      "HAVING",
+      "COUNT"
+    ]
+  },
+  {
+    "id": "Q039",
+    "difficulty": "hard",
+    "question": "What is the average attendance percentage per department?",
+    "expected_sql": "SELECT d.name, AVG(a.attendance_percentage) FROM departments d JOIN students s ON d.department_id = s.department_id JOIN enrollments e ON s.student_id = e.student_id JOIN attendance a ON e.enrollment_id = a.enrollment_id GROUP BY d.department_id, d.name;",
+    "tables_used": [
+      "departments",
+      "students",
+      "enrollments",
+      "attendance"
+    ],
+    "concepts": [
+      "JOIN",
+      "GROUP BY",
+      "AVG"
+    ]
+  },
+  {
+    "id": "Q040",
+    "difficulty": "hard",
+    "question": "Find students taking courses in more than 1 department.",
+    "expected_sql": "SELECT s.student_id FROM students s JOIN enrollments e ON s.student_id = e.student_id JOIN course_offerings co ON e.offering_id = co.offering_id JOIN courses c ON co.course_id = c.course_id GROUP BY s.student_id HAVING COUNT(DISTINCT c.department_id) > 1;",
+    "tables_used": [
+      "students",
+      "enrollments",
+      "course_offerings",
+      "courses"
+    ],
+    "concepts": [
+      "JOIN",
+      "GROUP BY",
+      "HAVING",
+      "COUNT DISTINCT"
+    ]
+  },
+  {
+    "id": "Q041",
+    "difficulty": "hard",
+    "question": "Find instructors who have taught in both Fall and Spring semesters.",
+    "expected_sql": "SELECT instructor_id FROM course_offerings WHERE semester = 'Fall' INTERSECT SELECT instructor_id FROM course_offerings WHERE semester = 'Spring';",
+    "tables_used": [
+      "course_offerings"
+    ],
+    "concepts": [
+      "INTERSECT"
+    ]
+  },
+  {
+    "id": "Q042",
+    "difficulty": "hard",
+    "question": "List courses that have never been offered.",
+    "expected_sql": "SELECT course_id FROM courses WHERE course_id NOT IN (SELECT course_id FROM course_offerings);",
+    "tables_used": [
+      "courses",
+      "course_offerings"
+    ],
+    "concepts": [
+      "NOT IN",
+      "SUBQUERY"
+    ]
+  },
+  {
+    "id": "Q043",
+    "difficulty": "hard",
+    "question": "Which department's students have received the highest total scholarship amount?",
+    "expected_sql": "SELECT d.name FROM departments d JOIN students s ON d.department_id = s.department_id JOIN scholarships sc ON s.student_id = sc.student_id GROUP BY d.department_id, d.name ORDER BY SUM(sc.amount) DESC LIMIT 1;",
+    "tables_used": [
+      "departments",
+      "students",
+      "scholarships"
+    ],
+    "concepts": [
+      "JOIN",
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "SUM"
+    ]
+  },
+  {
+    "id": "Q044",
+    "difficulty": "hard",
+    "question": "What is the most popular course by total historical enrollments?",
+    "expected_sql": "SELECT c.name FROM courses c JOIN course_offerings co ON c.course_id = co.course_id JOIN enrollments e ON co.offering_id = e.offering_id GROUP BY c.course_id, c.name ORDER BY COUNT(e.enrollment_id) DESC LIMIT 1;",
+    "tables_used": [
+      "courses",
+      "course_offerings",
+      "enrollments"
+    ],
+    "concepts": [
+      "JOIN",
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "COUNT"
+    ]
+  },
+  {
+    "id": "Q045",
+    "difficulty": "hard",
+    "question": "What is the average score of students with scholarships?",
+    "expected_sql": "SELECT AVG(m.score) FROM marks m JOIN enrollments e ON m.enrollment_id = e.enrollment_id JOIN students s ON e.student_id = s.student_id WHERE s.student_id IN (SELECT student_id FROM scholarships);",
+    "tables_used": [
+      "marks",
+      "enrollments",
+      "students",
+      "scholarships"
+    ],
+    "concepts": [
+      "JOIN",
+      "WHERE IN",
+      "SUBQUERY",
+      "AVG"
+    ]
+  },
+  {
+    "id": "Q046",
+    "difficulty": "expert",
+    "question": "Rank students by their overall average score.",
+    "expected_sql": "SELECT student_id, AVG(score) as avg_score, RANK() OVER (ORDER BY AVG(score) DESC) as rank FROM enrollments e JOIN marks m ON e.enrollment_id = m.enrollment_id GROUP BY student_id;",
+    "tables_used": [
+      "enrollments",
+      "marks"
+    ],
+    "concepts": [
+      "JOIN",
+      "GROUP BY",
+      "WINDOW FUNCTION",
+      "RANK",
+      "AVG"
+    ]
+  },
+  {
+    "id": "Q047",
+    "difficulty": "expert",
+    "question": "Find the instructor whose students have the highest average score.",
+    "expected_sql": "SELECT i.instructor_id, i.first_name, i.last_name FROM instructors i JOIN course_offerings co ON i.instructor_id = co.instructor_id JOIN enrollments e ON co.offering_id = e.offering_id JOIN marks m ON e.enrollment_id = m.enrollment_id GROUP BY i.instructor_id, i.first_name, i.last_name ORDER BY AVG(m.score) DESC LIMIT 1;",
+    "tables_used": [
+      "instructors",
+      "course_offerings",
+      "enrollments",
+      "marks"
+    ],
+    "concepts": [
+      "JOIN",
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "AVG"
+    ]
+  },
+  {
+    "id": "Q048",
+    "difficulty": "expert",
+    "question": "What percentage of students in each department have dropped at least one course?",
+    "expected_sql": "WITH DroppedStudents AS (SELECT DISTINCT student_id FROM enrollments WHERE status = 'Dropped'), DeptTotals AS (SELECT department_id, COUNT(*) as total_students FROM students GROUP BY department_id), DeptDropped AS (SELECT s.department_id, COUNT(ds.student_id) as dropped_students FROM students s JOIN DroppedStudents ds ON s.student_id = ds.student_id GROUP BY s.department_id) SELECT dt.department_id, IFNULL(dd.dropped_students * 100.0 / dt.total_students, 0) as drop_percentage FROM DeptTotals dt LEFT JOIN DeptDropped dd ON dt.department_id = dd.department_id;",
+    "tables_used": [
+      "enrollments",
+      "students"
+    ],
+    "concepts": [
+      "CTE",
+      "JOIN",
+      "LEFT JOIN",
+      "GROUP BY",
+      "MATH"
+    ]
+  },
+  {
+    "id": "Q049",
+    "difficulty": "expert",
+    "question": "Find the student who has taken the highest number of unique courses.",
+    "expected_sql": "SELECT e.student_id FROM enrollments e JOIN course_offerings co ON e.offering_id = co.offering_id GROUP BY e.student_id ORDER BY COUNT(DISTINCT co.course_id) DESC LIMIT 1;",
+    "tables_used": [
+      "enrollments",
+      "course_offerings"
+    ],
+    "concepts": [
+      "JOIN",
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "COUNT DISTINCT"
+    ]
+  },
+  {
+    "id": "Q050",
+    "difficulty": "expert",
+    "question": "Calculate the year-over-year difference in total course enrollments.",
+    "expected_sql": "WITH YearlyEnrollments AS (SELECT co.academic_year, COUNT(e.enrollment_id) as total_enrollments FROM course_offerings co JOIN enrollments e ON co.offering_id = e.offering_id GROUP BY co.academic_year) SELECT academic_year, total_enrollments, total_enrollments - LAG(total_enrollments) OVER (ORDER BY academic_year) as yoy_difference FROM YearlyEnrollments;",
+    "tables_used": [
+      "course_offerings",
+      "enrollments"
+    ],
+    "concepts": [
+      "CTE",
+      "JOIN",
+      "GROUP BY",
+      "WINDOW FUNCTION",
+      "LAG"
+    ]
+  }
+]
