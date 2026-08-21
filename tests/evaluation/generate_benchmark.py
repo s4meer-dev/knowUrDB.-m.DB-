@@ -67,6 +67,30 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "benchmark_questions.json"
     
+    db_path = out_dir.parent.parent / "database" / "demo" / "knowurdb_demo.db"
+    
+    import sqlite3
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    
+    def normalize_row(row):
+        return tuple(
+            round(val, 4) if isinstance(val, float) else val for val in row
+        )
+        
+    for q in questions:
+        cur.execute(q["expected_sql"])
+        results = cur.fetchall()
+        
+        # Determine if ORDER BY is semantically irrelevant by checking if 'ORDER BY' is in SQL
+        normalized = [normalize_row(r) for r in results]
+        if "ORDER BY" not in q["expected_sql"].upper():
+            normalized.sort(key=lambda x: str(x))
+            
+        q["expected_result"] = normalized
+        
+    conn.close()
+    
     with open(out_path, "w") as f:
         json.dump(questions, f, indent=2)
         

@@ -34,12 +34,26 @@ def main():
         sql = q["expected_sql"]
         try:
             cur.execute(sql)
-            # Fetch one to ensure execution actually produces something / works
-            _ = cur.fetchone()
-            print(f"{qid} PASS")
-            passed += 1
+            results = cur.fetchall()
+            
+            def normalize_row(row):
+                return tuple(round(val, 4) if isinstance(val, float) else val for val in row)
+                
+            normalized = [normalize_row(r) for r in results]
+            if "ORDER BY" not in sql.upper():
+                normalized.sort(key=lambda x: str(x))
+                
+            expected = [tuple(r) for r in q.get("expected_result", [])]
+            
+            if normalized == expected:
+                print(f"{qid} | PASS | PASS | PASS")
+                passed += 1
+            else:
+                print(f"{qid} | PASS | FAIL | FAIL")
+                failed += 1
+                failures.append((qid, sql, "Result mismatch"))
         except Exception as e:
-            print(f"{qid} FAIL: {e}")
+            print(f"{qid} | FAIL | FAIL | FAIL ({e})")
             failed += 1
             failures.append((qid, sql, str(e)))
             
