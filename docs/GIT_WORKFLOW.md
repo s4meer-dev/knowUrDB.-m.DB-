@@ -2,17 +2,19 @@
 
 ## Core Principles
 The canonical repository is: `s4meer-dev/knowUrDB`
+The canonical GitHub account is: `s4meer-dev`
 
-- `main` branch is the stable branch.
-- feature branches may be used for larger features.
-- **no force push**.
-- **no secrets committed**.
-- inspect `git status` before commit.
-- inspect `git diff` before commit.
-- meaningful commit messages.
-- every completed phase gets its own commit.
-- every completed phase is pushed to GitHub.
-- verify remote state after pushing.
+- `main` branch is the stable branch. All commits go here unless using feature branches for larger features.
+- **Repository-local Git identity**: Must be configured with `user.name` and `user.email`. Git author email must be a verified email associated with the `s4meer-dev` GitHub account.
+- **Pre-commit verification**: Verify current branch is `main`, remote is `s4meer-dev/knowUrDB`, and author identity is correctly set before committing.
+- **Testing before commit**: Run tests, lint, and build (where applicable) before committing.
+- **Diff review**: Always inspect `git status` and `git diff` before commit.
+- **Commit attribution requirements**: Every commit must be attributed to the correct GitHub account.
+- **No force pushes**: Never force push to `main` unless explicitly authorized.
+- **No rewriting published history**: Do not rebase, amend, or rewrite history on the `main` branch.
+- **Push verification**: Verify remote state after pushing to ensure local `main` matches `origin/main`.
+- **No secrets committed**: Ensure all credentials and secrets are protected via `.gitignore`.
+- **Meaningful commits**: Use Conventional Commits formatting and ensure every commit represents a meaningful change.
 
 ## Merge Strategy
 - Pull/merge strategy with review before merge.
