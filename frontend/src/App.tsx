@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { checkHealth } from './services/api';
-import { HealthResponse } from './types';
+import type { HealthResponse } from './types';
 
 function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -17,7 +17,7 @@ function App() {
           setHealth(data);
           setError(null);
         }
-      } catch (err) {
+      } catch {
         if (isMounted) {
           setError('Unable to reach the backend API.');
           setHealth(null);
