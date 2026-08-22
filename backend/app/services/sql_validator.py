@@ -4,22 +4,40 @@ import re
 class SQLSafetyError(Exception):
     pass
 
+
 class SQLValidator:
     """
     Validates SQL queries to ensure they are safe for read-only execution.
     """
-    
+
     # List of dangerous keywords that mutate state or affect schema
-    FORBIDDEN_KEYWORDS = [
-        "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", 
-        "REPLACE", "ATTACH", "DETACH", "PRAGMA", "VACUUM", "BEGIN", 
-        "COMMIT", "ROLLBACK", "SAVEPOINT", "RELEASE", "GRANT", "REVOKE"
-    ]
+    FORBIDDEN_KEYWORDS = frozenset(
+        [
+            "INSERT",
+            "UPDATE",
+            "DELETE",
+            "DROP",
+            "ALTER",
+            "CREATE",
+            "REPLACE",
+            "ATTACH",
+            "DETACH",
+            "PRAGMA",
+            "VACUUM",
+            "BEGIN",
+            "COMMIT",
+            "ROLLBACK",
+            "SAVEPOINT",
+            "RELEASE",
+            "GRANT",
+            "REVOKE",
+        ]
+    )
 
     @classmethod
     def validate(cls, sql: str) -> None:
         """
-        Validates the given SQL string. 
+        Validates the given SQL string.
         Raises SQLSafetyError if it fails validation.
         """
         if not sql or not sql.strip():
@@ -28,7 +46,7 @@ class SQLValidator:
         cleaned_sql = sql.strip().upper()
 
         # 1. Must start with SELECT or WITH
-        if not (cleaned_sql.startswith("SELECT") or cleaned_sql.startswith("WITH")):
+        if not cleaned_sql.startswith(("SELECT", "WITH")):
             raise SQLSafetyError("Only SELECT or WITH queries are allowed.")
 
         # 2. Reject multiple statements
@@ -43,5 +61,6 @@ class SQLValidator:
             # Check if the keyword exists as a whole word
             pattern = rf"\b{keyword}\b"
             if re.search(pattern, cleaned_sql):
-                raise SQLSafetyError(f"Dangerous SQL pattern detected: {keyword} is not allowed.")
-
+                raise SQLSafetyError(
+                    f"Dangerous SQL pattern detected: {keyword} is not allowed."
+                )

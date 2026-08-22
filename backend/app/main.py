@@ -13,10 +13,7 @@ app = FastAPI(
 
 # CORS configuration
 if settings.ENVIRONMENT == "development":
-    origins = [
-        settings.FRONTEND_URL,
-        "http://127.0.0.1:5173"
-    ]
+    origins = [settings.FRONTEND_URL, "http://127.0.0.1:5173"]
 else:
     # Fallback to no origins allowed, require specific config in prod
     origins = []
