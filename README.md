@@ -2,7 +2,7 @@
 
 **Tagline:** Natural Language Database Intelligence Platform
 
-**Current status**: Phase 1 — Full-Stack Development Foundation
+**Current status**: Phase 3 — Natural Language to SQL Engine
 
 ## Problem
 Users often have databases but need SQL knowledge to extract information.
@@ -57,6 +57,10 @@ npm run build
 - **Frontend**: React, Vite, Tailwind CSS, Recharts (Planned)
 - **Backend**: FastAPI, Python, SQLAlchemy, SQLGlot (Planned)
 - **Database**: SQLite initially (Planned)
+- **Phase 1:** Full-Stack Foundation (React, FastAPI, Axios) - **COMPLETE**
+- **Phase 2:** Database Setup (SQLite demo with 4,000+ students and benchmark) - **COMPLETE**
+- **Phase 3:** Natural Language to SQL Engine (Deterministic translation, API & Frontend) - **COMPLETE**
+- **Phase 4:** LLM Integration (Planned)
 - **AI**: Gemini API with abstract provider architecture (Planned)
 
 ## Roadmap

@@ -1,6 +1,7 @@
-from app.core.config import settings
 from fastapi import APIRouter
 from pydantic import BaseModel
+
+from app.core.config import settings
 
 router = APIRouter()
 
