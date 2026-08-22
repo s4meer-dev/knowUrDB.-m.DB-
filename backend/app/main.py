@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.query import router as query_router
+from app.api.schema import router as schema_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -28,3 +29,4 @@ app.add_middleware(
 
 app.include_router(health_router, prefix="/api", tags=["health"])
 app.include_router(query_router, prefix="/api", tags=["query"])
+app.include_router(schema_router, prefix="/api", tags=["schema"])
