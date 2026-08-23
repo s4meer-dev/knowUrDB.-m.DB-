@@ -1,6 +1,7 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+
 from app.models.ai import AIGenerateRequest, AIGenerateResponse, AIStatusResponse
 from app.services.ai_service import AIService
-from fastapi import APIRouter, Depends, HTTPException, status
 
 router = APIRouter()
 

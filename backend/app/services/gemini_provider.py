@@ -1,8 +1,9 @@
 import logging
 
-from app.core.config import settings
 from google import genai
 from google.genai import errors as genai_errors
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,9 @@ class GeminiProvider:
         if len(val) < 20:
             return {"configured": False, "status": "invalid_configuration"}
 
+        if not val.startswith("AIza"):
+            return {"configured": False, "status": "invalid_api_key"}
+
         return {"configured": True, "status": "ready"}
 
     def is_configured(self) -> bool:
@@ -48,11 +52,22 @@ class GeminiProvider:
             if not response.text:
                 raise ValueError("Empty response from AI provider.")
             return response.text
-        except genai_errors.APIError as e:
-            logger.error(f"Gemini API Error: {e!s}")
-            raise RuntimeError(f"AI provider error: {e!s}")
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"Unexpected error calling Gemini API: {e!s}")
+        except (genai_errors.APIError, genai_errors.ClientError) as e:
+            error_str = str(e).lower()
+            if (
+                "api key" in error_str
+                or "api_key" in error_str
+                or "invalid_argument" in error_str
+            ):
+                logger.error("Gemini API Error: Invalid API Key")
+                raise RuntimeError("AI provider error: Invalid API Key")
+            if "not_found" in error_str or "model" in error_str:
+                logger.error("Gemini API Error: Invalid Model")
+                raise RuntimeError("AI provider error: Invalid Model")
+            logger.error("Gemini API Error: External provider failure")
+            raise RuntimeError("AI provider error: External provider failure")
+        except Exception:  # noqa: BLE001
+            logger.error("Unexpected error calling Gemini API")
             raise RuntimeError(
                 "An unexpected error occurred while communicating with the AI provider."
             )

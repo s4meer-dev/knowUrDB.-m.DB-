@@ -1,9 +1,10 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
+
 from app.core.config import settings
 from app.main import app
-from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -18,7 +19,7 @@ def mock_unconfigured_settings():
 def mock_configured_settings():
     with patch(
         "app.core.config.settings.GEMINI_API_KEY",
-        "test-api-key-that-is-long-enough-12345",
+        "AIza-test-api-key-that-is-long-enough-12345",
     ):
         yield
 

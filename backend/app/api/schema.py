@@ -1,7 +1,8 @@
+from fastapi import APIRouter, HTTPException
+
 from app.core.database import demo_db_provider
 from app.models.schema import DatabaseSchema, SchemaSummary, TableInfo
 from app.services.schema_service import SchemaService
-from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
 

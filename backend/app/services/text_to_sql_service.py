@@ -354,7 +354,7 @@ class TextToSQLService:
         # 2. General Intent Rules
         # Category 1: Student counting
         if re.search(
-            r"^how many students are (in the database|there)$|^total number of students$",
+            r"^(what is the )?(total )?(number of|count of) students$|^how many students are (in the database|there)$|^tell me the number of students$|^what is the student count$|^give me the total students$|^total number of students$",
             q,
         ):
             return QueryPlan(intent="count", entity="students", metrics=["*"])

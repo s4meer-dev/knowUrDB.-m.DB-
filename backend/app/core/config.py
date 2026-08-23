@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5173"
 
     GEMINI_API_KEY: str | None = None
-    GEMINI_MODEL: str = "gemini-3.1-pro"
+    GEMINI_MODEL: str = "gemini-1.5-flash"
 
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE_PATH), env_file_encoding="utf-8", extra="ignore"

@@ -33,6 +33,6 @@ class AIService:
             raise
         except RuntimeError:
             raise
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"AIService error: {e!s}")
+        except Exception:  # noqa: BLE001
+            logger.error("AIService error: An unexpected exception occurred.")
             raise RuntimeError("Failed to generate AI response.")

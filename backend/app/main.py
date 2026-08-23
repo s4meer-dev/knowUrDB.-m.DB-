@@ -1,10 +1,11 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.api.ai import router as ai_router
 from app.api.health import router as health_router
 from app.api.query import router as query_router
 from app.api.schema import router as schema_router
 from app.core.config import settings
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
