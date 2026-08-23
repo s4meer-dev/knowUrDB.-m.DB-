@@ -48,11 +48,15 @@ def test_invalid_empty_question():
 
 
 def test_unsupported_question():
-    response = client.post("/api/query", json={"question": "Tell me a joke."})
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "error"
-    assert "Unsupported question" in data["error"]
+    with patch(
+        "app.api.query.ai_service.get_status",
+        return_value={"configured": False, "status": "missing_api_key"},
+    ):
+        response = client.post("/api/query", json={"question": "Tell me a joke."})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "error"
+        assert "Unsupported question" in data["error"]
 
 
 def test_unsafe_generated_sql_rejection(monkeypatch):
