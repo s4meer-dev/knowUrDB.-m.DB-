@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from app.main import app
 from fastapi.testclient import TestClient
 
@@ -175,3 +177,84 @@ def test_read_only_protection():
         assert "readonly database" in str(e)
     finally:
         conn.close()
+
+
+def test_ai_fallback_semantic_variation():
+    # Test semantic variation that is not caught by deterministic parser
+    question = "What is the total number of students?"
+
+    # Mock ai_service directly
+    with (
+        patch(
+            "app.api.query.ai_service.get_status",
+            return_value={"configured": True, "status": "ready"},
+        ),
+        patch(
+            "app.api.query.ai_service.generate",
+            return_value={"response": "```sql\nSELECT COUNT(*) FROM students;\n```"},
+        ),
+    ):
+        response = client.post("/api/query", json={"question": question})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["generated_sql"] == "SELECT COUNT(*) FROM students;"
+        assert "COUNT(*)" in data["columns"]
+        assert len(data["rows"]) == 1
+        assert data["rows"][0]["COUNT(*)"] == 4000
+
+
+def test_ai_fallback_unavailable():
+    # Test semantic variation when AI is unavailable
+    question = "What is the total number of students?"
+
+    with patch(
+        "app.api.query.ai_service.get_status",
+        return_value={"configured": False, "status": "unconfigured"},
+    ):
+        response = client.post("/api/query", json={"question": question})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "error"
+        assert "Unsupported question" in data["error"]
+
+
+def test_ai_fallback_generates_unsafe_sql():
+    # Test AI generating dangerous SQL
+    question = "Delete all students"
+
+    with (
+        patch(
+            "app.api.query.ai_service.get_status",
+            return_value={"configured": True, "status": "ready"},
+        ),
+        patch(
+            "app.api.query.ai_service.generate",
+            return_value={"response": "DELETE FROM students;"},
+        ),
+    ):
+        response = client.post("/api/query", json={"question": question})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "error"
+        assert "Only SELECT or WITH queries are allowed" in data["error"]
+
+
+def test_ai_fallback_handles_generation_error():
+    # Test AI service throwing an exception
+    question = "What is the total number of students?"
+
+    with (
+        patch(
+            "app.api.query.ai_service.get_status",
+            return_value={"configured": True, "status": "ready"},
+        ),
+        patch(
+            "app.api.query.ai_service.generate", side_effect=RuntimeError("API Error")
+        ),
+    ):
+        response = client.post("/api/query", json={"question": question})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "error"
+        assert "AI generation failed" in data["error"]
