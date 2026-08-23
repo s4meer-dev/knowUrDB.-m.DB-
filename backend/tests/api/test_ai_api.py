@@ -50,7 +50,7 @@ def test_ai_status_unconfigured(mock_unconfigured_settings):
     data = response.json()
     assert data["provider"] == "gemini"
     assert data["configured"] is False
-    assert data["status"] == "unconfigured"
+    assert data["status"] == "missing_api_key"
 
 
 def test_ai_status_configured(mock_configured_settings, mock_gemini_client):
@@ -68,7 +68,7 @@ def test_ai_status_placeholder(mock_placeholder_settings):
     assert response.status_code == 200
     data = response.json()
     assert data["configured"] is False
-    assert data["status"] == "invalid_placeholder"
+    assert data["status"] == "invalid_api_key"
 
 
 def test_ai_status_short_key(mock_short_settings):
@@ -76,7 +76,7 @@ def test_ai_status_short_key(mock_short_settings):
     assert response.status_code == 200
     data = response.json()
     assert data["configured"] is False
-    assert data["status"] == "invalid_configuration"
+    assert data["status"] == "invalid_api_key"
 
 
 def test_ai_generate_missing_prompt(mock_configured_settings):
