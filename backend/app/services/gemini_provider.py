@@ -1,9 +1,8 @@
 import logging
 
+from app.core.config import settings
 from google import genai
 from google.genai import errors as genai_errors
-
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +16,24 @@ class GeminiProvider:
         else:
             self.client = None
 
+    def get_status_info(self) -> dict:
+        if not self.api_key or not self.api_key.strip():
+            return {"configured": False, "status": "unconfigured"}
+
+        val = self.api_key.strip()
+        lower_val = val.lower()
+        placeholders = ["your", "placeholder", "enter", "<", ">", "dummy", "api_key"]
+
+        if any(p in lower_val for p in placeholders):
+            return {"configured": False, "status": "invalid_placeholder"}
+
+        if len(val) < 20:
+            return {"configured": False, "status": "invalid_configuration"}
+
+        return {"configured": True, "status": "ready"}
+
     def is_configured(self) -> bool:
-        return bool(self.api_key)
+        return self.get_status_info()["configured"]
 
     def generate_text(self, prompt: str) -> str:
         if not self.is_configured():

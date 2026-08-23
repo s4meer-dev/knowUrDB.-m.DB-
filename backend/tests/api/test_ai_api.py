@@ -1,10 +1,9 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
-
 from app.core.config import settings
 from app.main import app
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -17,7 +16,22 @@ def mock_unconfigured_settings():
 
 @pytest.fixture
 def mock_configured_settings():
-    with patch("app.core.config.settings.GEMINI_API_KEY", "test-key-123"):
+    with patch(
+        "app.core.config.settings.GEMINI_API_KEY",
+        "test-api-key-that-is-long-enough-12345",
+    ):
+        yield
+
+
+@pytest.fixture
+def mock_placeholder_settings():
+    with patch("app.core.config.settings.GEMINI_API_KEY", "your-api-key-here"):
+        yield
+
+
+@pytest.fixture
+def mock_short_settings():
+    with patch("app.core.config.settings.GEMINI_API_KEY", "short-key"):
         yield
 
 
@@ -45,6 +59,23 @@ def test_ai_status_configured(mock_configured_settings, mock_gemini_client):
     assert data["provider"] == "gemini"
     assert data["configured"] is True
     assert data["status"] == "ready"
+    assert "api_key" not in data
+
+
+def test_ai_status_placeholder(mock_placeholder_settings):
+    response = client.get("/api/ai/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["configured"] is False
+    assert data["status"] == "invalid_placeholder"
+
+
+def test_ai_status_short_key(mock_short_settings):
+    response = client.get("/api/ai/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["configured"] is False
+    assert data["status"] == "invalid_configuration"
 
 
 def test_ai_generate_missing_prompt(mock_configured_settings):

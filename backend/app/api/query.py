@@ -1,11 +1,10 @@
-from fastapi import APIRouter, HTTPException
-
 from app.core.database import demo_db_provider
 from app.models.query import NaturalLanguageQueryRequest, NaturalLanguageQueryResponse
 from app.services.query_executor import QueryExecutionError, QueryExecutor
 from app.services.schema_service import SchemaService
 from app.services.sql_validator import SQLSafetyError
 from app.services.text_to_sql_service import TextToSQLService
+from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
 

@@ -10,12 +10,12 @@ class AIService:
         self.provider = GeminiProvider()
 
     def get_status(self) -> dict:
-        configured = self.provider.is_configured()
+        status_info = self.provider.get_status_info()
         return {
             "provider": "gemini",
             "model": self.provider.model,
-            "configured": configured,
-            "status": "ready" if configured else "unconfigured",
+            "configured": status_info["configured"],
+            "status": status_info["status"],
         }
 
     def generate(self, prompt: str) -> dict:
