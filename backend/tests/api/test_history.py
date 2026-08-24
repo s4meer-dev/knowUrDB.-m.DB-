@@ -25,7 +25,9 @@ def test_query_history_workflow(client):
     assert len(response.json()) == 0
 
     # 3. Create a query
-    response = client.post("/api/query", json={"question": "how many students are there?"})
+    response = client.post(
+        "/api/query", json={"question": "how many students are there?"}
+    )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
 
