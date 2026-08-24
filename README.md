@@ -2,7 +2,7 @@
 
 **Tagline:** Natural Language Database Intelligence Platform
 
-**Current status**: Phase 5 — AI-powered Natural Language to SQL Integration
+**Current status**: Phase 6 — Query Intelligence, History, Explanations, Suggestions & Metadata
 
 ## Problem
 Users often have databases but need SQL knowledge to extract information.
@@ -52,6 +52,12 @@ Swagger UI: `http://127.0.0.1:8000/docs`
   ```json
   {"question": "How many students are in the database?"}
   ```
+  Returns results along with execution metadata (`row_count`, `execution_time_ms`, `query_source`), plain-English `explanation`, and `follow_up_suggestions`.
+- `GET /api/history` - Retrieve query history
+- `GET /api/history/{query_id}` - Retrieve a specific query from history
+- `DELETE /api/history/{query_id}` - Delete a specific query from history
+- `DELETE /api/history` - Clear all query history
+- `GET /api/suggestions` - Get schema-based question suggestions
 
 Testing and Linting:
 ```bash
@@ -89,6 +95,7 @@ npm run build
 - **Phase 3:** Natural Language to SQL Engine (Deterministic translation, API & Frontend) - **COMPLETE**
 - **Phase 4:** Schema Intelligence & Introspection - **COMPLETE**
 - **Phase 5:** AI LLM Integration (Gemini-powered semantic fallback) - **COMPLETE**
+- **Phase 6:** Query Intelligence, History, Explanations, Suggestions & Metadata - **COMPLETE**
 
 ## Security Principles
 - Never trust AI-generated SQL.

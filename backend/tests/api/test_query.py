@@ -56,7 +56,7 @@ def test_unsupported_question():
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "error"
-        assert "Unsupported question" in data["error"]
+        assert "I couldn't find data" in data["error"]
 
 
 def test_unsafe_generated_sql_rejection(monkeypatch):
@@ -72,7 +72,7 @@ def test_unsafe_generated_sql_rejection(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "error"
-    assert "Only SELECT or WITH queries are allowed" in data["error"]
+    assert "did not meet database safety requirements" in data["error"]
 
 
 def test_multiple_statement_rejection(monkeypatch):
@@ -88,7 +88,7 @@ def test_multiple_statement_rejection(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "error"
-    assert "Multiple SQL statements are not allowed" in data["error"]
+    assert "did not meet database safety requirements" in data["error"]
 
 
 def test_nlp_student_counting_variations():
@@ -230,7 +230,7 @@ def test_ai_fallback_unavailable():
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "error"
-        assert "Unsupported question" in data["error"]
+        assert "I couldn't find data" in data["error"]
 
 
 def test_ai_fallback_generates_unsafe_sql():
@@ -251,7 +251,7 @@ def test_ai_fallback_generates_unsafe_sql():
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "error"
-        assert "Only SELECT or WITH queries are allowed" in data["error"]
+        assert "did not meet database safety requirements" in data["error"]
 
 
 def test_ai_fallback_handles_generation_error():
@@ -271,4 +271,4 @@ def test_ai_fallback_handles_generation_error():
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "error"
-        assert "AI generation failed" in data["error"]
+        assert "temporarily unavailable" in data["error"]
