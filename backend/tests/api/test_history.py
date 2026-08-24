@@ -36,7 +36,7 @@ def test_query_history_workflow(client):
     assert len(history) == 1
 
     item = history[0]
-    assert item["question"] == "how many students"
+    assert item["question"] == "how many students are there?"
     assert item["query_source"] in ["ai", "fallback"]
     assert item["status"] == "success"
     assert item["row_count"] is not None
