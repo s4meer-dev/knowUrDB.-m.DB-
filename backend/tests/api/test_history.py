@@ -25,9 +25,25 @@ def test_query_history_workflow(client):
     assert len(response.json()) == 0
 
     # 3. Create a query
-    response = client.post(
-        "/api/query", json={"question": "how many students are there?"}
-    )
+    from unittest.mock import patch
+
+    with (
+        patch(
+            "app.api.query.ai_service.get_status",
+            return_value={"configured": True, "status": "ready"},
+        ),
+        patch(
+            "app.api.query.ai_service.generate",
+            return_value={"response": "```sql\nSELECT COUNT(*) FROM students;\n```"},
+        ),
+        patch(
+            "app.services.query_intelligence_service.AIService.generate",
+            return_value={"response": "VALID"},
+        ),
+    ):
+        response = client.post(
+            "/api/query", json={"question": "how many students are there?"}
+        )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
 

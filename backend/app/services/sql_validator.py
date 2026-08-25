@@ -10,6 +10,20 @@ class SQLValidator:
     Validates SQL queries to ensure they are safe for read-only execution.
     """
 
+    @classmethod
+    def validate_against_db(cls, sql: str, db_provider) -> None:
+        """
+        Validates the given SQL string against the actual database schema using EXPLAIN.
+        Raises QueryExecutionError (via sqlite3.OperationalError) if tables/columns don't exist.
+        """
+        conn = db_provider.get_connection()
+        try:
+            # Running EXPLAIN parses the query and generates bytecode, checking if tables/columns exist.
+            # It does not execute the query, making it safe.
+            conn.execute(f"EXPLAIN {sql}")
+        finally:
+            conn.close()
+
     # List of dangerous keywords that mutate state or affect schema
     FORBIDDEN_KEYWORDS = frozenset(
         [

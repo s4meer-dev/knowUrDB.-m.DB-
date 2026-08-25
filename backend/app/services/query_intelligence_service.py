@@ -14,6 +14,83 @@ class QueryIntelligenceService:
         self.ai_service = ai_service
         self.schema_service = schema_service
 
+    def analyze_intent(self, question: str) -> str:
+        """
+        Classifies the user's question into one of three categories:
+        - VALID: The question can likely be answered with a SQL query against this schema.
+        - AMBIGUOUS: The question is related to databases/records, but relies on tables/concepts not in the schema, or is too vague.
+        - UNRELATED: The question has nothing to do with this database or its data.
+        Returns 'VALID', 'AMBIGUOUS', or 'UNRELATED'.
+        If AI is unavailable, falls back to 'VALID' to let the existing pipeline try to handle it.
+        """
+        ai_status = self.ai_service.get_status()
+        if not (ai_status.get("configured") and ai_status.get("status") == "ready"):
+            return "VALID"
+
+        schema_summary = self.schema_service.get_schema_summary().summary
+
+        prompt = f"""Given the following database schema summary, classify the user question into exactly one of these categories:
+- VALID: The question can be answered with a SQL query against this schema.
+- AMBIGUOUS: The question is related to records or databases, but relies on tables or concepts NOT in the schema (e.g. asking for 'records' when no 'records' table exists), or is too vague to write a safe query.
+- UNRELATED: The question has nothing to do with this database or its data (e.g. weather, poetry, generic trivia).
+
+Schema:
+{schema_summary}
+
+Question: "{question}"
+
+Return ONLY the classification word: VALID, AMBIGUOUS, or UNRELATED.
+"""
+        try:
+            response = self.ai_service.generate(prompt)
+            intent = response["response"].strip().upper()
+            if intent in ["VALID", "AMBIGUOUS", "UNRELATED"]:
+                return intent
+            return "VALID"
+        except Exception:  # noqa: BLE001
+            return "VALID"
+
+    def repair_sql(self, question: str, bad_sql: str, error_message: str) -> str | None:
+        """
+        Attempts to repair an invalid SQL query based on the database execution error.
+        Returns the repaired SQL string, or None if repair fails/AI is unavailable.
+        """
+        ai_status = self.ai_service.get_status()
+        if not (ai_status.get("configured") and ai_status.get("status") == "ready"):
+            return None
+
+        schema_summary = self.schema_service.get_schema_summary().summary
+
+        prompt = f"""The following SQL query was generated for the question '{question}':
+{bad_sql}
+
+But it failed database validation with the following error:
+{error_message}
+
+Please correct the SQL query using ONLY the provided schema. Do not invent tables, columns, or relationships.
+
+Schema:
+{schema_summary}
+
+IMPORTANT RULES:
+- Return ONLY the raw SQL query.
+- Do NOT wrap the SQL in markdown formatting or backticks (no ```sql ... ```).
+- Do NOT include any explanations or conversational text.
+- Only generate SELECT statements. No data mutation is allowed.
+"""
+        try:
+            response = self.ai_service.generate(prompt)
+            sql = response["response"].strip()
+            # Clean up markdown if AI includes it
+            if sql.startswith("```sql"):
+                sql = sql[6:]
+            elif sql.startswith("```"):
+                sql = sql[3:]
+            sql = sql.removesuffix("```")
+            return sql.strip()
+        except Exception:  # noqa: BLE001
+            return None
+
     def generate_explanation(self, sql: str, question: str) -> str | None:
         """
         Generates a plain-English explanation for the given SQL query.

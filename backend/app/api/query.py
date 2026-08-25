@@ -7,7 +7,7 @@ from app.services.history_service import HistoryService
 from app.services.query_executor import QueryExecutionError, QueryExecutor
 from app.services.query_intelligence_service import QueryIntelligenceService
 from app.services.schema_service import SchemaService
-from app.services.sql_validator import SQLSafetyError
+from app.services.sql_validator import SQLSafetyError, SQLValidator
 from app.services.text_to_sql_service import TextToSQLService
 
 router = APIRouter()
@@ -26,20 +26,77 @@ async def query_database(request: NaturalLanguageQueryRequest):
     if not request.question or not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
+    # 1. Intent Validation
+    intent = query_intelligence_service.analyze_intent(request.question)
+
+    if intent == "UNRELATED":
+        error_msg = "This assistant is currently designed to answer questions using the connected database. Please ask a question related to the available database data."
+        history_service.log_query(
+            question=request.question,
+            query_source="none",
+            status="error",
+            error_message=error_msg,
+        )
+        return NaturalLanguageQueryResponse(
+            question=request.question, status="error", error=error_msg
+        )
+
+    if intent == "AMBIGUOUS":
+        tables = ", ".join(schema_service.get_table_names())
+        error_msg = f"The question is database-related, but it is ambiguous. Please specify which table or type of record you want to query. Available tables include: {tables}."
+        history_service.log_query(
+            question=request.question,
+            query_source="none",
+            status="error",
+            error_message=error_msg,
+        )
+        return NaturalLanguageQueryResponse(
+            question=request.question, status="error", error=error_msg
+        )
+
     sql = None
     query_source = None
 
+    # 2. Try Deterministic Fallback First
     try:
-        # 1. Translate NL to SQL (Deterministic Fallback/Internal)
-        sql = text_to_sql_service.translate(request.question)
+        fallback_sql = text_to_sql_service.translate(request.question)
+        # Validate against actual DB to ensure it didn't hallucinate a table like 'students' when it doesn't exist
+        SQLValidator.validate(fallback_sql)
+        SQLValidator.validate_against_db(fallback_sql, demo_db_provider)
+        sql = fallback_sql
         query_source = "fallback"
-    except ValueError:
-        # 2. AI Generation
+    except SQLSafetyError:
+        error_msg = "The generated query was rejected because it did not meet database safety requirements."
+        history_service.log_query(
+            question=request.question,
+            query_source="fallback",
+            status="error",
+            error_message=error_msg,
+        )
+        return NaturalLanguageQueryResponse(
+            question=request.question, status="error", error=error_msg
+        )
+    except Exception:  # noqa: BLE001, S110
+        # Deterministic generation failed or generated invalid SQL for this schema
+        pass
+
+    # 3. AI Generation (with retries)
+    if not sql:
         ai_status = ai_service.get_status()
-        if ai_status.get("configured") and ai_status.get("status") == "ready":
-            try:
-                schema_summary = schema_service.get_schema_summary().summary
-                prompt = f"""You are a SQL generation assistant for a SQLite database.
+        if not (ai_status.get("configured") and ai_status.get("status") == "ready"):
+            error_msg = "I couldn't find data related to that concept in the available database."
+            history_service.log_query(
+                question=request.question,
+                query_source="fallback",
+                status="error",
+                error_message=error_msg,
+            )
+            return NaturalLanguageQueryResponse(
+                question=request.question, status="error", error=error_msg
+            )
+
+        schema_summary = schema_service.get_schema_summary().summary
+        prompt = f"""You are a SQL generation assistant for a SQLite database.
 The database schema is as follows:
 {schema_summary}
 
@@ -51,19 +108,61 @@ IMPORTANT RULES:
 - Do NOT wrap the SQL in markdown formatting or backticks (no ```sql ... ```).
 - Do NOT include any explanations or conversational text.
 - Only generate SELECT statements. No data mutation is allowed.
+- Use ONLY tables and columns explicitly present in the supplied schema. Never invent a table, column, or relationship.
 """
-                ai_response = ai_service.generate(prompt)
+
+        max_retries = 2
+        last_error = None
+        current_sql = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                if attempt == 0:
+                    ai_response = ai_service.generate(prompt)
+                    current_sql = ai_response["response"].strip()
+                else:
+                    # Repair attempt
+                    current_sql = query_intelligence_service.repair_sql(
+                        request.question, current_sql, last_error
+                    )
+                    if not current_sql:
+                        break  # Give up if repair fails to generate
 
                 # Clean up AI output
-                sql = ai_response["response"].strip()
-                if sql.startswith("```sql"):
-                    sql = sql[6:]
-                elif sql.startswith("```"):
-                    sql = sql[3:]
-                sql = sql.removesuffix("```")
-                sql = sql.strip()
+                if current_sql.startswith("```sql"):
+                    current_sql = current_sql[6:]
+                elif current_sql.startswith("```"):
+                    current_sql = current_sql[3:]
+                current_sql = current_sql.removesuffix("```").strip()
+
+                # Validate safety and schema
+                SQLValidator.validate(current_sql)
+                SQLValidator.validate_against_db(current_sql, demo_db_provider)
+
+                # If we get here, it's valid
+                sql = current_sql
                 query_source = "ai"
-            except Exception:  # noqa: BLE001
+                break
+
+            except SQLSafetyError:
+                # Do not retry safety violations
+                error_msg = "The generated query was rejected because it did not meet database safety requirements."
+                history_service.log_query(
+                    question=request.question,
+                    query_source="ai",
+                    status="error",
+                    generated_sql=current_sql,
+                    error_message=error_msg,
+                )
+                return NaturalLanguageQueryResponse(
+                    question=request.question,
+                    generated_sql=current_sql,
+                    status="error",
+                    error=error_msg,
+                    query_source="ai",
+                )
+            except RuntimeError:
+                # If the AI provider fails (network, auth, etc.), do not retry
                 error_msg = "The AI service is temporarily unavailable. A supported fallback was attempted where possible."
                 history_service.log_query(
                     question=request.question,
@@ -75,12 +174,19 @@ IMPORTANT RULES:
                     question=request.question,
                     status="error",
                     error=error_msg,
+                    query_source="ai",
                 )
-        else:
-            error_msg = "I couldn't find data related to that concept in the available database."
+            except Exception as e:  # noqa: BLE001
+                last_error = str(e)
+                # Loop will continue and try to repair
+
+        if not sql:
+            # Exhausted retries
+            tables = ", ".join(schema_service.get_table_names())
+            error_msg = f"I could not map your question to the available database schema. Please ask about one of the available tables: {tables}."
             history_service.log_query(
                 question=request.question,
-                query_source="fallback",
+                query_source="ai",
                 status="error",
                 error_message=error_msg,
             )
@@ -88,14 +194,14 @@ IMPORTANT RULES:
                 question=request.question,
                 status="error",
                 error=error_msg,
+                query_source="ai",
             )
 
+    # 4. Execute Query
     try:
-        # 3. Validate & Execute
         columns, rows, exec_time = query_executor.execute(sql)
         row_count = len(rows)
 
-        # 4. Intelligence
         explanation = query_intelligence_service.generate_explanation(
             sql, request.question
         )
@@ -103,7 +209,6 @@ IMPORTANT RULES:
             request.question, sql
         )
 
-        # 5. History Logging
         history_service.log_query(
             question=request.question,
             query_source=query_source,
@@ -124,10 +229,6 @@ IMPORTANT RULES:
             query_source=query_source,
             explanation=explanation,
             follow_up_suggestions=follow_ups,
-            # Even if row_count == 0, we treat it as success but we can provide an error/message in the frontend.
-            # Wait, the prompt says: "A successful query with zero rows must still be: status = success, with row_count = 0, and a friendly message such as 'No matching records were found.'"
-            # We can put this in the `error` field as a message, or just return it. The prompt says "friendly message such as". We'll put it in `error` or handle in frontend? It says "and a friendly message such as 'No matching records were found.' Do not treat an empty result as a server error."
-            # We can use the error field for the message if row_count == 0, but status remains 'success'.
             error="Your question was understood successfully, but no matching records were found."
             if row_count == 0
             else None,
