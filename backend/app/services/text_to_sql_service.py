@@ -352,12 +352,38 @@ class TextToSQLService:
             )
 
         # 2. General Intent Rules
-        # Category 1: Student counting
-        if re.search(
-            r"^(what is the )?(total )?(number of|count of) students$|^how many students are (in the database|there)$|^tell me the number of students$|^what is the student count$|^give me the total students$|^total number of students$",
+        # Category 1: Entity counting
+        match = re.search(
+            r"^(what is the )?(total )?(number of|count of) (\w+)$|^how many (\w+) are (in the database|there)$|^how many (\w+) exist$|^tell me the number of (\w+)$|^what is the (\w+) count$|^give me the total (\w+)$|^total number of (\w+)$",
             q,
-        ):
-            return QueryPlan(intent="count", entity="students", metrics=["*"])
+        )
+        if match:
+            # Get the first non-None group that corresponds to the entity name
+            entity = next(
+                (
+                    g
+                    for g in match.groups()[3:]
+                    if g and g not in ["in the database", "there"]
+                ),
+                None,
+            )
+            if entity:
+                valid_tables = self.schema_service.get_table_names()
+                actual_entity = entity
+                if entity not in valid_tables:
+                    for t in valid_tables:
+                        if (
+                            t.startswith(entity)
+                            or entity.startswith(t)
+                            or entity + "s" == t
+                            or t + "s" == entity
+                        ):
+                            actual_entity = t
+                            break
+                if actual_entity in valid_tables:
+                    return QueryPlan(
+                        intent="count", entity=actual_entity, metrics=["*"]
+                    )
 
         # Category 2: Department student counts
         if re.search(
@@ -409,25 +435,18 @@ class TextToSQLService:
                 custom_sql=f"SELECT s.student_id, s.first_name, s.last_name, ROUND(AVG(m.score), 2) AS average_score FROM students s JOIN enrollments e ON e.student_id = s.student_id JOIN marks m ON m.enrollment_id = e.enrollment_id GROUP BY s.student_id, s.first_name, s.last_name ORDER BY average_score DESC LIMIT {limit};",
             )
 
-        # Count all
-        match = re.match(
-            r"^how many (\w+) are (in the database|there)$", q
-        ) or re.match(r"^how many (\w+) exist$", q)
-        if match:
-            entity = match.group(1)
-            # basic plural handling
-            if entity == "students":
-                return QueryPlan(intent="count", entity="students", metrics=["*"])
-            if entity == "departments":
-                return QueryPlan(intent="count", entity="departments", metrics=["*"])
-            if entity == "instructors":
-                return QueryPlan(intent="count", entity="instructors", metrics=["*"])
-            return QueryPlan(intent="count", entity=entity, metrics=["*"])
-
         # Select all names
         match = re.match(r"^list the names of all (\w+)$", q)
         if match:
-            return QueryPlan(intent="select", entity=match.group(1), metrics=["name"])
+            entity = match.group(1)
+            valid_tables = self.schema_service.get_table_names()
+            actual_entity = entity
+            if entity not in valid_tables:
+                for t in valid_tables:
+                    if entity + "s" == t or t + "s" == entity:
+                        actual_entity = t
+                        break
+            return QueryPlan(intent="select", entity=actual_entity, metrics=["name"])
 
         # Find by ID
         match = re.match(r"find the (\w+) with (\w+) (\d+)", q)

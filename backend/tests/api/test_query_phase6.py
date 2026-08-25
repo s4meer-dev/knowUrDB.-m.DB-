@@ -64,6 +64,8 @@ def test_query_unsupported_error(client):
     assert (
         "couldn't find data" in data["error"].lower()
         or "unavailable" in data["error"].lower()
+        or "designed to answer questions using the connected database"
+        in data["error"].lower()
     )
 
 

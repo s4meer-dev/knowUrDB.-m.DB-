@@ -56,7 +56,10 @@ def test_unsupported_question():
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "error"
-        assert "I couldn't find data" in data["error"]
+        assert (
+            "This assistant is currently designed to answer questions using the connected database."
+            in data["error"]
+        )
 
 
 def test_unsafe_generated_sql_rejection(monkeypatch):
@@ -202,6 +205,10 @@ def test_ai_fallback_semantic_variation():
                 return_value={"configured": True, "status": "ready"},
             ),
             patch(
+                "app.api.query.query_intelligence_service.analyze_intent",
+                return_value="VALID",
+            ),
+            patch(
                 "app.api.query.ai_service.generate",
                 return_value={
                     "response": "```sql\nSELECT COUNT(*) FROM students;\n```"
@@ -220,6 +227,7 @@ def test_ai_fallback_semantic_variation():
 
 def test_ai_fallback_unavailable():
     # Test semantic variation when AI is unavailable
+    # Now that we added meta query router, explain schema is handled deterministically!
     question = "Explain the database schema."
 
     with patch(
@@ -229,8 +237,9 @@ def test_ai_fallback_unavailable():
         response = client.post("/api/query", json={"question": question})
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "error"
-        assert "I couldn't find data" in data["error"]
+        # Expect SUCCESS now instead of error, because it uses meta_router
+        assert data["status"] == "success"
+        assert "columns" in data["rows"][0]  # Validating it returned schema structure
 
 
 def test_ai_fallback_generates_unsafe_sql():
@@ -256,7 +265,11 @@ def test_ai_fallback_generates_unsafe_sql():
 
 def test_ai_fallback_handles_generation_error():
     # Test AI service throwing an exception
-    question = "Explain the database schema."
+    # Instead of schema, use a query that isn't deterministically handled but passes intent check
+    question = "What is the meaning of life?"
+    # Wait, 'meaning of life' fails deterministic intent check.
+    # Let's use a query that uses table names to bypass deterministic unrelated check:
+    question = "How many complex enrollments per random day?"
 
     with (
         patch(

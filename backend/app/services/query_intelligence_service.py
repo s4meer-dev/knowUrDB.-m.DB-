@@ -21,11 +21,11 @@ class QueryIntelligenceService:
         - AMBIGUOUS: The question is related to databases/records, but relies on tables/concepts not in the schema, or is too vague.
         - UNRELATED: The question has nothing to do with this database or its data.
         Returns 'VALID', 'AMBIGUOUS', or 'UNRELATED'.
-        If AI is unavailable, falls back to 'VALID' to let the existing pipeline try to handle it.
         """
         ai_status = self.ai_service.get_status()
         if not (ai_status.get("configured") and ai_status.get("status") == "ready"):
-            return "VALID"
+            # Deterministic Fallback Heuristic for UNRELATED questions
+            return self._deterministic_intent_fallback(question)
 
         schema_summary = self.schema_service.get_schema_summary().summary
 
@@ -46,9 +46,74 @@ Return ONLY the classification word: VALID, AMBIGUOUS, or UNRELATED.
             intent = response["response"].strip().upper()
             if intent in ["VALID", "AMBIGUOUS", "UNRELATED"]:
                 return intent
-            return "VALID"
+            return self._deterministic_intent_fallback(question)
         except Exception:  # noqa: BLE001
+            return self._deterministic_intent_fallback(question)
+
+    def _deterministic_intent_fallback(self, question: str) -> str:
+        """
+        If AI is down, we use a basic keyword search to catch obviously unrelated questions
+        (e.g., weather, joke, president). If it has ANY database keywords or table names, we assume VALID.
+        """
+        q = question.lower()
+
+        # Check against schema names
+        tables = self.schema_service.get_table_names()
+        for t in tables:
+            if t.lower() in q:
+                return "VALID"
+            # simple singular check (e.g. 'student' matches 'students' table)
+            if t.endswith("s") and t[:-1].lower() in q:
+                return "VALID"
+
+        db_keywords = [
+            "database",
+            "table",
+            "record",
+            "row",
+            "data",
+            "schema",
+            "structure",
+            "summary",
+            "student",
+            "department",
+            "course",
+            "instructor",
+            "enrollment",
+            "mark",
+            "scholarship",
+            "attendance",
+            "profile",
+            "credits",
+            "score",
+            "grade",
+        ]
+
+        # We need at least one strong keyword. 'what', 'which' are too generic.
+        # But also, we need to make sure we don't accidentally block valid questions like "count all"
+
+        # Let's tokenize and check word by word to avoid substring matches like "data" in "metadata"
+        # though "data" is fine, but "row" in "crowd" is bad.
+        import re
+
+        words = set(re.findall(r"\b\w+\b", q))
+
+        # Check if any exact word matches a strong DB keyword
+        if any(kw in words for kw in db_keywords):
             return "VALID"
+
+        # Also check for exact multi-word strong phrases
+        strong_phrases = [
+            "how many",
+            "total number",
+            "average score",
+            "list all",
+            "show me",
+        ]
+        if any(phrase in q for phrase in strong_phrases):
+            return "VALID"
+
+        return "UNRELATED"
 
     def repair_sql(self, question: str, bad_sql: str, error_message: str) -> str | None:
         """

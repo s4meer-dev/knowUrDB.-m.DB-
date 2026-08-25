@@ -4,6 +4,7 @@ from app.core.database import demo_db_provider
 from app.models.query import NaturalLanguageQueryRequest, NaturalLanguageQueryResponse
 from app.services.ai_service import AIService
 from app.services.history_service import HistoryService
+from app.services.meta_query_router import MetaQueryRouter
 from app.services.query_executor import QueryExecutionError, QueryExecutor
 from app.services.query_intelligence_service import QueryIntelligenceService
 from app.services.schema_service import SchemaService
@@ -19,12 +20,38 @@ query_executor = QueryExecutor(demo_db_provider)
 ai_service = AIService()
 history_service = HistoryService()
 query_intelligence_service = QueryIntelligenceService(ai_service, schema_service)
+meta_router = MetaQueryRouter(schema_service, query_executor)
 
 
 @router.post("/query", response_model=NaturalLanguageQueryResponse)
 async def query_database(request: NaturalLanguageQueryRequest):
     if not request.question or not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
+
+    # 0. Deterministic Meta Query Router (Bypass AI entirely for simple schema/count questions)
+    meta_response = meta_router.route_meta_query(request.question)
+    if meta_response:
+        history_service.log_query(
+            question=request.question,
+            query_source="fallback",
+            status="success",
+            generated_sql=meta_response.get("generated_sql", ""),
+            row_count=meta_response["row_count"],
+            execution_time_ms=meta_response["execution_time_ms"],
+        )
+        return NaturalLanguageQueryResponse(
+            question=request.question,
+            generated_sql=meta_response.get("generated_sql", ""),
+            columns=meta_response["columns"],
+            rows=meta_response["rows"],
+            row_count=meta_response["row_count"],
+            execution_time_ms=meta_response["execution_time_ms"],
+            status="success",
+            query_source="fallback",
+            explanation=meta_response["explanation"],
+            follow_up_suggestions=[],
+            error=None,
+        )
 
     # 1. Intent Validation
     intent = query_intelligence_service.analyze_intent(request.question)
