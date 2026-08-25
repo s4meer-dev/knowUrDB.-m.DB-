@@ -92,18 +92,18 @@ export const History: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-full max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between mb-2">
+    <div className="flex flex-col h-full max-w-5xl mx-auto space-y-6 animate-fade-in pt-4">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Query History</h2>
-          <p className="text-gray-500 mt-1">Review your past database questions and results.</p>
+          <h2 className="text-3xl font-bold text-zinc-900 tracking-tight">Query History</h2>
+          <p className="text-zinc-500 mt-2 text-lg">Review your past database questions and results.</p>
         </div>
         
         {items.length > 0 && !loading && (
           <button
             onClick={handleClearAll}
             disabled={clearingAll}
-            className="text-red-600 hover:text-red-800 hover:bg-red-50 px-4 py-2 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+            className="text-red-500 hover:text-red-700 hover:bg-red-50 px-4 py-2 rounded-xl transition-all text-sm font-semibold disabled:opacity-50"
           >
             {clearingAll ? 'Clearing...' : 'Clear All'}
           </button>
@@ -112,7 +112,7 @@ export const History: React.FC = () => {
 
       <div className="flex-1">
         {!loading && items.length === 0 ? (
-          <div className="mt-8">
+          <div className="mt-12">
             <EmptyState 
               title="No history yet" 
               message="Your recent database queries will appear here." 
@@ -124,7 +124,7 @@ export const History: React.FC = () => {
               action={
                 <button 
                   onClick={() => navigate('/')}
-                  className="mt-2 text-indigo-600 hover:text-indigo-800 font-medium"
+                  className="mt-4 text-zinc-900 bg-zinc-100 hover:bg-zinc-200 px-6 py-2.5 rounded-xl font-medium transition-colors"
                 >
                   Start exploring your data &rarr;
                 </button>

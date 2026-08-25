@@ -8,7 +8,8 @@ import type {
   HistoryItem,
   SuggestionsResponse,
   SchemaSummary,
-  TableInfo
+  TableInfo,
+  DatabaseSchema
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
@@ -58,8 +59,8 @@ export const getSuggestions = async (): Promise<SuggestionsResponse> => {
   return response.data;
 };
 
-export const getSchema = async (): Promise<SchemaSummary> => {
-  const response = await apiClient.get<SchemaSummary>('/api/schema');
+export const getSchema = async (): Promise<DatabaseSchema> => {
+  const response = await apiClient.get<DatabaseSchema>('/api/schema');
   return response.data;
 };
 

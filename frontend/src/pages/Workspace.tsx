@@ -48,42 +48,40 @@ export const Workspace: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full max-w-5xl mx-auto space-y-6">
-      <div className="mb-2">
-        <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Explore Database</h2>
-        <p className="text-gray-500 mt-1">Ask questions in plain English to instantly query and analyze your data.</p>
+    <div className="flex flex-col h-full max-w-4xl mx-auto pt-8 pb-12 animate-fade-in">
+      {!result && !loading && (
+        <div className="mb-10 text-center animate-slide-up">
+          <h2 className="text-3xl font-bold text-zinc-900 tracking-tight mb-3">Explore your Database</h2>
+          <p className="text-zinc-500 text-lg">Ask questions in plain English to instantly query and analyze your data.</p>
+        </div>
+      )}
+
+      <div className={`transition-all duration-500 ease-in-out ${result || loading ? 'mb-6' : 'mb-10 transform translate-y-4'}`}>
+        <QueryInput 
+          value={question} 
+          onChange={setQuestion} 
+          onSubmit={() => handleQuery(question)} 
+          isLoading={loading} 
+          disabled={false} 
+        />
       </div>
 
-      <QueryInput 
-        value={question} 
-        onChange={setQuestion} 
-        onSubmit={() => handleQuery(question)} 
-        isLoading={loading} 
-        disabled={false} 
-      />
-
-      <SuggestionsPanel 
-        onSelectSuggestion={handleQuery} 
-        disabled={loading} 
-      />
+      {!result && !loading && (
+        <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
+          <SuggestionsPanel 
+            onSelectSuggestion={handleQuery} 
+            disabled={loading} 
+          />
+        </div>
+      )}
 
       <div className="flex-1">
-        {result || loading ? (
-          <QueryResult 
-            result={result} 
-            isLoading={loading} 
-            onFollowUp={handleQuery} 
-          />
-        ) : (
-          <div className="mt-8">
-            <EmptyState 
-              title="Ready to query" 
-              message="Select a suggestion above or type your own question to explore the database." 
-              icon={
-                <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 16l2.879-2.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242zM21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-              }
+        {(result || loading) && (
+          <div className="animate-fade-in">
+            <QueryResult 
+              result={result} 
+              isLoading={loading} 
+              onFollowUp={handleQuery} 
             />
           </div>
         )}

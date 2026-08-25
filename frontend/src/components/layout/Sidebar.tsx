@@ -33,17 +33,17 @@ export const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex-shrink-0 hidden md:flex flex-col h-[calc(100vh-73px)] sticky top-[73px]">
-      <nav className="flex-1 py-6 px-4 space-y-2">
+    <aside className="w-64 bg-white/50 backdrop-blur-sm border-r border-zinc-200 flex-shrink-0 hidden md:flex flex-col h-[calc(100vh-65px)] sticky top-[65px]">
+      <nav className="flex-1 py-6 px-4 space-y-1.5">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             className={({ isActive }) => 
-              `flex items-center px-4 py-3 rounded-xl transition-colors font-medium text-sm
+              `flex items-center px-4 py-2.5 rounded-lg transition-all font-medium text-sm border
               ${isActive 
-                ? 'bg-indigo-50 text-indigo-700' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`
+                ? 'bg-white border-zinc-200/60 shadow-sm text-zinc-900' 
+                : 'border-transparent text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/50'}`
             }
           >
             {item.icon}
@@ -51,14 +51,14 @@ export const Sidebar: React.FC = () => {
           </NavLink>
         ))}
       </nav>
-      <div className="p-4 border-t border-gray-200">
-        <div className="bg-indigo-50 rounded-xl p-4 text-center">
-          <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="p-4 border-t border-zinc-200/50">
+        <div className="bg-zinc-900 rounded-xl p-4 text-center group cursor-pointer transition-transform hover:scale-[1.02]">
+          <div className="w-8 h-8 bg-zinc-800 text-zinc-300 rounded-lg flex items-center justify-center mx-auto mb-2 transition-colors group-hover:text-white group-hover:bg-zinc-700">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
             </svg>
           </div>
-          <p className="text-xs text-indigo-800 font-medium">Powered by Gemini AI</p>
+          <p className="text-[11px] text-zinc-400 font-medium tracking-wide uppercase group-hover:text-zinc-300 transition-colors">Powered by AI</p>
         </div>
       </div>
     </aside>

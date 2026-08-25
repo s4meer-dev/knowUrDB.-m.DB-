@@ -1,18 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { getSchema, getTableSchema } from '../services/api';
-import type { SchemaSummary, TableInfo } from '../types';
+import { getSchema } from '../services/api';
+import type { DatabaseSchema, TableInfo } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { ErrorState } from '../components/common/ErrorState';
 
 export const Schema: React.FC = () => {
-  const [summary, setSummary] = useState<SchemaSummary | null>(null);
+  const [summary, setSummary] = useState<DatabaseSchema | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [errorSummary, setErrorSummary] = useState(false);
 
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [tableDetails, setTableDetails] = useState<TableInfo | null>(null);
-  const [loadingTable, setLoadingTable] = useState(false);
-  const [errorTable, setErrorTable] = useState(false);
 
   const fetchSummary = async () => {
     try {
@@ -31,17 +29,11 @@ export const Schema: React.FC = () => {
     fetchSummary();
   }, []);
 
-  const fetchTableDetails = async (tableName: string) => {
-    try {
-      setSelectedTable(tableName);
-      setLoadingTable(true);
-      setErrorTable(false);
-      const data = await getTableSchema(tableName);
-      setTableDetails(data);
-    } catch {
-      setErrorTable(true);
-    } finally {
-      setLoadingTable(false);
+  const handleTableSelect = (tableName: string) => {
+    setSelectedTable(tableName);
+    if (summary) {
+      const details = summary.tables.find(t => t.name === tableName);
+      setTableDetails(details || null);
     }
   };
 
@@ -70,7 +62,7 @@ export const Schema: React.FC = () => {
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Schema Explorer</h2>
         <p className="text-gray-500 mt-1">
-          Explore the structure of your database. {summary?.total_tables} tables available.
+          Explore the structure of your database. {summary?.tables.length} tables available.
         </p>
       </div>
 
@@ -83,10 +75,10 @@ export const Schema: React.FC = () => {
           <div className="flex-1 overflow-auto p-2 space-y-1">
             {summary?.tables.map(table => (
               <button
-                key={table}
-                onClick={() => fetchTableDetails(table)}
+                key={table.name}
+                onClick={() => handleTableSelect(table.name)}
                 className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-between group
-                  ${selectedTable === table 
+                  ${selectedTable === table.name 
                     ? 'bg-indigo-50 text-indigo-700 font-medium' 
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
               >
@@ -94,9 +86,9 @@ export const Schema: React.FC = () => {
                   <svg className="w-4 h-4 mr-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
                   </svg>
-                  <span className="truncate">{table}</span>
+                  <span className="truncate">{table.name}</span>
                 </div>
-                <svg className={`w-4 h-4 opacity-0 transition-opacity ${selectedTable === table ? 'opacity-100 text-indigo-500' : 'group-hover:opacity-50'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`w-4 h-4 opacity-0 transition-opacity ${selectedTable === table.name ? 'opacity-100 text-indigo-500' : 'group-hover:opacity-50'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
                 </svg>
               </button>
@@ -114,16 +106,12 @@ export const Schema: React.FC = () => {
               <p className="text-lg font-medium text-gray-600">Select a table</p>
               <p className="text-sm mt-1">Choose a table from the list to view its columns and data types.</p>
             </div>
-          ) : loadingTable ? (
-            <div className="flex-1 flex items-center justify-center">
-              <LoadingSpinner text={`Loading ${selectedTable}...`} />
-            </div>
-          ) : errorTable || !tableDetails ? (
+          ) : !tableDetails ? (
             <div className="flex-1 flex items-center justify-center p-8">
               <ErrorState 
                 title="Table not found" 
                 message={`Could not load schema for ${selectedTable}.`}
-                onRetry={() => fetchTableDetails(selectedTable)}
+                onRetry={() => handleTableSelect(selectedTable)}
               />
             </div>
           ) : (
@@ -134,13 +122,13 @@ export const Schema: React.FC = () => {
                     <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
                     </svg>
-                    {tableDetails.table_name}
+                    {tableDetails.name}
                   </h3>
                   <p className="text-sm text-gray-500 mt-1 flex items-center">
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
                     </svg>
-                    {tableDetails.row_count} row{tableDetails.row_count !== 1 ? 's' : ''} • {tableDetails.columns.length} columns
+                    {tableDetails.columns.length} columns
                   </p>
                 </div>
               </div>
@@ -161,17 +149,21 @@ export const Schema: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-100">
-                    {tableDetails.columns.map((col, idx) => (
+                    {tableDetails.columns.map((col, idx) => {
+                      const isPrimaryKey = tableDetails.primary_keys.includes(col.name) || col.primary_key;
+                      const foreignKey = tableDetails.foreign_keys.find(fk => fk.source_column === col.name);
+                      
+                      return (
                       <tr key={idx} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {col.name}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600 font-mono">
-                          {col.type}
+                          {col.type || (col as any).data_type}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <div className="flex gap-2">
-                            {col.primary_key && (
+                            {isPrimaryKey && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
                                 <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
@@ -179,18 +171,18 @@ export const Schema: React.FC = () => {
                                 Primary Key
                               </span>
                             )}
-                            {col.foreign_key && (
+                            {foreignKey && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
                                 <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                                 </svg>
-                                FK: {col.foreign_key.table}.{col.foreign_key.column}
+                                FK: {foreignKey.referenced_table}.{foreignKey.referenced_column}
                               </span>
                             )}
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>

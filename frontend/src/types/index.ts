@@ -64,13 +64,23 @@ export interface ColumnInfo {
   } | null;
 }
 
+export interface ForeignKeyInfo {
+  source_column: string;
+  referenced_table: string;
+  referenced_column: string;
+}
+
 export interface TableInfo {
-  table_name: string;
+  name: string;
   columns: ColumnInfo[];
-  row_count: number;
+  primary_keys: string[];
+  foreign_keys: ForeignKeyInfo[];
+}
+
+export interface DatabaseSchema {
+  tables: TableInfo[];
 }
 
 export interface SchemaSummary {
-  tables: string[];
-  total_tables: number;
+  summary: string;
 }

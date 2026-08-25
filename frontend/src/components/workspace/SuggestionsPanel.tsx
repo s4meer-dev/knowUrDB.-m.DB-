@@ -60,33 +60,14 @@ export const SuggestionsPanel: React.FC<SuggestionsPanelProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center">
-          <svg className="w-4 h-4 mr-1 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-          </svg>
-          Suggested Questions
-        </h3>
-        <button 
-          onClick={fetchSuggestions}
-          className="text-gray-400 hover:text-indigo-600 p-1 rounded-md transition-colors"
-          title="Refresh suggestions"
-          disabled={disabled}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-          </svg>
-        </button>
-      </div>
-      
-      <div className="flex flex-wrap gap-2">
+    <div className="w-full">
+      <div className="flex flex-wrap items-center justify-center gap-2">
         {suggestions.map((s, idx) => (
           <button
             key={idx}
             onClick={() => onSelectSuggestion(s.question)}
             disabled={disabled}
-            className="text-sm bg-gray-50 text-gray-700 border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50 text-left flex-grow md:flex-grow-0"
+            className="text-sm font-medium bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 px-4 py-2 rounded-xl transition-all disabled:opacity-50 shadow-sm"
           >
             {s.question}
           </button>
