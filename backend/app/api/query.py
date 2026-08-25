@@ -190,7 +190,7 @@ IMPORTANT RULES:
                 )
             except RuntimeError:
                 # If the AI provider fails (network, auth, etc.), do not retry
-                error_msg = "The AI service is temporarily unavailable. A supported fallback was attempted where possible."
+                error_msg = "I could not confidently interpret that database request. Please ask about the available tables, columns, records, or data in the connected database."
                 history_service.log_query(
                     question=request.question,
                     query_source="ai",
@@ -209,8 +209,7 @@ IMPORTANT RULES:
 
         if not sql:
             # Exhausted retries
-            tables = ", ".join(schema_service.get_table_names())
-            error_msg = f"I could not map your question to the available database schema. Please ask about one of the available tables: {tables}."
+            error_msg = "I could not confidently interpret that database request. Please ask about the available tables, columns, records, or data in the connected database."
             history_service.log_query(
                 question=request.question,
                 query_source="ai",

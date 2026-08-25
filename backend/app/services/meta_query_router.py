@@ -17,8 +17,10 @@ class MetaQueryRouter:
 
     def normalize_question(self, question: str) -> str:
         q = question.lower().strip()
-        q = q.removesuffix("?")
-        q = q.replace(".", "")
+        # Remove common punctuation
+        q = re.sub(r'[^\w\s]', '', q)
+        # Normalize whitespace
+        q = re.sub(r'\s+', ' ', q)
         return q.strip()
 
     def route_meta_query(self, question: str) -> dict[str, Any] | None:
@@ -28,25 +30,41 @@ class MetaQueryRouter:
         if matched, otherwise returns None.
         """
         q = self.normalize_question(question)
+        words = set(q.split())
 
         # 1. Table Listing & Schema Summary
-        if re.search(
-            r"^(show|list)( me)?( all)?( available)? tables( in the database)?$|^what tables are in the database$|^which tables exist$|^show database tables$",
-            q,
-        ):
-            return self._handle_list_tables()
+        table_keywords = {"tables", "table"}
+        discovery_keywords = {"show", "list", "what", "which", "available", "exist"}
+        
+        schema_keywords = {"schema", "database", "structure", "information", "data", "summary", "describe", "explain", "contain"}
 
-        if re.search(
-            r"^what information is stored in the database$|^describe the database$|^what data is available$|^what does this database contain$|^show me the database structure$|^explain the database schema$|^give me a summary of the database$",
-            q,
+        # If they ask about tables
+        if table_keywords.intersection(words) and discovery_keywords.intersection(words):
+            # E.g. "what tables are available", "show database tables", "list all tables"
+            if not schema_keywords.intersection(words) - {"database"}: 
+                # Avoid triggering if they just said "what data is in the tables" -> that's schema/overview
+                return self._handle_list_tables()
+
+        # If they ask for database overview/schema
+        if ("database" in words or "schema" in words or "data" in words or "information" in words) and (
+            "describe" in words or "explain" in words or "summary" in words or "structure" in words or 
+            ("what" in words and ("stored" in words or "available" in words or "contain" in words or "in" in words)) or
+            "about" in words
         ):
+            # E.g. "describe the database", "what data is available in the database", "give me information about the database"
             return self._handle_schema_summary()
 
         # 2. Global Record Counts
-        if re.search(
-            r"^give me the total number of records$|^how many records are (there|in the database)$|^what is the total row count$|^total number of records$",
-            q,
-        ):
+        count_keywords = {"count", "number", "how", "many", "total"}
+        record_keywords = {"records", "rows", "data"}
+        
+        if ("total" in words and "number" in words and "records" in words) or \
+           ("how" in words and "many" in words and "records" in words) or \
+           ("total" in words and "row" in words and "count" in words):
+            return self._handle_global_record_count()
+            
+        # Add basic count all records as well
+        if "count" in words and "records" in words:
             return self._handle_global_record_count()
 
         return None

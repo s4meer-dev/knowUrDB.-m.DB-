@@ -497,6 +497,38 @@ class TextToSQLService:
                 filters=[{"col": "hire_year", "op": ">", "val": year, "type": "int"}],
             )
 
+        # --- 3. NLP-Lite Fallback ---
+        q_clean = re.sub(r'[^\w\s]', '', q)
+        q_clean = re.sub(r'\s+', ' ', q_clean)
+        words = q_clean.split()
+        
+        forbidden_keywords = {"delete", "drop", "update", "insert", "alter", "create"}
+        if forbidden_keywords.intersection(set(words)):
+            raise ValueError(f"Could not parse question safely: {question}")
+            
+        valid_tables = self.schema_service.get_table_names()
+        
+        def find_entity(token_list: list[str]) -> str | None:
+            for w in token_list:
+                for t in valid_tables:
+                    if w == t or w + "s" == t or (w.endswith("s") and w[:-1] == t):
+                        return t
+            joined = "_".join(token_list)
+            for t in valid_tables:
+                if t in joined or t.replace("_", "") in "".join(token_list):
+                    return t
+            return None
+
+        entity = find_entity(words)
+
+        if entity:
+            count_keywords = {"count", "number", "how", "many", "total"}
+            is_count = bool(count_keywords.intersection(set(words)))
+
+            if is_count:
+                return QueryPlan(intent="count", entity=entity, metrics=["*"])
+            return QueryPlan(intent="select", entity=entity, metrics=["*"])
+
         # Default fallback
         raise ValueError(f"Could not parse question: {question}")
 

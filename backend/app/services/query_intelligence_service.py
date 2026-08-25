@@ -56,50 +56,26 @@ Return ONLY the classification word: VALID, AMBIGUOUS, or UNRELATED.
         (e.g., weather, joke, president). If it has ANY database keywords or table names, we assume VALID.
         """
         q = question.lower()
+        import re
+        q = re.sub(r'[^\w\s]', '', q)
+        q = re.sub(r'\s+', ' ', q)
 
-        # Check against schema names
+        words = set(q.split())
+        
+        # Check against schema names (handle plurals)
         tables = self.schema_service.get_table_names()
         for t in tables:
-            if t.lower() in q:
-                return "VALID"
-            # simple singular check (e.g. 'student' matches 'students' table)
-            if t.endswith("s") and t[:-1].lower() in q:
+            t_lower = t.lower()
+            if t_lower in words or (t_lower.endswith('s') and t_lower[:-1] in words) or (t_lower + 's' in words):
                 return "VALID"
 
-        db_keywords = [
-            "database",
-            "table",
-            "record",
-            "row",
-            "data",
-            "schema",
-            "structure",
-            "summary",
-            "student",
-            "department",
-            "course",
-            "instructor",
-            "enrollment",
-            "mark",
-            "scholarship",
-            "attendance",
-            "profile",
-            "credits",
-            "score",
-            "grade",
-        ]
-
-        # We need at least one strong keyword. 'what', 'which' are too generic.
-        # But also, we need to make sure we don't accidentally block valid questions like "count all"
-
-        # Let's tokenize and check word by word to avoid substring matches like "data" in "metadata"
-        # though "data" is fine, but "row" in "crowd" is bad.
-        import re
-
-        words = set(re.findall(r"\b\w+\b", q))
+        db_keywords = {
+            "database", "table", "tables", "record", "records", "row", "rows", "data", "schema", 
+            "structure", "summary", "count", "number", "total", "average", "maximum", "minimum"
+        }
 
         # Check if any exact word matches a strong DB keyword
-        if any(kw in words for kw in db_keywords):
+        if db_keywords.intersection(words):
             return "VALID"
 
         # Also check for exact multi-word strong phrases
@@ -109,6 +85,7 @@ Return ONLY the classification word: VALID, AMBIGUOUS, or UNRELATED.
             "average score",
             "list all",
             "show me",
+            "give me"
         ]
         if any(phrase in q for phrase in strong_phrases):
             return "VALID"
