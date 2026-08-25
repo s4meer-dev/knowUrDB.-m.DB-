@@ -14,14 +14,14 @@ export const SqlPanel: React.FC<SqlPanelProps> = ({ sql }) => {
   };
 
   return (
-    <div className="bg-gray-900 text-gray-100 p-4 border-b border-gray-200">
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+    <div className="bg-[#09090b] text-zinc-100 p-5 border-b border-zinc-800/80 shadow-[inset_0_2px_10px_rgba(0,0,0,0.2)]">
+      <div className="flex justify-between items-center mb-3">
+        <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
           Generated SQL
         </span>
         <button
           onClick={handleCopy}
-          className="text-xs text-gray-400 hover:text-white transition-colors flex items-center"
+          className="text-xs text-zinc-400 hover:text-cyan-400 transition-colors flex items-center"
         >
           {copied ? (
             <>
@@ -41,7 +41,7 @@ export const SqlPanel: React.FC<SqlPanelProps> = ({ sql }) => {
         </button>
       </div>
       <div className="overflow-x-auto">
-        <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed text-indigo-300">
+        <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed text-cyan-300/90">
           {sql}
         </pre>
       </div>

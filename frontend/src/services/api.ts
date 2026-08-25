@@ -7,7 +7,6 @@ import type {
   HistoryListResponse,
   HistoryItem,
   SuggestionsResponse,
-  SchemaSummary,
   TableInfo,
   DatabaseSchema
 } from '../types';

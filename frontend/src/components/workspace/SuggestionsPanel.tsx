@@ -35,7 +35,7 @@ export const SuggestionsPanel: React.FC<SuggestionsPanelProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 min-h-[120px] flex items-center justify-center">
+      <div className="bg-[#09090b]/50 backdrop-blur-sm rounded-xl border border-zinc-800/50 p-4 min-h-[120px] flex items-center justify-center">
         <LoadingSpinner size="sm" text="Loading suggestions..." />
       </div>
     );
@@ -43,11 +43,11 @@ export const SuggestionsPanel: React.FC<SuggestionsPanelProps> = ({
 
   if (error) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
-        <p className="text-sm text-gray-500 mb-2">Could not load suggestions.</p>
+      <div className="bg-[#09090b]/50 backdrop-blur-sm rounded-xl border border-zinc-800/50 p-4 text-center">
+        <p className="text-sm text-zinc-500 mb-2">Could not load suggestions.</p>
         <button 
           onClick={fetchSuggestions}
-          className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+          className="text-cyan-500 hover:text-cyan-400 text-sm font-medium transition-colors"
         >
           Try again
         </button>
@@ -61,13 +61,13 @@ export const SuggestionsPanel: React.FC<SuggestionsPanelProps> = ({
 
   return (
     <div className="w-full">
-      <div className="flex flex-wrap items-center justify-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-3">
         {suggestions.map((s, idx) => (
           <button
             key={idx}
             onClick={() => onSelectSuggestion(s.question)}
             disabled={disabled}
-            className="text-sm font-medium bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 px-4 py-2 rounded-xl transition-all disabled:opacity-50 shadow-sm"
+            className="text-sm font-medium bg-zinc-900/50 backdrop-blur-sm text-zinc-400 border border-zinc-800/80 hover:border-cyan-500/30 hover:text-cyan-400 hover:bg-cyan-500/5 px-4 py-2.5 rounded-full transition-all disabled:opacity-50 shadow-sm"
           >
             {s.question}
           </button>

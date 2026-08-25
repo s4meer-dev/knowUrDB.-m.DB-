@@ -95,15 +95,15 @@ export const History: React.FC = () => {
     <div className="flex flex-col h-full max-w-5xl mx-auto space-y-6 animate-fade-in pt-4">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-3xl font-bold text-zinc-900 tracking-tight">Query History</h2>
-          <p className="text-zinc-500 mt-2 text-lg">Review your past database questions and results.</p>
+          <h2 className="text-3xl font-bold text-zinc-100 tracking-tight">Query History</h2>
+          <p className="text-zinc-400 mt-2 text-lg">Review your past database questions and results.</p>
         </div>
         
         {items.length > 0 && !loading && (
           <button
             onClick={handleClearAll}
             disabled={clearingAll}
-            className="text-red-500 hover:text-red-700 hover:bg-red-50 px-4 py-2 rounded-xl transition-all text-sm font-semibold disabled:opacity-50"
+            className="text-red-400 hover:text-red-300 hover:bg-red-500/10 px-4 py-2 rounded-xl transition-all text-sm font-semibold disabled:opacity-50"
           >
             {clearingAll ? 'Clearing...' : 'Clear All'}
           </button>
@@ -117,7 +117,7 @@ export const History: React.FC = () => {
               title="No history yet" 
               message="Your recent database queries will appear here." 
               icon={
-                <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-16 h-16 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
               }

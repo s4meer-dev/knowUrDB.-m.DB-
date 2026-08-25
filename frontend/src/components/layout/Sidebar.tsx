@@ -33,34 +33,26 @@ export const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="w-64 bg-white/50 backdrop-blur-sm border-r border-zinc-200 flex-shrink-0 hidden md:flex flex-col h-[calc(100vh-65px)] sticky top-[65px]">
-      <nav className="flex-1 py-6 px-4 space-y-1.5">
+    <aside className="w-64 bg-[#09090b]/80 backdrop-blur-xl border-r border-zinc-800/50 flex-shrink-0 hidden md:flex flex-col h-[calc(100vh-65px)] sticky top-[65px]">
+      <nav className="flex-1 py-8 px-4 space-y-1.5">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             className={({ isActive }) => 
-              `flex items-center px-4 py-2.5 rounded-lg transition-all font-medium text-sm border
+              `flex items-center px-4 py-3 rounded-xl transition-all font-medium text-sm border
               ${isActive 
-                ? 'bg-white border-zinc-200/60 shadow-sm text-zinc-900' 
-                : 'border-transparent text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/50'}`
+                ? 'bg-zinc-900 border-zinc-700/50 shadow-[0_0_15px_rgba(34,211,238,0.05)] text-cyan-400' 
+                : 'border-transparent text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/50'}`
             }
           >
-            {item.icon}
+            <div className={`mr-3 transition-colors ${location.pathname === item.to ? 'text-cyan-400' : 'text-zinc-500 group-hover:text-zinc-300'}`}>
+              {item.icon}
+            </div>
             {item.label}
           </NavLink>
         ))}
       </nav>
-      <div className="p-4 border-t border-zinc-200/50">
-        <div className="bg-zinc-900 rounded-xl p-4 text-center group cursor-pointer transition-transform hover:scale-[1.02]">
-          <div className="w-8 h-8 bg-zinc-800 text-zinc-300 rounded-lg flex items-center justify-center mx-auto mb-2 transition-colors group-hover:text-white group-hover:bg-zinc-700">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-            </svg>
-          </div>
-          <p className="text-[11px] text-zinc-400 font-medium tracking-wide uppercase group-hover:text-zinc-300 transition-colors">Powered by AI</p>
-        </div>
-      </div>
     </aside>
   );
 };

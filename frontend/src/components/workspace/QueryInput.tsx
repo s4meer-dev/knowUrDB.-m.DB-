@@ -35,11 +35,11 @@ export const QueryInput: React.FC<QueryInputProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-2 relative transition-all focus-within:ring-4 focus-within:ring-zinc-100 focus-within:border-zinc-300">
+    <div className="bg-zinc-900/80 backdrop-blur-md rounded-2xl shadow-lg border border-zinc-800/80 p-2 relative transition-all focus-within:ring-2 focus-within:ring-cyan-500/50 focus-within:border-cyan-500/50 focus-within:shadow-[0_0_30px_rgba(34,211,238,0.1)]">
       <div className="flex flex-col relative">
         <textarea
           ref={textareaRef}
-          className="w-full bg-transparent border-none rounded-xl p-4 pr-16 text-zinc-800 placeholder-zinc-400 focus:ring-0 focus:outline-none resize-none min-h-[100px] text-lg font-medium leading-relaxed disabled:opacity-50"
+          className="w-full bg-transparent border-none rounded-xl p-4 pr-16 text-zinc-100 placeholder-zinc-500 focus:ring-0 focus:outline-none resize-none min-h-[100px] text-lg font-medium leading-relaxed disabled:opacity-50"
           placeholder="Ask anything about your database..."
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -55,8 +55,8 @@ export const QueryInput: React.FC<QueryInputProps> = ({
             disabled={!value.trim() || disabled || isLoading}
             className={`flex items-center justify-center p-3 rounded-xl transition-all ${
               value.trim() && !disabled && !isLoading
-                ? 'bg-zinc-900 text-white shadow-md hover:bg-zinc-800 hover:scale-105 active:scale-95'
-                : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'
+                ? 'bg-cyan-500 text-zinc-950 shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:bg-cyan-400 hover:scale-105 active:scale-95'
+                : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
             }`}
             title="Send Query (Enter)"
           >

@@ -12,7 +12,7 @@ interface HistoryListProps {
 export const HistoryList: React.FC<HistoryListProps> = ({ items, isLoading, onItemClick }) => {
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+      <div className="bg-[#09090b]/50 backdrop-blur-md rounded-2xl shadow-xl border border-zinc-800/80 p-12">
         <LoadingSpinner text="Loading your history..." />
       </div>
     );

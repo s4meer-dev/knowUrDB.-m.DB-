@@ -28,20 +28,22 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
   if (!result) return null;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden flex flex-col mt-4 max-h-[800px] animate-fade-in">
+    <div className="bg-[#09090b]/80 backdrop-blur-xl rounded-2xl shadow-xl border border-zinc-800/80 overflow-hidden flex flex-col mt-4 max-h-[800px] animate-fade-in relative">
+      <div className="absolute inset-0 bg-gradient-to-b from-zinc-800/20 to-transparent pointer-events-none"></div>
+      
       {/* Result Header */}
-      <div className="bg-zinc-50/50 border-b border-zinc-100 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-zinc-900/90 border-b border-zinc-800/80 px-6 py-4 flex flex-wrap items-center justify-between gap-4 relative z-10">
         <div>
-          <h2 className="font-semibold text-zinc-800 flex items-center tracking-tight">
+          <h2 className="font-semibold text-zinc-100 flex items-center tracking-tight">
             {isLoading && (
-              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-zinc-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
             )}
             {isLoading ? 'Analyzing...' : 'Result'}
           </h2>
-          <p className="text-sm text-zinc-500 mt-0.5 line-clamp-1" title={result.question}>
+          <p className="text-sm text-zinc-400 mt-0.5 line-clamp-1 font-medium" title={result.question}>
             {result.question}
           </p>
         </div>
@@ -49,7 +51,7 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
         {result.generated_sql && result.status === 'success' && (
           <button
             onClick={() => setShowSql(!showSql)}
-            className="text-xs text-zinc-600 hover:text-zinc-900 font-medium flex items-center bg-white border border-zinc-200 shadow-sm px-3 py-1.5 rounded-lg transition-colors"
+            className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/20 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
           >
             <svg className={`w-3.5 h-3.5 mr-1.5 transition-transform ${showSql ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
@@ -59,7 +61,7 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
         )}
       </div>
 
-      <div className={`transition-opacity duration-300 flex flex-col overflow-hidden ${isLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`transition-opacity duration-300 flex flex-col overflow-hidden relative z-10 ${isLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
         {/* SQL Panel */}
         {showSql && result.generated_sql && result.status === 'success' && (
           <SqlPanel sql={result.generated_sql} />
