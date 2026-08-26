@@ -1,2 +1,3 @@
 build(deps): update dependency resolution strategies at 2026-08-26T10:00:18
 chore(ci): configure pipeline caching for faster builds at 2026-08-26T11:00:18
+docs(api): update swagger schemas for internal endpoints at 2026-08-26T12:00:18
