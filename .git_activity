@@ -1,1 +1,2 @@
 build(deps): update dependency resolution strategies at 2026-08-26T10:00:18
+chore(ci): configure pipeline caching for faster builds at 2026-08-26T11:00:18
