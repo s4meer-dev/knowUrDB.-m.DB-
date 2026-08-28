@@ -8,7 +8,9 @@ import type {
   HistoryItem,
   SuggestionsResponse,
   TableInfo,
-  DatabaseSchema
+  DatabaseSchema,
+  DatabaseStatusResponse,
+  BasicResponse
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
@@ -65,5 +67,27 @@ export const getSchema = async (): Promise<DatabaseSchema> => {
 
 export const getTableSchema = async (table: string): Promise<TableInfo> => {
   const response = await apiClient.get<TableInfo>(`/api/schema/${table}`);
+  return response.data;
+};
+
+export const getDatabaseStatus = async (): Promise<DatabaseStatusResponse> => {
+  const response = await apiClient.get<DatabaseStatusResponse>('/api/database/status');
+  return response.data;
+};
+
+export const resetDatabase = async (): Promise<BasicResponse> => {
+  const response = await apiClient.post<BasicResponse>('/api/database/reset');
+  return response.data;
+};
+
+export const uploadDatabase = async (file: File): Promise<DatabaseStatusResponse> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await apiClient.post<DatabaseStatusResponse>('/api/database/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
   return response.data;
 };

@@ -9,6 +9,7 @@ from app.api.history import router as history_router
 from app.api.query import router as query_router
 from app.api.schema import router as schema_router
 from app.api.suggestions import router as suggestions_router
+from app.api.database import router as database_router
 from app.core.app_database import app_db_provider
 from app.core.config import settings
 
@@ -48,3 +49,4 @@ app.include_router(schema_router, prefix="/api", tags=["schema"])
 app.include_router(ai_router, prefix="/api/ai", tags=["ai"])
 app.include_router(history_router, prefix="/api/history", tags=["history"])
 app.include_router(suggestions_router, prefix="/api/suggestions", tags=["suggestions"])
+app.include_router(database_router, prefix="/api/database", tags=["database"])

@@ -84,3 +84,14 @@ export interface DatabaseSchema {
 export interface SchemaSummary {
   summary: string;
 }
+
+export interface DatabaseStatusResponse {
+  is_demo: boolean;
+  name: string;
+  path: string;
+}
+
+export interface BasicResponse {
+  status: string;
+  message: string;
+}

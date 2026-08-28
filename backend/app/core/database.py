@@ -37,4 +37,44 @@ DEFAULT_DEMO_DB_PATH = (
     / "demo"
     / "knowurdb_demo.db"
 )
+# Still export for backwards compatibility in existing tests or imports
 demo_db_provider = DatabaseProvider(DEFAULT_DEMO_DB_PATH)
+
+class DatabaseManager:
+    @staticmethod
+    def get_active_provider() -> DatabaseProvider:
+        from app.core.app_database import app_db_provider
+        active_db_path_str = app_db_provider.get_setting("active_database_path")
+        if active_db_path_str:
+            path = Path(active_db_path_str)
+            if path.exists():
+                return DatabaseProvider(path)
+        return DatabaseProvider(DEFAULT_DEMO_DB_PATH)
+
+    @staticmethod
+    def get_active_database_info() -> dict:
+        from app.core.app_database import app_db_provider
+        active_db_path_str = app_db_provider.get_setting("active_database_path")
+        if active_db_path_str:
+            path = Path(active_db_path_str)
+            if path.exists():
+                return {
+                    "is_demo": False,
+                    "name": path.name,
+                    "path": str(path)
+                }
+        return {
+            "is_demo": True,
+            "name": "Demo Database",
+            "path": str(DEFAULT_DEMO_DB_PATH)
+        }
+        
+    @staticmethod
+    def set_active_database(path: str):
+        from app.core.app_database import app_db_provider
+        app_db_provider.set_setting("active_database_path", path)
+        
+    @staticmethod
+    def reset_to_demo():
+        from app.core.app_database import app_db_provider
+        app_db_provider.set_setting("active_database_path", "")

@@ -30,6 +30,15 @@ class AppDatabaseProvider:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
         with self.get_connection() as conn:
+            # Settings table for active database state
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+                """
+            )
             # Query history table
             conn.execute(
                 """
@@ -51,6 +60,19 @@ class AppDatabaseProvider:
                 "CREATE INDEX IF NOT EXISTS idx_query_history_created_at ON query_history(created_at DESC)"
             )
 
+    def get_setting(self, key: str) -> str | None:
+        with self.get_connection() as conn:
+            cursor = conn.execute("SELECT value FROM settings WHERE key = ?", (key,))
+            row = cursor.fetchone()
+            return row["value"] if row else None
+
+    def set_setting(self, key: str, value: str):
+        with self.get_connection() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                (key, value)
+            )
+            conn.commit()
 
 # Default provider pointing to the app DB in the database folder
 DEFAULT_APP_DB_PATH = Path(__file__).parent.parent.parent.parent / "database" / "app.db"

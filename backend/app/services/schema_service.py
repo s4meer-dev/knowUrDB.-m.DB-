@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.core.database import DatabaseProvider
+from app.core.database import DatabaseManager, DatabaseProvider
 from app.models.schema import (
     ColumnInfo,
     DatabaseSchema,
@@ -15,19 +15,21 @@ class SchemaService:
     Schema intelligence module to provide structured metadata about the database.
     """
 
-    def __init__(self, db_provider: DatabaseProvider):
+    def __init__(self, db_provider: DatabaseProvider | None = None):
         self.db_provider = db_provider
-        self._schema_cache: DatabaseSchema | None = None
+        self._schema_cache: dict[str, DatabaseSchema] = {}
 
     def get_schema(self) -> DatabaseSchema:
         """
         Returns structured metadata about tables, columns, primary keys, and foreign keys.
         """
-        if self._schema_cache:
-            return self._schema_cache
+        provider = self.db_provider or DatabaseManager.get_active_provider()
+        cache_key = str(provider.db_path)
+        if cache_key in self._schema_cache:
+            return self._schema_cache[cache_key]
 
         tables = []
-        conn = self.db_provider.get_connection()
+        conn = provider.get_connection()
         try:
             cursor = conn.cursor()
 
@@ -42,7 +44,7 @@ class SchemaService:
                 tables.append(table_info)
 
             schema = DatabaseSchema(tables=tables)
-            self._schema_cache = schema
+            self._schema_cache[cache_key] = schema
             return schema
         finally:
             conn.close()
@@ -59,7 +61,8 @@ class SchemaService:
         if table_name.startswith("sqlite_"):
             raise ValueError(f"Access to internal table '{table_name}' is not allowed.")
 
-        conn = self.db_provider.get_connection()
+        provider = self.db_provider or DatabaseManager.get_active_provider()
+        conn = provider.get_connection()
         try:
             cursor = conn.cursor()
 

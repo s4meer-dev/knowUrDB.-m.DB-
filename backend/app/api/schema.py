@@ -1,13 +1,12 @@
 from fastapi import APIRouter, HTTPException
 
-from app.core.database import demo_db_provider
 from app.models.schema import DatabaseSchema, SchemaSummary, TableInfo
 from app.services.schema_service import SchemaService
 
 router = APIRouter()
 
-# In a real app, these would be injected dependencies
-schema_service = SchemaService(demo_db_provider)
+# In a real app, these would be injected
+schema_service = SchemaService()
 
 
 @router.get("/schema", response_model=DatabaseSchema)

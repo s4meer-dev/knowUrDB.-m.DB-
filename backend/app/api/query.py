@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app.core.database import demo_db_provider
+from app.core.database import DatabaseManager
 from app.models.query import NaturalLanguageQueryRequest, NaturalLanguageQueryResponse
 from app.services.ai_service import AIService
 from app.services.history_service import HistoryService
@@ -14,9 +14,9 @@ from app.services.text_to_sql_service import TextToSQLService
 router = APIRouter()
 
 # Dependencies
-schema_service = SchemaService(demo_db_provider)
+schema_service = SchemaService()
 text_to_sql_service = TextToSQLService(schema_service)
-query_executor = QueryExecutor(demo_db_provider)
+query_executor = QueryExecutor()
 ai_service = AIService()
 history_service = HistoryService()
 query_intelligence_service = QueryIntelligenceService(ai_service, schema_service)
@@ -57,7 +57,10 @@ async def query_database(request: NaturalLanguageQueryRequest):
     intent = query_intelligence_service.analyze_intent(request.question)
 
     if intent == "UNRELATED":
-        error_msg = "This assistant is currently designed to answer questions using the connected database. Please ask a question related to the available database data."
+        tables = schema_service.get_table_names()
+        table_str = ", ".join(tables[:3]) if tables else ""
+        suggestion = f" You can ask about tables such as {table_str}." if table_str else ""
+        error_msg = f"This assistant is currently connected to your selected database. Please ask a question related to the data, tables, or relationships available in this database.{suggestion}"
         history_service.log_query(
             question=request.question,
             query_source="none",
@@ -89,7 +92,7 @@ async def query_database(request: NaturalLanguageQueryRequest):
         fallback_sql = text_to_sql_service.translate(request.question)
         # Validate against actual DB to ensure it didn't hallucinate a table like 'students' when it doesn't exist
         SQLValidator.validate(fallback_sql)
-        SQLValidator.validate_against_db(fallback_sql, demo_db_provider)
+        SQLValidator.validate_against_db(fallback_sql, DatabaseManager.get_active_provider())
         sql = fallback_sql
         query_source = "fallback"
     except SQLSafetyError:
@@ -164,7 +167,7 @@ IMPORTANT RULES:
 
                 # Validate safety and schema
                 SQLValidator.validate(current_sql)
-                SQLValidator.validate_against_db(current_sql, demo_db_provider)
+                SQLValidator.validate_against_db(current_sql, DatabaseManager.get_active_provider())
 
                 # If we get here, it's valid
                 sql = current_sql

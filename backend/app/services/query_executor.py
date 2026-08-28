@@ -2,7 +2,7 @@ import sqlite3
 import time
 from typing import Any
 
-from app.core.database import DatabaseProvider
+from app.core.database import DatabaseManager, DatabaseProvider
 from app.services.sql_validator import SQLSafetyError, SQLValidator
 
 
@@ -15,7 +15,7 @@ class QueryExecutor:
     Executes validated SQL safely and formats the result.
     """
 
-    def __init__(self, db_provider: DatabaseProvider):
+    def __init__(self, db_provider: DatabaseProvider | None = None):
         self.db_provider = db_provider
 
     def execute(self, sql: str) -> tuple[list[str], list[dict[str, Any]], float]:
@@ -30,7 +30,8 @@ class QueryExecutor:
 
         start_time = time.perf_counter()
 
-        conn = self.db_provider.get_connection()
+        provider = self.db_provider or DatabaseManager.get_active_provider()
+        conn = provider.get_connection()
         try:
             cursor = conn.cursor()
             cursor.execute(sql)
