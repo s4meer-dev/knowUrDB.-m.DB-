@@ -54,7 +54,7 @@ export const DatabaseSelector: React.FC = () => {
       await uploadDatabase(file);
       window.location.reload();
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to upload database. Please ensure it's a valid SQLite or SQL file.");
+      setError(err.response?.data?.detail?.message || err.response?.data?.detail || "Failed to upload database. Please ensure it's a valid supported format.");
       setIsUploading(false);
     }
   };
@@ -79,6 +79,23 @@ export const DatabaseSelector: React.FC = () => {
           <div className="p-4 border-b border-zinc-800/50">
             <h3 className="text-sm font-semibold text-zinc-100 mb-1">Active Database</h3>
             <p className="text-xs text-zinc-400 break-all">{status.is_demo ? 'Using the default Demo Database' : status.path}</p>
+            {!status.is_demo && status.format && (
+              <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
+                <span className="px-2 py-0.5 bg-zinc-800 rounded-md text-zinc-300 border border-zinc-700/50">
+                  Format: <span className="font-medium text-purple-400">{status.format}</span>
+                </span>
+                {status.table_count !== undefined && (
+                  <span className="px-2 py-0.5 bg-zinc-800 rounded-md text-zinc-300 border border-zinc-700/50">
+                    Tables: <span className="font-medium text-cyan-400">{status.table_count}</span>
+                  </span>
+                )}
+                {status.record_count !== undefined && (
+                  <span className="px-2 py-0.5 bg-zinc-800 rounded-md text-zinc-300 border border-zinc-700/50">
+                    Records: <span className="font-medium text-emerald-400">{status.record_count}</span>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           
           <div className="p-3 space-y-2">
@@ -110,15 +127,15 @@ export const DatabaseSelector: React.FC = () => {
                 )}
               </div>
               <div className="flex-1">
-                <div className="font-medium text-zinc-200">Upload Database</div>
-                <div className="text-[10px] text-zinc-500">.sqlite, .db, .sqlite3, .sql</div>
+                <div className="font-medium text-zinc-200">{isUploading ? "Processing..." : "Upload Database"}</div>
+                <div className="text-[10px] text-zinc-500">SQL, CSV, Excel, JSON, SQLite, Parquet</div>
               </div>
             </button>
             <input 
               type="file" 
               ref={fileInputRef} 
               className="hidden" 
-              accept=".db,.sqlite,.sqlite3,.sql" 
+              accept=".db,.sqlite,.sqlite3,.sql,.csv,.tsv,.json,.jsonl,.xlsx,.xls,.parquet,.duckdb" 
               onChange={handleFileChange} 
             />
           </div>

@@ -32,7 +32,7 @@ class QueryIntelligenceService:
         prompt = f"""Given the following database schema summary, classify the user question into exactly one of these categories:
 - VALID: The question can be answered with a SQL query against this schema.
 - AMBIGUOUS: The question is related to records or databases, but relies on tables or concepts NOT in the schema (e.g. asking for 'records' when no 'records' table exists), or is too vague to write a safe query.
-- UNRELATED: The question has nothing to do with this database or its data (e.g. weather, poetry, generic trivia).
+- UNRELATED: The question has nothing to do with this database or its data (e.g. weather, poetry, generic trivia, identity questions, or requests for general knowledge).
 
 Schema:
 {schema_summary}

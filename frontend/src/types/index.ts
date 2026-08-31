@@ -89,6 +89,10 @@ export interface DatabaseStatusResponse {
   is_demo: boolean;
   name: string;
   path: string;
+  format?: string;
+  dialect?: string;
+  table_count?: number;
+  record_count?: number;
 }
 
 export interface BasicResponse {

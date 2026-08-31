@@ -1,21 +1,30 @@
 import os
 import shutil
+import traceback
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
-import sqlite3
+from typing import Optional
 
 from app.core.database import DatabaseManager
+from app.services.ingestion.pipeline import IngestionPipeline
+from app.services.ingestion.detectors import FileFormat
 
 router = APIRouter()
 
 UPLOAD_DIR = Path(__file__).parent.parent.parent.parent / "database" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+pipeline = IngestionPipeline(str(UPLOAD_DIR))
+
 class DatabaseStatusResponse(BaseModel):
     is_demo: bool
     name: str
     path: str
+    format: Optional[str] = None
+    dialect: Optional[str] = None
+    table_count: Optional[int] = None
+    record_count: Optional[int] = None
 
 class BasicResponse(BaseModel):
     status: str
@@ -30,15 +39,10 @@ async def reset_to_demo():
     DatabaseManager.reset_to_demo()
     return {"status": "success", "message": "Reset to Demo Database."}
 
-@router.post("/upload", response_model=DatabaseStatusResponse)
+@router.post("/upload")
 async def upload_database(file: UploadFile = File(...)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
-
-    ext = os.path.splitext(file.filename)[1].lower()
-    allowed_extensions = {".db", ".sqlite", ".sqlite3", ".sql"}
-    if ext not in allowed_extensions:
-        raise HTTPException(status_code=400, detail=f"Unsupported file extension {ext}. Allowed: .db, .sqlite, .sqlite3, .sql")
 
     # Generate safe unique filename
     import uuid
@@ -53,37 +57,43 @@ async def upload_database(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
-    # If it's a .sql dump, convert it to a SQLite DB
-    if ext == ".sql":
-        db_path = UPLOAD_DIR / f"{unique_id}_imported.db"
-        try:
-            conn = sqlite3.connect(db_path)
-            with open(file_path, "r", encoding="utf-8") as f:
-                sql_script = f.read()
-            conn.executescript(sql_script)
-            conn.commit()
-            conn.close()
-            # Replace file_path with new DB path
-            file_path = db_path
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to import SQL dump: {e}")
-
-    # Validate that it's a valid SQLite DB
     try:
-        conn = sqlite3.connect(f"file:{file_path.absolute().as_posix()}?mode=ro", uri=True)
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = cursor.fetchall()
-        conn.close()
-        # It's ok if there are no tables if it's an empty DB, but usually we expect at least one.
-        # But we won't strictly fail it if empty. Let's just catch SQLite errors.
-    except Exception as e:
-        # Cleanup invalid file
+        # Process the file via pipeline
+        result = pipeline.process_file(str(file_path), file.filename)
+        
+        # Set as active
+        DatabaseManager.set_active_database(result["path"])
+        
+        info = DatabaseManager.get_active_database_info()
+        info.update({
+            "format": result["format"],
+            "dialect": result["dialect"],
+            "table_count": result["table_count"],
+            "record_count": result["record_count"]
+        })
+        
+        # Cleanup original file if it's not the DB we are using directly
+        if str(file_path) != result["path"] and file_path.exists():
+            try:
+                file_path.unlink()
+            except Exception:
+                pass
+                
+        return info
+
+    except ValueError as e:
+        # Expected errors like unsupported format or bad conversion
         if file_path.exists():
             file_path.unlink()
-        raise HTTPException(status_code=400, detail=f"Invalid SQLite database: {e}")
-
-    # Set as active
-    DatabaseManager.set_active_database(str(file_path.absolute()))
-    
-    return DatabaseManager.get_active_database_info()
+        
+        err_str = str(e)
+        if "Unsupported format" in err_str or "not currently supported" in err_str:
+            raise HTTPException(status_code=400, detail={"error_code": "UNSUPPORTED_FILE_FORMAT", "message": err_str})
+        else:
+            raise HTTPException(status_code=400, detail={"error_code": "INVALID_DATABASE_FILE", "message": err_str})
+            
+    except Exception as e:
+        if file_path.exists():
+            file_path.unlink()
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={"error_code": "INTERNAL_ERROR", "message": f"An unexpected error occurred during processing: {e}"})
