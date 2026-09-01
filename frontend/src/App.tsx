@@ -4,6 +4,7 @@ import { AppShell } from './components/layout/AppShell';
 import { Workspace } from './pages/Workspace';
 import { History } from './pages/History';
 import { Schema } from './pages/Schema';
+import { SourceLibrary } from './pages/SourceLibrary';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { useEffect, useState } from 'react';
 import { checkHealth } from './services/api';
@@ -63,6 +64,7 @@ function App() {
         <AppShell>
           <Routes>
             <Route path="/" element={<Workspace />} />
+            <Route path="/sources" element={<SourceLibrary />} />
             <Route path="/history" element={<History />} />
             <Route path="/schema" element={<Schema />} />
           </Routes>

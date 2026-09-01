@@ -23,14 +23,14 @@ export const Workspace: React.FC = () => {
     }
   }, [location.state]);
 
-  const handleQuery = async (q: string = question) => {
+  const handleQuery = async (q: string = question, sourceIds?: string[]) => {
     if (!q.trim()) return;
     
     setQuestion(q);
     setLoading(true);
     
     try {
-      const res = await queryDatabase(q);
+      const res = await queryDatabase(q, sourceIds);
       setResult(res);
     } catch (e: any) {
       setResult({

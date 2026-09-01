@@ -11,17 +11,25 @@ from app.services.schema_service import SchemaService
 from app.services.sql_validator import SQLSafetyError, SQLValidator
 from app.services.text_to_sql_service import TextToSQLService
 
+from app.services.query_router import QueryRouter
+from app.services.source_manager import SourceManager
+from app.services.document_processor import DocumentProcessor
+from app.services.gemini_provider import GeminiProvider
+
 router = APIRouter()
 
 # Dependencies
 schema_service = SchemaService()
 text_to_sql_service = TextToSQLService(schema_service)
 query_executor = QueryExecutor()
+ai_provider = GeminiProvider()
 ai_service = AIService()
 history_service = HistoryService()
 query_intelligence_service = QueryIntelligenceService(ai_service, schema_service)
 meta_router = MetaQueryRouter(schema_service, query_executor)
-
+source_manager = SourceManager()
+query_router = QueryRouter(ai_provider, source_manager)
+document_processor = DocumentProcessor(ai_provider)
 
 @router.post("/query", response_model=NaturalLanguageQueryResponse)
 async def query_database(request: NaturalLanguageQueryRequest):
@@ -53,62 +61,89 @@ async def query_database(request: NaturalLanguageQueryRequest):
             error=None,
         )
 
-    # 1. Intent Validation
-    intent = query_intelligence_service.analyze_intent(request.question)
-
-    if intent == "UNRELATED":
-        tables = schema_service.get_table_names()
-        table_str = ", ".join(tables[:3]) if tables else ""
-        suggestion = f" You can ask about tables such as {table_str}." if table_str else ""
-        error_msg = f"This assistant is currently connected to your selected database. Please ask a question related to the data, tables, or relationships available in this database.{suggestion}"
-        history_service.log_query(
-            question=request.question,
-            query_source="none",
-            status="error",
-            error_message=error_msg,
-        )
+    # 1. New Routing Logic
+    routing_decision = query_router.route_query(request.question, request.source_ids)
+    
+    if routing_decision["decision"] == "UNRELATED":
+        error_msg = "I couldn't find relevant data for your question. Please ask something related to the available sources."
         return NaturalLanguageQueryResponse(
-            question=request.question, status="error", error=error_msg
+            question=request.question, status="error", error=error_msg, confidence=routing_decision["confidence"]
         )
 
-    if intent == "AMBIGUOUS":
-        tables = ", ".join(schema_service.get_table_names())
-        error_msg = f"The question is database-related, but it is ambiguous. Please specify which table or type of record you want to query. Available tables include: {tables}."
-        history_service.log_query(
-            question=request.question,
-            query_source="none",
-            status="error",
-            error_message=error_msg,
-        )
+    if routing_decision["decision"] == "META":
+        # Let meta_router handle if applicable (it might not have access to multi-source meta, but we'll try)
+        # Actually, for source discovery we should answer here.
+        sources = source_manager.list_sources()
+        names = [s.name for s in sources]
         return NaturalLanguageQueryResponse(
-            question=request.question, status="error", error=error_msg
+            question=request.question,
+            status="success",
+            explanation=f"You have {len(sources)} available sources: {', '.join(names)}",
+            query_source="meta",
+            confidence=routing_decision["confidence"]
         )
+
+    if routing_decision["decision"] == "CLARIFICATION":
+        return NaturalLanguageQueryResponse(
+            question=request.question,
+            status="clarification_required",
+            error="I found relevant data in multiple sources. Which one would you like to use?",
+            candidates=routing_decision["candidates"],
+            confidence=routing_decision["confidence"]
+        )
+
+    # 2. Execution for SINGLE_SOURCE or MULTI_SOURCE
+    # For now, we take the first source if multiple (we can implement advanced cross-source later)
+    target_source = routing_decision["sources"][0]
+    source_metadata = source_manager.get_source(target_source["source_id"])
+    
+    if not source_metadata:
+        return NaturalLanguageQueryResponse(
+            question=request.question, status="error", error="Selected source not found."
+        )
+
+    citations = [{
+        "source_id": source_metadata.source_id,
+        "name": source_metadata.name,
+        "type": source_metadata.file_type
+    }]
+
+    if target_source["type"] in ["pdf", "txt", "markdown"]:
+        # Document retrieval
+        results = document_processor.search(request.question, source_metadata.storage_location)
+        if not results:
+             return NaturalLanguageQueryResponse(
+                question=request.question, status="success",
+                explanation="I could not find a specific answer to that question in the document.",
+                sources=citations
+            )
+        
+        # Build answer from top chunks
+        context_str = "\n\n".join([f"Chunk: {r['text']}" for r in results])
+        prompt = f"Answer the user's question based ONLY on the following text from {source_metadata.name}.\n\nText:\n{context_str}\n\nQuestion: {request.question}"
+        answer = ai_provider.generate_text(prompt)
+        
+        # Add page citations if available
+        for r in results:
+            if r.get("page_number"):
+                citations[0]["page"] = r["page_number"]
+                break
+                
+        return NaturalLanguageQueryResponse(
+            question=request.question, status="success",
+            explanation=answer,
+            query_source="single_source",
+            sources=citations,
+            confidence=routing_decision["confidence"]
+        )
+        
+    # Relational Database Execution
+    # Set this source as active for the query execution
+    db_path = source_manager.get_internal_db_path(source_metadata.source_id)
+    DatabaseManager.set_active_database(db_path)
 
     sql = None
     query_source = None
-
-    # 2. Try Deterministic Fallback First
-    try:
-        fallback_sql = text_to_sql_service.translate(request.question)
-        # Validate against actual DB to ensure it didn't hallucinate a table like 'students' when it doesn't exist
-        SQLValidator.validate(fallback_sql)
-        SQLValidator.validate_against_db(fallback_sql, DatabaseManager.get_active_provider())
-        sql = fallback_sql
-        query_source = "fallback"
-    except SQLSafetyError:
-        error_msg = "The generated query was rejected because it did not meet database safety requirements."
-        history_service.log_query(
-            question=request.question,
-            query_source="fallback",
-            status="error",
-            error_message=error_msg,
-        )
-        return NaturalLanguageQueryResponse(
-            question=request.question, status="error", error=error_msg
-        )
-    except Exception:  # noqa: BLE001, S110
-        # Deterministic generation failed or generated invalid SQL for this schema
-        pass
 
     # 3. AI Generation (with retries)
     if not sql:
@@ -258,6 +293,8 @@ IMPORTANT RULES:
             query_source=query_source,
             explanation=explanation,
             follow_up_suggestions=follow_ups,
+            sources=citations,
+            confidence=routing_decision["confidence"],
             error="Your question was understood successfully, but no matching records were found."
             if row_count == 0
             else None,

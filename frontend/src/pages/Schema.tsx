@@ -1,33 +1,56 @@
 import React, { useEffect, useState } from 'react';
-import { getSchema } from '../services/api';
-import type { DatabaseSchema, TableInfo } from '../types';
+import { getSources, getSourceSchema } from '../services/api';
+import type { DatabaseSchema, TableInfo, SourceMetadata } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { ErrorState } from '../components/common/ErrorState';
 
 export const Schema: React.FC = () => {
+  const [sources, setSources] = useState<SourceMetadata[]>([]);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [summary, setSummary] = useState<DatabaseSchema | null>(null);
-  const [loadingSummary, setLoadingSummary] = useState(true);
-  const [errorSummary, setErrorSummary] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [tableDetails, setTableDetails] = useState<TableInfo | null>(null);
 
-  const fetchSummary = async () => {
-    try {
-      setLoadingSummary(true);
-      setErrorSummary(false);
-      const data = await getSchema();
-      setSummary(data);
-    } catch {
-      setErrorSummary(true);
-    } finally {
-      setLoadingSummary(false);
-    }
-  };
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        setLoading(true);
+        const data = await getSources();
+        const relationalSources = data.filter(s => s.detected_format !== 'pdf' && s.detected_format !== 'txt' && s.detected_format !== 'markdown');
+        setSources(relationalSources);
+        if (relationalSources.length > 0) {
+          setSelectedSourceId(relationalSources[0].source_id);
+        }
+      } catch {
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInitialData();
+  }, []);
 
   useEffect(() => {
-    fetchSummary();
-  }, []);
+    const fetchSchemaForSource = async () => {
+      if (!selectedSourceId) return;
+      try {
+        setLoading(true);
+        const data = await getSourceSchema(selectedSourceId);
+        setSummary(data);
+        setSelectedTable(null);
+        setTableDetails(null);
+      } catch {
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSchemaForSource();
+  }, [selectedSourceId]);
+
 
   const handleTableSelect = (tableName: string) => {
     setSelectedTable(tableName);
@@ -37,19 +60,18 @@ export const Schema: React.FC = () => {
     }
   };
 
-  if (errorSummary) {
+  if (error) {
     return (
       <div className="flex items-center justify-center h-full">
         <ErrorState 
           title="Failed to load schema" 
           message="Could not retrieve database schema information."
-          onRetry={fetchSummary}
         />
       </div>
     );
   }
 
-  if (loadingSummary) {
+  if (loading && !summary) {
     return (
       <div className="flex items-center justify-center h-full">
         <LoadingSpinner text="Analyzing database schema..." size="lg" />
@@ -57,13 +79,37 @@ export const Schema: React.FC = () => {
     );
   }
 
+  if (sources.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full flex-col text-center">
+        <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center text-zinc-500 mb-4">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+        </div>
+        <p className="text-zinc-400 font-medium text-lg">No relational sources found</p>
+        <p className="text-zinc-500 mt-2">Upload a database to view its schema.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-140px)] max-w-6xl mx-auto animate-fade-in pt-4">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Schema Explorer</h2>
-        <p className="text-zinc-400 mt-1">
-          Explore the structure of your database. {summary?.tables.length} tables available.
-        </p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Schema Explorer</h2>
+          <p className="text-zinc-400 mt-1">
+            Explore the structure of your database. {summary?.tables.length || 0} tables available.
+          </p>
+        </div>
+        
+        <select 
+          value={selectedSourceId || ''} 
+          onChange={(e) => setSelectedSourceId(e.target.value)}
+          className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-zinc-300 focus:outline-none focus:border-cyan-500"
+        >
+          {sources.map(s => (
+            <option key={s.source_id} value={s.source_id}>{s.name}</option>
+          ))}
+        </select>
       </div>
 
       <div className="flex flex-1 overflow-hidden gap-6">

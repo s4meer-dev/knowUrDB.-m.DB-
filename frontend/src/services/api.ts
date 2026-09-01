@@ -9,8 +9,8 @@ import type {
   SuggestionsResponse,
   TableInfo,
   DatabaseSchema,
-  DatabaseStatusResponse,
-  BasicResponse
+  BasicResponse,
+  SourceMetadata
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
@@ -32,8 +32,8 @@ export const checkAiStatus = async (): Promise<AiStatusResponse> => {
   return response.data;
 };
 
-export const queryDatabase = async (question: string): Promise<QueryResponse> => {
-  const response = await apiClient.post<QueryResponse>('/api/query', { question } as QueryRequest);
+export const queryDatabase = async (question: string, sourceIds?: string[]): Promise<QueryResponse> => {
+  const response = await apiClient.post<QueryResponse>('/api/query', { question, source_ids: sourceIds } as QueryRequest);
   return response.data;
 };
 
@@ -70,21 +70,31 @@ export const getTableSchema = async (table: string): Promise<TableInfo> => {
   return response.data;
 };
 
-export const getDatabaseStatus = async (): Promise<DatabaseStatusResponse> => {
-  const response = await apiClient.get<DatabaseStatusResponse>('/api/database/status');
+export const getSources = async (): Promise<SourceMetadata[]> => {
+  const response = await apiClient.get<SourceMetadata[]>('/api/sources');
   return response.data;
 };
 
-export const resetDatabase = async (): Promise<BasicResponse> => {
-  const response = await apiClient.post<BasicResponse>('/api/database/reset');
+export const getSource = async (sourceId: string): Promise<SourceMetadata> => {
+  const response = await apiClient.get<SourceMetadata>(`/api/sources/${sourceId}`);
   return response.data;
 };
 
-export const uploadDatabase = async (file: File): Promise<DatabaseStatusResponse> => {
+export const deleteSource = async (sourceId: string): Promise<BasicResponse> => {
+  const response = await apiClient.delete<BasicResponse>(`/api/sources/${sourceId}`);
+  return response.data;
+};
+
+export const getSourceSchema = async (sourceId: string): Promise<DatabaseSchema> => {
+  const response = await apiClient.get<DatabaseSchema>(`/api/sources/${sourceId}/schema`);
+  return response.data;
+};
+
+export const uploadSource = async (file: File): Promise<SourceMetadata> => {
   const formData = new FormData();
   formData.append('file', file);
   
-  const response = await apiClient.post<DatabaseStatusResponse>('/api/database/upload', formData, {
+  const response = await apiClient.post<SourceMetadata>('/api/sources/upload', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },

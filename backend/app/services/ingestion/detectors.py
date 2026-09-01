@@ -14,6 +14,9 @@ class FileFormat:
     EXCEL = "excel"
     PARQUET = "parquet"
     DUCKDB = "duckdb"
+    PDF = "pdf"
+    TXT = "txt"
+    MARKDOWN = "markdown"
     UNSUPPORTED = "unsupported"
 
 class FileDetector:
@@ -41,6 +44,12 @@ class FileDetector:
             return FileFormat.PARQUET
         elif ext == ".sql":
             return FileDetector._inspect_sql(file_path)
+        elif ext == ".pdf":
+            return FileFormat.PDF
+        elif ext == ".txt":
+            return FileFormat.TXT
+        elif ext in [".md", ".markdown"]:
+            return FileFormat.MARKDOWN
         
         # Fallback to binary inspection if extension is unknown
         return FileDetector._inspect_binary(file_path)

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { checkHealth, checkAiStatus } from '../../services/api';
 import type { HealthResponse, AiStatusResponse } from '../../types';
-import { DatabaseSelector } from './DatabaseSelector';
 
 export const Header: React.FC = () => {
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -94,10 +93,6 @@ export const Header: React.FC = () => {
               Down
             </span>
           )}
-        </div>
-        
-        <div className="pl-4 border-l border-zinc-700/50">
-          <DatabaseSelector />
         </div>
       </div>
     </header>

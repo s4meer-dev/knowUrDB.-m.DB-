@@ -10,8 +10,22 @@ export interface AiStatusResponse {
   provider: string;
 }
 
+export interface QuerySourceCitation {
+  source_id: string;
+  name: string;
+  type: string;
+  table?: string;
+  page?: number;
+}
+
+export interface ClarificationCandidate {
+  source_id: string;
+  name: string;
+}
+
 export interface QueryRequest {
   question: string;
+  source_ids?: string[];
 }
 
 export interface QueryResponse {
@@ -21,11 +35,14 @@ export interface QueryResponse {
   rows: Record<string, any>[];
   row_count: number;
   execution_time_ms: number;
-  status: 'success' | 'error';
+  status: 'success' | 'clarification_required' | 'error';
   error?: string;
   query_source?: string;
   explanation?: string;
   follow_up_suggestions?: string[];
+  sources?: QuerySourceCitation[];
+  candidates?: ClarificationCandidate[];
+  confidence?: number;
 }
 
 export interface HistoryItem {
@@ -83,6 +100,23 @@ export interface DatabaseSchema {
 
 export interface SchemaSummary {
   summary: string;
+}
+
+export interface SourceMetadata {
+  source_id: string;
+  name: string;
+  original_filename: string;
+  file_type: string;
+  mime_type: string;
+  detected_format: string;
+  detected_dialect?: string;
+  size_bytes: number;
+  uploaded_at: string;
+  status: 'uploading' | 'analyzing' | 'indexing' | 'ready' | 'failed' | 'deleting' | 'deleted';
+  table_count?: number;
+  record_count?: number;
+  schema_summary?: any;
+  error_message?: string;
 }
 
 export interface DatabaseStatusResponse {

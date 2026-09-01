@@ -1,4 +1,6 @@
 import sqlite3
+import uuid
+import datetime
 from pathlib import Path
 
 
@@ -55,10 +57,64 @@ class AppDatabaseProvider:
                 )
                 """
             )
+            # Sources Registry table
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sources (
+                    source_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    original_filename TEXT NOT NULL,
+                    file_type TEXT NOT NULL,
+                    mime_type TEXT NOT NULL,
+                    detected_format TEXT NOT NULL,
+                    detected_dialect TEXT,
+                    size_bytes INTEGER NOT NULL,
+                    uploaded_at DATETIME NOT NULL,
+                    status TEXT NOT NULL,
+                    table_count INTEGER DEFAULT 0,
+                    record_count INTEGER DEFAULT 0,
+                    schema_summary TEXT,
+                    storage_location TEXT NOT NULL,
+                    error_message TEXT
+                )
+                """
+            )
             # Add indexes for efficient querying
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_query_history_created_at ON query_history(created_at DESC)"
             )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sources_status ON sources(status)"
+            )
+
+            # Initialize demo source if no sources exist
+            cursor = conn.execute("SELECT COUNT(*) as count FROM sources")
+            if cursor.fetchone()["count"] == 0:
+                demo_db_path = Path(__file__).parent.parent.parent.parent / "database" / "demo" / "knowurdb_demo.db"
+                
+                # Check if file exists, else use relative path string for testing
+                path_str = str(demo_db_path.absolute()) if demo_db_path.exists() else "database/demo/knowurdb_demo.db"
+                
+                conn.execute(
+                    """
+                    INSERT INTO sources (
+                        source_id, name, original_filename, file_type, mime_type,
+                        detected_format, size_bytes, uploaded_at, status, storage_location
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "demo-source-id",
+                        "Demo Database",
+                        "knowurdb_demo.db",
+                        ".db",
+                        "application/x-sqlite3",
+                        "sqlite3",
+                        demo_db_path.stat().st_size if demo_db_path.exists() else 0,
+                        datetime.datetime.now(datetime.UTC).isoformat(),
+                        "ready",
+                        path_str
+                    )
+                )
 
     def get_setting(self, key: str) -> str | None:
         with self.get_connection() as conn:

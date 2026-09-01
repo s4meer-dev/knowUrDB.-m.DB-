@@ -1,4 +1,4 @@
-﻿annotated-doc==0.0.5
+annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.14.2
 certifi==2026.7.22
@@ -33,3 +33,4 @@ openpyxl==3.1.2
 pyarrow==15.0.0
 duckdb==0.10.1
 sqlglot==23.0.0
+PyPDF2==3.0.1

@@ -97,3 +97,20 @@ class GeminiProvider:
             raise RuntimeError(
                 "An unexpected error occurred while communicating with the AI provider."
             )
+
+    def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
+        if not self.is_configured():
+            logger.error("Gemini API key is not configured for embeddings.")
+            raise ValueError("AI provider is not configured.")
+        
+        try:
+            # We'll use the recommended embedding model for general text
+            response = self.client.models.embed_content(
+                model="text-embedding-004",
+                contents=texts
+            )
+            return [embedding.values for embedding in response.embeddings]
+        except Exception as e:
+            logger.error(f"Error generating embeddings: {e}")
+            raise RuntimeError("Failed to generate embeddings")
+

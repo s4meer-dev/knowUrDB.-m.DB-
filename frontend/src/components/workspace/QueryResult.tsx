@@ -10,7 +10,7 @@ import { ErrorState } from '../common/ErrorState';
 interface QueryResultProps {
   result: QueryResponse | null;
   isLoading: boolean;
-  onFollowUp: (question: string) => void;
+  onFollowUp: (question: string, sourceIds?: string[]) => void;
 }
 
 export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onFollowUp }) => {
@@ -74,7 +74,29 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
 
         {/* Body */}
         <div className="flex-grow overflow-auto relative min-h-[150px]">
-          {result.status === 'error' ? (
+          {result.status === 'clarification_required' ? (
+            <div className="p-8">
+              <div className="flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
+                <h3 className="text-xl font-bold text-zinc-100 mb-2">Clarification Required</h3>
+                <p className="text-zinc-400 mb-6">{result.error}</p>
+                <div className="flex flex-col w-full max-w-md gap-3">
+                  {result.candidates?.map(c => (
+                    <button 
+                      key={c.source_id}
+                      onClick={() => onFollowUp(result.question, [c.source_id])}
+                      className="bg-zinc-800/50 hover:bg-zinc-700/50 border border-zinc-700/50 p-4 rounded-xl text-left transition-colors flex items-center justify-between group"
+                    >
+                      <span className="font-medium text-zinc-200">{c.name}</span>
+                      <svg className="w-4 h-4 text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : result.status === 'error' ? (
             <div className="p-8">
               <ErrorState 
                 title="I couldn't answer that" 
