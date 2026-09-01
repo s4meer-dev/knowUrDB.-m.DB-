@@ -64,6 +64,47 @@ async def upload_source(file: UploadFile = File(...)):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail={"error_code": "INTERNAL_ERROR", "message": f"An unexpected error occurred during processing: {e}"})
 
+@router.post("/upload/batch", response_model=List[SourceMetadata])
+async def upload_sources_batch(files: List[UploadFile] = File(...)):
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+
+    results = []
+    temp_dir = Path(__file__).parent.parent.parent.parent / "database" / "temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    for file in files:
+        if not file.filename:
+            continue
+
+        unique_id = uuid.uuid4().hex[:8]
+        safe_filename = f"{unique_id}_{file.filename}"
+        temp_file_path = temp_dir / safe_filename
+
+        try:
+            with open(temp_file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            size = temp_file_path.stat().st_size
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save file '{file.filename}' temporarily: {e}")
+
+        try:
+            metadata = source_manager.register_source(
+                original_filename=file.filename,
+                file_path=str(temp_file_path),
+                mime_type=file.content_type or "application/octet-stream",
+                size_bytes=size
+            )
+            results.append(metadata)
+        except Exception as e:
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail={"error_code": "INTERNAL_ERROR", "message": f"Error processing '{file.filename}': {e}"})
+        finally:
+            if temp_file_path.exists():
+                temp_file_path.unlink()
+                
+    return results
+
 @router.get("/{source_id}", response_model=SourceMetadata)
 async def get_source(source_id: str):
     source = source_manager.get_source(source_id)

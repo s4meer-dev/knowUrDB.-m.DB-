@@ -10,7 +10,8 @@ vi.mock('./services/api', () => ({
   queryDatabase: vi.fn(),
   getSuggestions: vi.fn(),
   getHistory: vi.fn(),
-  getSchema: vi.fn()
+  getSchema: vi.fn(),
+  getSources: vi.fn()
 }));
 
 describe('App Component', () => {
@@ -19,6 +20,7 @@ describe('App Component', () => {
     (api.checkHealth as any).mockResolvedValue({ status: 'ok' });
     (api.checkAiStatus as any).mockResolvedValue({ status: 'ready', configured: true });
     (api.getSuggestions as any).mockResolvedValue({ suggestions: [] });
+    (api.getSources as any).mockResolvedValue([]);
   });
 
   it('renders the application shell and checks health', async () => {
@@ -33,7 +35,7 @@ describe('App Component', () => {
     
     // Check if connected state is shown after mock resolves
     await waitFor(() => {
-      expect(screen.getByText('Connected')).toBeInTheDocument();
+      expect(screen.getByText('Online')).toBeInTheDocument();
       expect(screen.getByText('Ready')).toBeInTheDocument();
     });
   });
