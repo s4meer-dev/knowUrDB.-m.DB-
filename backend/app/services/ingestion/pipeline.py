@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import uuid
+import contextlib
 from pathlib import Path
 from app.services.ingestion.detectors import FileDetector, FileFormat
 from app.services.ingestion.converters import FormatConverter, ConversionError
@@ -34,7 +35,7 @@ class IngestionPipeline:
 
         # 3. Validate final SQLite DB and get basic stats
         try:
-            with sqlite3.connect(f"file:{Path(dest_db_path).absolute().as_posix()}?mode=ro", uri=True) as conn:
+            with contextlib.closing(sqlite3.connect(f"file:{Path(dest_db_path).absolute().as_posix()}?mode=ro", uri=True)) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
                 tables = [r[0] for r in cursor.fetchall() if r[0] != 'sqlite_sequence']
@@ -47,6 +48,7 @@ class IngestionPipeline:
                         record_count += cursor.fetchone()[0]
                     except Exception:
                         pass
+                cursor.close()
         except Exception as e:
             if Path(dest_db_path).exists():
                 Path(dest_db_path).unlink()

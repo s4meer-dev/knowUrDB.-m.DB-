@@ -35,6 +35,6 @@ class SourceMetadata(BaseModel):
     table_count: int | None = Field(0, description="Number of tables if structured")
     record_count: int | None = Field(0, description="Number of total records if structured")
     schema_summary: Any | None = Field(None, description="Summary of schema for routing")
-    storage_location: str = Field(..., description="Path to the storage directory")
+    storage_location: str = Field(..., description="Path to the storage directory", exclude=True)
     error_message: str | None = Field(None, description="Error message if failed")
 

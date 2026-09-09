@@ -73,6 +73,7 @@ export const SourceLibrary: React.FC = () => {
                   <th className="px-6 py-4">Name</th>
                   <th className="px-6 py-4">Type</th>
                   <th className="px-6 py-4">Size</th>
+                  <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4">Uploaded</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
@@ -90,6 +91,20 @@ export const SourceLibrary: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-400 font-mono">
                       {formatSize(source.size_bytes)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {source.status === 'failed' ? (
+                        <div className="flex flex-col">
+                          <span className="text-red-400 font-semibold uppercase text-xs">FAILED</span>
+                          {source.error_message && (
+                            <span className="text-red-500/70 text-[10px] truncate max-w-[150px]" title={source.error_message}>
+                              {source.error_message}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-emerald-400 font-semibold uppercase text-xs">READY</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500">
                       {new Date(source.uploaded_at).toLocaleDateString()}

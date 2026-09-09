@@ -3,6 +3,7 @@ import sqlite3
 import pandas as pd
 import duckdb
 import re
+import contextlib
 from pathlib import Path
 from app.services.ingestion.detectors import FileFormat
 
@@ -54,7 +55,7 @@ class TabularConverter:
         try:
             df = pd.read_csv(source_path, sep=sep)
             table_name = TabularConverter._sanitize_table_name(Path(source_path).stem)
-            with sqlite3.connect(dest_db_path) as conn:
+            with contextlib.closing(sqlite3.connect(dest_db_path)) as conn:
                 df.to_sql(table_name, conn, index=False, if_exists="replace")
         except Exception as e:
             raise ConversionError(f"Failed to convert CSV/TSV: {e}")
@@ -64,7 +65,7 @@ class TabularConverter:
         try:
             df = pd.read_json(source_path, lines=lines)
             table_name = TabularConverter._sanitize_table_name(Path(source_path).stem)
-            with sqlite3.connect(dest_db_path) as conn:
+            with contextlib.closing(sqlite3.connect(dest_db_path)) as conn:
                 # pandas handles nested structures sometimes as dicts, stringify them
                 for col in df.columns:
                     if df[col].apply(lambda x: isinstance(x, (dict, list))).any():
@@ -77,7 +78,7 @@ class TabularConverter:
     def convert_excel(source_path: str, dest_db_path: str):
         try:
             xls = pd.ExcelFile(source_path)
-            with sqlite3.connect(dest_db_path) as conn:
+            with contextlib.closing(sqlite3.connect(dest_db_path)) as conn:
                 for sheet_name in xls.sheet_names:
                     df = pd.read_excel(xls, sheet_name=sheet_name)
                     table_name = TabularConverter._sanitize_table_name(sheet_name)
@@ -90,7 +91,7 @@ class TabularConverter:
         try:
             df = pd.read_parquet(source_path)
             table_name = TabularConverter._sanitize_table_name(Path(source_path).stem)
-            with sqlite3.connect(dest_db_path) as conn:
+            with contextlib.closing(sqlite3.connect(dest_db_path)) as conn:
                 df.to_sql(table_name, conn, index=False, if_exists="replace")
         except Exception as e:
             raise ConversionError(f"Failed to convert Parquet: {e}")
@@ -101,7 +102,7 @@ class DuckDBConverter:
         try:
             con = duckdb.connect(source_path)
             tables = con.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='main'").fetchall()
-            with sqlite3.connect(dest_db_path) as sqlite_conn:
+            with contextlib.closing(sqlite3.connect(dest_db_path)) as sqlite_conn:
                 for (table_name,) in tables:
                     df = con.execute(f"SELECT * FROM \"{table_name}\"").df()
                     df.to_sql(table_name, sqlite_conn, index=False, if_exists="replace")
@@ -119,7 +120,7 @@ class SQLDumpConverter:
 
             content = SQLDumpConverter._sanitize_mysql(content)
             
-            with sqlite3.connect(dest_db_path) as conn:
+            with contextlib.closing(sqlite3.connect(dest_db_path)) as conn:
                 conn.executescript(content)
                 conn.commit()
         except Exception as e:
@@ -168,7 +169,7 @@ class SQLDumpConverter:
 
             content = SQLDumpConverter._sanitize_postgres(content)
             
-            with sqlite3.connect(dest_db_path) as conn:
+            with contextlib.closing(sqlite3.connect(dest_db_path)) as conn:
                 conn.executescript(content)
                 conn.commit()
         except Exception as e:
@@ -197,7 +198,7 @@ class SQLDumpConverter:
         try:
             with open(source_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-            with sqlite3.connect(dest_db_path) as conn:
+            with contextlib.closing(sqlite3.connect(dest_db_path)) as conn:
                 conn.executescript(content)
                 conn.commit()
         except Exception as e:

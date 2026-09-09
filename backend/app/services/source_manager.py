@@ -1,7 +1,7 @@
 import os
 import shutil
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -35,16 +35,17 @@ class SourceManager:
         """
         source_id = f"src_{uuid.uuid4().hex}"
         source_dir = STORAGE_DIR / "sources" / source_id
-        source_dir.mkdir(parents=True, exist_ok=True)
+        original_dir = source_dir / "original"
+        original_dir.mkdir(parents=True, exist_ok=True)
         
         # Move original file to source dir
-        original_file_dest = source_dir / original_filename
+        original_file_dest = original_dir / original_filename
         shutil.copy2(file_path, original_file_dest)
 
         format_type = FileDetector.detect_format(str(original_file_dest), original_filename)
         source_type = self._determine_source_type(format_type)
 
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         metadata = SourceMetadata(
             source_id=source_id,
             name=original_filename,
@@ -67,9 +68,19 @@ class SourceManager:
                 
                 # Move the generated SQLite database to the source directory
                 generated_db_path = result["path"]
-                final_db_name = f"{source_id}_internal.db"
+                final_db_name = "database.db"
                 final_db_dest = source_dir / final_db_name
-                shutil.move(generated_db_path, final_db_dest)
+                
+                import time
+                max_retries = 5
+                for attempt in range(max_retries):
+                    try:
+                        shutil.move(generated_db_path, final_db_dest)
+                        break
+                    except PermissionError as e:
+                        if attempt == max_retries - 1:
+                            raise e
+                        time.sleep(0.5 * (2 ** attempt))
                 
                 metadata.table_count = result["table_count"]
                 metadata.record_count = result["record_count"]
@@ -156,7 +167,10 @@ class SourceManager:
         if storage_path.is_file():
             expected_path = storage_path
         else:
-            expected_path = storage_path / f"{source_id}_internal.db"
+            # Fallback for old sources which might use _internal.db
+            expected_path = storage_path / "database.db"
+            if not expected_path.exists():
+                expected_path = storage_path / f"{source_id}_internal.db"
             
         if not expected_path.exists():
             raise ValueError(f"Internal database for source {source_id} not found")

@@ -40,6 +40,15 @@ def test_query_history_workflow(client):
             "app.services.query_intelligence_service.AIService.generate",
             return_value={"response": "VALID"},
         ),
+        patch(
+            "app.api.query.query_router.route_query",
+            return_value={
+                "decision": "SINGLE_SOURCE",
+                "sources": [{"source_id": "demo-source-id", "type": "sqlite3"}],
+                "candidates": [],
+                "confidence": 1.0
+            }
+        ),
     ):
         response = client.post(
             "/api/query", json={"question": "how many students are there?"}

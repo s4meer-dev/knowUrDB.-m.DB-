@@ -319,7 +319,9 @@ IMPORTANT RULES:
         if "Safety validation failed" in str(e):
             error_msg = "The generated query was rejected because it did not meet database safety requirements."
         else:
-            error_msg = "An error occurred while executing the query on the database."
+            # We want to give the specific DB error without a stack trace
+            error_detail = str(e).replace("Database error: ", "")
+            error_msg = f"An error occurred while executing the query: {error_detail}"
 
         history_service.log_query(
             question=request.question,
