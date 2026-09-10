@@ -101,3 +101,17 @@ export const uploadSource = async (file: File): Promise<SourceMetadata> => {
   });
   return response.data;
 };
+
+export const uploadBatchSources = async (files: File[]): Promise<SourceMetadata[]> => {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append('files', file);
+  }
+  
+  const response = await apiClient.post<SourceMetadata[]>('/api/sources/upload/batch', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};

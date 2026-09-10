@@ -65,7 +65,7 @@ async def upload_source(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail={"error_code": "INTERNAL_ERROR", "message": f"An unexpected error occurred during processing: {e}"})
 
 @router.post("/upload/batch", response_model=List[SourceMetadata])
-async def upload_sources_batch(files: List[UploadFile] = File(...)):
+async def upload_sources_batch(files: list[UploadFile] = File(...)):
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 

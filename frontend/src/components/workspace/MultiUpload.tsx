@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { uploadSource } from '../../services/api';
+import { uploadBatchSources } from '../../services/api';
 import type { SourceMetadata } from '../../types';
 
 interface MultiUploadProps {
@@ -92,40 +92,34 @@ export const MultiUpload: React.FC<MultiUploadProps> = ({ onUploadSuccess }) => 
     
     setIsUploading(true);
     
-    // Mark them as waiting first (if retrying)
+    // Mark them as uploading
     setUploadQueue(prev => prev.map(q => 
-      (q.status === 'WAITING' || q.status === 'ERROR') ? { ...q, status: 'WAITING', error: undefined } : q
+      (q.status === 'WAITING' || q.status === 'ERROR') ? { ...q, status: 'UPLOADING', error: undefined } : q
     ));
 
-    const MAX_CONCURRENT = 3;
-    let index = 0;
-    
-    const runWorker = async () => {
-      while (index < toUpload.length) {
-        const currentIndex = index++;
-        const target = toUpload[currentIndex];
-        
-        // Mark as uploading
-        setUploadQueue(prev => prev.map(q => q.id === target.id ? { ...q, status: 'UPLOADING' } : q));
-        
-        try {
-          const result = await uploadSource(target.file);
-          setUploadQueue(prev => prev.map(q => q.id === target.id ? { ...q, status: 'SUCCESS' } : q));
-          onUploadSuccess(result);
-        } catch (err: any) {
-          const errorMessage = err.response?.data?.detail?.message || err.response?.data?.detail || 'Failed to upload';
-          setUploadQueue(prev => prev.map(q => q.id === target.id ? { ...q, status: 'ERROR', error: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage) } : q));
+    try {
+      const filesToUpload = toUpload.map(q => q.file);
+      const results = await uploadBatchSources(filesToUpload);
+      
+      setUploadQueue(prev => prev.map(q => {
+        if (toUpload.some(t => t.id === q.id)) {
+          return { ...q, status: 'SUCCESS' };
         }
-      }
-    };
-    
-    const workers = [];
-    for (let i = 0; i < Math.min(MAX_CONCURRENT, toUpload.length); i++) {
-      workers.push(runWorker());
+        return q;
+      }));
+      
+      results.forEach(res => onUploadSuccess(res));
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.detail?.message || err.response?.data?.detail || 'Failed to upload batch';
+      setUploadQueue(prev => prev.map(q => {
+        if (toUpload.some(t => t.id === q.id)) {
+          return { ...q, status: 'ERROR', error: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage) };
+        }
+        return q;
+      }));
+    } finally {
+      setIsUploading(false);
     }
-    
-    await Promise.all(workers);
-    setIsUploading(false);
   };
 
   return (
