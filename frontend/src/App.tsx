@@ -1,4 +1,3 @@
-
 import { Routes, Route } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { Workspace } from './pages/Workspace';
@@ -6,6 +5,7 @@ import { History } from './pages/History';
 import { Schema } from './pages/Schema';
 import { SourceLibrary } from './pages/SourceLibrary';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { CustomCursor } from './components/common/CustomCursor';
 import { useEffect, useState } from 'react';
 import { checkHealth } from './services/api';
 
@@ -21,8 +21,8 @@ function App() {
         console.warn("Backend not yet ready or failed health check", err);
       } finally {
         if (isMounted) {
-          // Small simulated delay for premium smooth transition
-          setTimeout(() => setIsInitializing(false), 800);
+          // 2 second simulated delay for premium galaxy intro
+          setTimeout(() => setIsInitializing(false), 2000);
         }
       }
     };
@@ -30,37 +30,39 @@ function App() {
     return () => { isMounted = false; };
   }, []);
 
-  if (isInitializing) {
-    return (
-      <div className="fixed inset-0 bg-[#09090b] flex flex-col items-center justify-center z-50 transition-opacity duration-700">
-        <div className="flex flex-col items-center animate-fade-in relative">
-          <div className="absolute inset-0 bg-cyan-500/10 blur-3xl rounded-full scale-150"></div>
-          
-          <div className="relative w-16 h-16 flex items-center justify-center mb-8">
-            <div className="absolute inset-0 border border-zinc-800 rounded-full"></div>
-            <div className="absolute inset-0 border border-cyan-500 rounded-full animate-[spin_3s_linear_infinite] border-t-transparent border-l-transparent"></div>
-            <div className="absolute inset-2 border border-zinc-700 rounded-full animate-[spin_4s_linear_infinite_reverse] border-r-transparent border-b-transparent"></div>
-            <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
-            </svg>
-          </div>
-          
-          <h1 className="text-2xl font-bold text-white tracking-tight mb-3">KnowUrDB</h1>
-          <div className="flex flex-col items-center gap-1.5">
-            <p className="text-sm text-zinc-400 font-medium tracking-wide uppercase text-[11px]">Understanding your data</p>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
-              <span className="text-xs text-zinc-500 font-mono">INITIALIZING SYSTEM...</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <ErrorBoundary>
-      <div className="animate-fade-in min-h-screen bg-[#09090b] text-zinc-100 selection:bg-cyan-500/30 selection:text-cyan-100">
+      <CustomCursor />
+      
+      {/* Galaxy Intro Layer */}
+      <div 
+        className={`fixed inset-0 z-50 pointer-events-none transition-opacity duration-1000 ease-in-out ${isInitializing ? 'opacity-100' : 'opacity-0'}`}
+        style={{
+          background: 'radial-gradient(ellipse at center, #1e1b4b 0%, #09090b 70%)'
+        }}
+      >
+        <div className="absolute inset-0 overflow-hidden">
+          {/* Subtle moving particles/stars */}
+          <div className="absolute w-[200%] h-[200%] top-[-50%] left-[-50%] opacity-20 animate-[spin_60s_linear_infinite]" 
+               style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '50px 50px' }}></div>
+          <div className="absolute w-[200%] h-[200%] top-[-50%] left-[-50%] opacity-30 animate-[spin_40s_linear_infinite_reverse]" 
+               style={{ backgroundImage: 'radial-gradient(circle, #22d3ee 1px, transparent 1px)', backgroundSize: '70px 70px' }}></div>
+        </div>
+        
+        <div className="flex flex-col items-center justify-center h-full relative z-10 animate-fade-in">
+          <div className="absolute inset-0 bg-cyan-500/5 blur-3xl rounded-full scale-150 animate-pulse-slow"></div>
+          
+          <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight mb-4 drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+            KnowUrDB
+          </h1>
+          <p className="text-sm md:text-base text-zinc-400 font-medium tracking-[0.2em] uppercase">
+            Ask your database anything.
+          </p>
+        </div>
+      </div>
+
+      {/* Main App Layer */}
+      <div className={`transition-opacity duration-700 ease-in-out min-h-screen bg-[#09090b] text-zinc-100 selection:bg-cyan-500/30 selection:text-cyan-100 ${isInitializing ? 'opacity-0' : 'opacity-100'}`}>
         <AppShell>
           <Routes>
             <Route path="/" element={<Workspace />} />
@@ -75,4 +77,3 @@ function App() {
 }
 
 export default App;
-
