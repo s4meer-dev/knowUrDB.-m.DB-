@@ -90,6 +90,11 @@ export const getSourceSchema = async (sourceId: string): Promise<DatabaseSchema>
   return response.data;
 };
 
+export const getSourceTableSample = async (sourceId: string, tableName: string, limit: number = 50): Promise<{ columns: string[], rows: any[] }> => {
+  const response = await apiClient.get<{ columns: string[], rows: any[] }>(`/api/sources/${sourceId}/schema/${tableName}/sample?limit=${limit}`);
+  return response.data;
+};
+
 export const uploadSource = async (file: File): Promise<SourceMetadata> => {
   const formData = new FormData();
   formData.append('file', file);

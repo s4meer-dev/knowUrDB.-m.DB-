@@ -117,12 +117,28 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
           />
         )}
 
+        {/* Sources Citation */}
+        {result.status === 'success' && result.sources && result.sources.length > 0 && (
+          <div className="bg-[#09090b] border-t border-zinc-800/80 p-3 px-6 text-xs text-zinc-400">
+            <span className="font-semibold text-zinc-300">Sources: </span>
+            {result.sources.map((s, idx) => (
+              <span key={s.source_id}>
+                {s.name}
+                {s.table && <span className="text-zinc-500"> ({s.table})</span>}
+                {s.page && <span className="text-zinc-500"> (Page {s.page})</span>}
+                {idx < (result.sources?.length || 0) - 1 ? ', ' : ''}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* Metadata */}
         {result.status === 'success' && (
           <MetadataPanel 
             rowCount={result.row_count} 
             executionTimeMs={result.execution_time_ms} 
             querySource={result.query_source}
+            confidence={result.confidence}
           />
         )}
       </div>

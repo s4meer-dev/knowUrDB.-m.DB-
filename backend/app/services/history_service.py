@@ -18,6 +18,7 @@ class HistoryService:
         query_source: str,
         status: str,
         generated_sql: str | None = None,
+        source_id: str | None = None,
         row_count: int | None = None,
         execution_time_ms: float | None = None,
         error_message: str | None = None,
@@ -32,15 +33,16 @@ class HistoryService:
             conn.execute(
                 """
                 INSERT INTO query_history (
-                    id, question, generated_sql, query_source, status,
+                    id, question, generated_sql, query_source, source_id, status,
                     row_count, execution_time_ms, error_message
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     query_id,
                     question,
                     generated_sql,
                     query_source,
+                    source_id,
                     status,
                     row_count,
                     execution_time_ms,
@@ -65,6 +67,7 @@ class HistoryService:
                 question=row["question"],
                 generated_sql=row["generated_sql"],
                 query_source=row["query_source"],
+                source_id=row["source_id"],
                 status=row["status"],
                 row_count=row["row_count"],
                 execution_time_ms=row["execution_time_ms"],
@@ -92,6 +95,7 @@ class HistoryService:
             question=row["question"],
             generated_sql=row["generated_sql"],
             query_source=row["query_source"],
+            source_id=row["source_id"],
             status=row["status"],
             row_count=row["row_count"],
             execution_time_ms=row["execution_time_ms"],

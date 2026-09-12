@@ -12,7 +12,7 @@ def client():
 
 def test_query_metadata_success(client):
     response = client.post(
-        "/api/query", json={"question": "how many students are there"}
+        "/api/query", json={"question": "how many students are there", "source_id": "demo-source-id"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -22,8 +22,7 @@ def test_query_metadata_success(client):
     assert data["row_count"] >= 0
     assert "execution_time_ms" in data
     assert data["execution_time_ms"] >= 0
-    assert "query_source" in data
-    assert data["query_source"] in ["ai", "fallback"]
+    assert data["query_source"] in ["ai", "fallback", "nlp_lite"]
 
     # Check explanations and suggestions exist (may be None or [])
     assert "explanation" in data
@@ -41,7 +40,7 @@ def test_query_zero_rows_success(client, monkeypatch):
 
     # Ask a question that will return 0 rows
     response = client.post(
-        "/api/query", json={"question": "list students named asdfghjklqwerty"}
+        "/api/query", json={"question": "list students named asdfghjklqwerty", "source_id": "demo-source-id"}
     )
     assert response.status_code == 200
     data = response.json()

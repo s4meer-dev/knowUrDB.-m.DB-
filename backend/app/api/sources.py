@@ -65,7 +65,7 @@ async def upload_source(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail={"error_code": "INTERNAL_ERROR", "message": f"An unexpected error occurred during processing: {e}"})
 
 @router.post("/upload/batch", response_model=List[SourceMetadata])
-async def upload_sources_batch(files: list[UploadFile] = File(...)):
+async def upload_sources_batch(files: list[UploadFile] = File(..., json_schema_extra={"items": {"type": "string", "format": "binary"}})):
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
@@ -142,3 +142,24 @@ async def get_source_schema(source_id: str):
     else:
         # Document sources do not have a relational schema in the same way
         return {"tables": [{"name": "Document Pages", "columns": [{"name": "text", "type": "TEXT"}]}]}
+
+@router.get("/{source_id}/schema/{table_name}/sample")
+async def get_source_table_sample(source_id: str, table_name: str, limit: int = 50):
+    source = source_manager.get_source(source_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+        
+    source_type = source_manager._determine_source_type(source.detected_format)
+    
+    if source_type == SourceType.RELATIONAL:
+        try:
+            db_path = source_manager.get_internal_db_path(source_id)
+            DatabaseManager.set_active_database(db_path)
+            columns, rows = schema_service.get_table_sample(table_name, limit)
+            return {"columns": columns, "rows": rows}
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to get sample data: {e}")
+    else:
+        return {"columns": ["text"], "rows": [{"text": "Sample text from document..."}]}

@@ -138,3 +138,37 @@ class SchemaService:
             lines.append(f"- {table.name} with columns {', '.join(col_names)}.")
 
         return SchemaSummary(summary=" ".join(lines))
+
+    def get_table_sample(self, table_name: str, limit: int = 50) -> tuple[list[str], list[dict[str, Any]]]:
+        """
+        Returns a sample of data from the specified table.
+        Returns a tuple of (column_names, rows).
+        """
+        if table_name.startswith("sqlite_"):
+            raise ValueError(f"Access to internal table '{table_name}' is not allowed.")
+
+        provider = self.db_provider or DatabaseManager.get_active_provider()
+        conn = provider.get_connection()
+        try:
+            cursor = conn.cursor()
+
+            # Validate table exists
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name = ?;",
+                (table_name,),
+            )
+            if not cursor.fetchone():
+                raise ValueError(f"Table '{table_name}' does not exist.")
+
+            cursor.execute(f"SELECT * FROM \"{table_name}\" LIMIT ?;", (limit,))
+            rows = cursor.fetchall()
+            
+            if not rows:
+                return [], []
+                
+            columns = [description[0] for description in cursor.description]
+            result_rows = [dict(zip(columns, row)) for row in rows]
+            
+            return columns, result_rows
+        finally:
+            conn.close()

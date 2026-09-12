@@ -4,21 +4,35 @@ interface MetadataPanelProps {
   rowCount: number;
   executionTimeMs: number;
   querySource?: string;
+  confidence?: number;
 }
 
 export const MetadataPanel: React.FC<MetadataPanelProps> = ({ 
   rowCount, 
   executionTimeMs, 
-  querySource 
+  querySource,
+  confidence
 }) => {
   const getSourceDisplay = (source?: string) => {
     if (source === 'ai') return 'AI generated';
     if (source === 'fallback') return 'Fallback logic';
+    if (source === 'nlp_lite') return 'NLP Lite';
+    if (source === 'meta') return 'Meta router';
+    if (source === 'single_source') return 'Single source';
     return source || 'System';
   };
 
   return (
     <div className="bg-[#09090b] border-t border-zinc-800/80 p-3 px-6 flex flex-wrap gap-6 text-[11px] uppercase tracking-wider text-zinc-500 font-medium justify-end">
+      {confidence !== undefined && (
+        <div className="flex items-center">
+          <svg className="w-3.5 h-3.5 mr-1.5 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          Confidence {(confidence * 100).toFixed(0)}%
+        </div>
+      )}
+
       <div className="flex items-center">
         <svg className="w-3.5 h-3.5 mr-1.5 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>

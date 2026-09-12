@@ -9,7 +9,7 @@ client = TestClient(app)
 
 def test_query_count_students():
     response = client.post(
-        "/api/query", json={"question": "How many students are in the database?"}
+        "/api/query", json={"question": "How many students are in the database?", "source_id": "demo-source-id"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -57,7 +57,7 @@ def test_unsupported_question():
         data = response.json()
         assert data["status"] == "error"
         assert (
-            "This assistant is currently designed to answer questions using the connected database."
+            "I couldn't find data related to that concept in the available database."
             in data["error"]
         )
 
@@ -71,7 +71,7 @@ def test_unsafe_generated_sql_rejection(monkeypatch):
 
     monkeypatch.setattr(TextToSQLService, "translate", mock_translate)
 
-    response = client.post("/api/query", json={"question": "Drop the database."})
+    response = client.post("/api/query", json={"question": "Drop the database.", "source_id": "demo-source-id"})
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "error"
@@ -87,7 +87,7 @@ def test_multiple_statement_rejection(monkeypatch):
 
     monkeypatch.setattr(TextToSQLService, "translate", mock_translate)
 
-    response = client.post("/api/query", json={"question": "Get students and courses."})
+    response = client.post("/api/query", json={"question": "Get students and courses.", "source_id": "demo-source-id"})
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "error"
@@ -101,7 +101,7 @@ def test_nlp_student_counting_variations():
         "Total number of students",
     ]
     for q in questions:
-        response = client.post("/api/query", json={"question": q})
+        response = client.post("/api/query", json={"question": q, "source_id": "demo-source-id"})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "success", f"Failed for question: {q}"
@@ -115,7 +115,7 @@ def test_nlp_department_student_counts():
         "List departments with student counts",
     ]
     for q in questions:
-        response = client.post("/api/query", json={"question": q})
+        response = client.post("/api/query", json={"question": q, "source_id": "demo-source-id"})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "success", f"Failed for question: {q}"
@@ -131,7 +131,7 @@ def test_nlp_department_with_most_students():
         "Which department has the maximum number of students?",
     ]
     for q in questions:
-        response = client.post("/api/query", json={"question": q})
+        response = client.post("/api/query", json={"question": q, "source_id": "demo-source-id"})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "success", f"Failed for question: {q}"
@@ -149,7 +149,7 @@ def test_nlp_average_attendance_by_department():
         "Which department has the highest average attendance?",
     ]
     for q in questions:
-        response = client.post("/api/query", json={"question": q})
+        response = client.post("/api/query", json={"question": q, "source_id": "demo-source-id"})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "success", f"Failed for question: {q}"
@@ -164,7 +164,7 @@ def test_nlp_top_students_by_average_marks():
         "Highest average scoring students",
     ]
     for q in questions:
-        response = client.post("/api/query", json={"question": q})
+        response = client.post("/api/query", json={"question": q, "source_id": "demo-source-id"})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "success", f"Failed for question: {q}"
@@ -215,7 +215,7 @@ def test_ai_fallback_semantic_variation():
                 },
             ),
         ):
-            response = client.post("/api/query", json={"question": question})
+            response = client.post("/api/query", json={"question": question, "source_id": "demo-source-id"})
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "success", f"Failed for question: {question}"
@@ -234,7 +234,7 @@ def test_ai_fallback_unavailable():
         "app.api.query.ai_service.get_status",
         return_value={"configured": False, "status": "unconfigured"},
     ):
-        response = client.post("/api/query", json={"question": question})
+        response = client.post("/api/query", json={"question": question, "source_id": "demo-source-id"})
         assert response.status_code == 200
         data = response.json()
         # Expect SUCCESS now instead of error, because it uses meta_router
@@ -256,7 +256,7 @@ def test_ai_fallback_generates_unsafe_sql():
             return_value={"response": "DELETE FROM students;"},
         ),
     ):
-        response = client.post("/api/query", json={"question": question})
+        response = client.post("/api/query", json={"question": question, "source_id": "demo-source-id"})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "error"
@@ -276,7 +276,7 @@ def test_ai_fallback_handles_generation_error():
             "app.api.query.ai_service.generate", side_effect=RuntimeError("API Error")
         ),
     ):
-        response = client.post("/api/query", json={"question": question})
+        response = client.post("/api/query", json={"question": question, "source_id": "demo-source-id"})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "error"

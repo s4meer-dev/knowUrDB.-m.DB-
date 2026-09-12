@@ -49,6 +49,7 @@ class AppDatabaseProvider:
                     question TEXT NOT NULL,
                     generated_sql TEXT,
                     query_source TEXT NOT NULL,
+                    source_id TEXT,
                     status TEXT NOT NULL,
                     row_count INTEGER,
                     execution_time_ms REAL,
@@ -79,10 +80,22 @@ class AppDatabaseProvider:
                 )
                 """
             )
-            # Add indexes for efficient querying
+            # Add index for efficient querying on created_at
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_query_history_created_at ON query_history(created_at DESC)"
             )
+
+            # Migration for existing databases
+            try:
+                conn.execute("ALTER TABLE query_history ADD COLUMN source_id TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+            # Now create index on source_id after making sure the column exists
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_query_history_source_id ON query_history(source_id)"
+            )
+
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_sources_status ON sources(status)"
             )

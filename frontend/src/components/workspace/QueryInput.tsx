@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react';
+import type { SourceMetadata } from '../../types';
 
 interface QueryInputProps {
   value: string;
@@ -6,6 +7,10 @@ interface QueryInputProps {
   onSubmit: () => void;
   isLoading: boolean;
   disabled: boolean;
+  sources?: SourceMetadata[];
+  selectedSourceId?: string;
+  onSourceChange?: (sourceId: string) => void;
+  loadingSources?: boolean;
 }
 
 export const QueryInput: React.FC<QueryInputProps> = ({
@@ -13,7 +18,11 @@ export const QueryInput: React.FC<QueryInputProps> = ({
   onChange,
   onSubmit,
   isLoading,
-  disabled
+  disabled,
+  sources = [],
+  selectedSourceId = 'all',
+  onSourceChange = () => {},
+  loadingSources = false
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -35,11 +44,34 @@ export const QueryInput: React.FC<QueryInputProps> = ({
   };
 
   return (
-    <div className="bg-zinc-900/80 backdrop-blur-md rounded-2xl shadow-lg border border-zinc-800/80 p-2 relative transition-all focus-within:ring-2 focus-within:ring-cyan-500/50 focus-within:border-cyan-500/50 focus-within:shadow-[0_0_30px_rgba(34,211,238,0.1)]">
+    <div className="bg-zinc-900/80 backdrop-blur-md rounded-2xl shadow-lg border border-zinc-800/80 p-2 relative transition-all focus-within:ring-2 focus-within:ring-cyan-500/50 focus-within:border-cyan-500/50 focus-within:shadow-[0_0_30px_rgba(34,211,238,0.1)] flex flex-col">
+      <div className="flex items-center px-4 pt-2 pb-1 border-b border-zinc-800/50 mb-1">
+        <label htmlFor="source-selector" className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mr-3">
+          Database / Source
+        </label>
+        <select
+          id="source-selector"
+          value={selectedSourceId}
+          onChange={(e) => onSourceChange(e.target.value)}
+          disabled={loadingSources || disabled || isLoading}
+          className="bg-transparent text-sm font-medium text-cyan-400 focus:outline-none focus:ring-0 hover:text-cyan-300 transition-colors cursor-pointer disabled:opacity-50 min-w-[150px]"
+        >
+          <option value="all" className="bg-zinc-900 text-zinc-100">All Sources</option>
+          {sources.map(s => (
+            <option key={s.source_id} value={s.source_id} className="bg-zinc-900 text-zinc-100">
+              {s.name} {s.record_count ? `(${s.record_count.toLocaleString()} rows)` : ''}
+            </option>
+          ))}
+        </select>
+        {loadingSources && (
+          <div className="ml-2 w-3 h-3 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
+        )}
+      </div>
+
       <div className="flex flex-col relative">
         <textarea
           ref={textareaRef}
-          className="w-full bg-transparent border-none rounded-xl p-4 pr-16 text-zinc-100 placeholder-zinc-500 focus:ring-0 focus:outline-none resize-none min-h-[100px] text-lg font-medium leading-relaxed disabled:opacity-50"
+          className="w-full bg-transparent border-none rounded-xl p-4 pr-16 text-zinc-100 placeholder-zinc-500 focus:ring-0 focus:outline-none resize-none min-h-[80px] text-lg font-medium leading-relaxed disabled:opacity-50"
           placeholder="Ask anything about your database..."
           value={value}
           onChange={(e) => onChange(e.target.value)}

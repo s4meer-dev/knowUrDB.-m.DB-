@@ -69,6 +69,9 @@ class QueryHistoryItem(BaseModel):
     query_source: str = Field(
         ..., description="Source of the query (e.g., 'ai', 'fallback')"
     )
+    source_id: str | None = Field(
+        None, description="The ID of the source queried"
+    )
     status: str = Field(..., description="Status ('success', 'error')")
     row_count: int | None = Field(None, description="Number of rows returned")
     execution_time_ms: float | None = Field(None, description="Execution time in ms")

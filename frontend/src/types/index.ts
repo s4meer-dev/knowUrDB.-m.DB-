@@ -54,6 +54,7 @@ export interface HistoryItem {
   execution_time_ms: number;
   error?: string;
   query_source?: string;
+  source_id?: string;
   created_at: string;
 }
 

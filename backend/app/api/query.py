@@ -42,6 +42,7 @@ async def query_database(request: NaturalLanguageQueryRequest):
         history_service.log_query(
             question=request.question,
             query_source="fallback",
+            source_id=request.source_ids[0] if request.source_ids else None,
             status="success",
             generated_sql=meta_response.get("generated_sql", ""),
             row_count=meta_response["row_count"],
@@ -149,19 +150,42 @@ async def query_database(request: NaturalLanguageQueryRequest):
     if not sql:
         ai_status = ai_service.get_status()
         if not (ai_status.get("configured") and ai_status.get("status") == "ready"):
-            error_msg = "I couldn't find data related to that concept in the available database."
-            history_service.log_query(
-                question=request.question,
-                query_source="fallback",
-                status="error",
-                error_message=error_msg,
-            )
-            return NaturalLanguageQueryResponse(
-                question=request.question, status="error", error=error_msg
-            )
+            try:
+                sql = text_to_sql_service.translate(request.question)
+                query_source = "nlp_lite"
+                
+                # Still need to validate safety for deterministic output (e.g. from mock tests)
+                SQLValidator.validate(sql)
+                SQLValidator.validate_against_db(sql, DatabaseManager.get_active_provider())
+            except SQLSafetyError:
+                error_msg = "The generated query was rejected because it did not meet database safety requirements."
+                history_service.log_query(
+                    question=request.question,
+                    query_source="nlp_lite",
+                    source_id=source_metadata.source_id,
+                    status="error",
+                    generated_sql=sql,
+                    error_message=error_msg,
+                )
+                return NaturalLanguageQueryResponse(
+                    question=request.question, status="error", error=error_msg
+                )
+            except ValueError:
+                error_msg = "I couldn't find data related to that concept in the available database."
+                history_service.log_query(
+                    question=request.question,
+                    query_source="fallback",
+                    source_id=source_metadata.source_id,
+                    status="error",
+                    error_message=error_msg,
+                )
+                return NaturalLanguageQueryResponse(
+                    question=request.question, status="error", error=error_msg
+                )
 
-        schema_summary = schema_service.get_schema_summary().summary
-        prompt = f"""You are a SQL generation assistant for a SQLite database.
+        if not sql:
+            schema_summary = schema_service.get_schema_summary().summary
+            prompt = f"""You are a SQL generation assistant for a SQLite database.
 The database schema is as follows:
 {schema_summary}
 
@@ -215,6 +239,7 @@ IMPORTANT RULES:
                 history_service.log_query(
                     question=request.question,
                     query_source="ai",
+                    source_id=source_metadata.source_id,
                     status="error",
                     generated_sql=current_sql,
                     error_message=error_msg,
@@ -232,6 +257,7 @@ IMPORTANT RULES:
                 history_service.log_query(
                     question=request.question,
                     query_source="ai",
+                    source_id=source_metadata.source_id,
                     status="error",
                     error_message=error_msg,
                 )
@@ -251,6 +277,7 @@ IMPORTANT RULES:
             history_service.log_query(
                 question=request.question,
                 query_source="ai",
+                source_id=source_metadata.source_id,
                 status="error",
                 error_message=error_msg,
             )
@@ -276,6 +303,7 @@ IMPORTANT RULES:
         history_service.log_query(
             question=request.question,
             query_source=query_source,
+            source_id=source_metadata.source_id,
             status="success",
             generated_sql=sql,
             row_count=row_count,
@@ -304,6 +332,7 @@ IMPORTANT RULES:
         history_service.log_query(
             question=request.question,
             query_source=query_source,
+            source_id=source_metadata.source_id,
             status="error",
             generated_sql=sql,
             error_message=error_msg,
@@ -326,6 +355,7 @@ IMPORTANT RULES:
         history_service.log_query(
             question=request.question,
             query_source=query_source,
+            source_id=source_metadata.source_id,
             status="error",
             generated_sql=sql,
             error_message=error_msg,

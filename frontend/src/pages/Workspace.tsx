@@ -4,20 +4,45 @@ import { QueryInput } from '../components/workspace/QueryInput';
 import { SuggestionsPanel } from '../components/workspace/SuggestionsPanel';
 import { QueryResult } from '../components/workspace/QueryResult';
 
-import { queryDatabase } from '../services/api';
-import type { QueryResponse } from '../types';
+import { queryDatabase, getSources } from '../services/api';
+import type { QueryResponse, SourceMetadata } from '../types';
 
 export const Workspace: React.FC = () => {
   const location = useLocation();
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<QueryResponse | null>(null);
+  
+  const [sources, setSources] = useState<SourceMetadata[]>([]);
+  const [selectedSourceId, setSelectedSourceId] = useState<string>('all');
+  const [loadingSources, setLoadingSources] = useState(true);
+
+  useEffect(() => {
+    fetchSources();
+  }, []);
+
+  const fetchSources = async () => {
+    try {
+      setLoadingSources(true);
+      const data = await getSources();
+      setSources(data);
+    } catch (e) {
+      console.error("Failed to fetch sources", e);
+    } finally {
+      setLoadingSources(false);
+    }
+  };
 
   useEffect(() => {
     // Check if we came here from the History page with an initial question
-    const state = location.state as { initialQuestion?: string };
+    const state = location.state as { initialQuestion?: string, sourceId?: string };
     if (state?.initialQuestion && !loading && !result) {
-      handleQuery(state.initialQuestion);
+      if (state.sourceId) {
+        setSelectedSourceId(state.sourceId);
+        handleQuery(state.initialQuestion, state.sourceId === 'all' ? undefined : [state.sourceId]);
+      } else {
+        handleQuery(state.initialQuestion);
+      }
       // Clear the state so it doesn't trigger on reload
       window.history.replaceState({}, document.title);
     }
@@ -29,8 +54,11 @@ export const Workspace: React.FC = () => {
     setQuestion(q);
     setLoading(true);
     
+    // Use selectedSourceId if not explicitly provided
+    const finalSourceIds = sourceIds || (selectedSourceId === 'all' ? undefined : [selectedSourceId]);
+    
     try {
-      const res = await queryDatabase(q, sourceIds);
+      const res = await queryDatabase(q, finalSourceIds);
       setResult(res);
     } catch (e: any) {
       setResult({
@@ -69,13 +97,17 @@ export const Workspace: React.FC = () => {
           onSubmit={() => handleQuery(question)} 
           isLoading={loading} 
           disabled={false} 
+          sources={sources}
+          selectedSourceId={selectedSourceId}
+          onSourceChange={setSelectedSourceId}
+          loadingSources={loadingSources}
         />
       </div>
 
       {!result && !loading && (
         <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
           <SuggestionsPanel 
-            onSelectSuggestion={handleQuery} 
+            onSelectSuggestion={(q) => handleQuery(q)} 
             disabled={loading} 
           />
         </div>
@@ -87,7 +119,7 @@ export const Workspace: React.FC = () => {
             <QueryResult 
               result={result} 
               isLoading={loading} 
-              onFollowUp={handleQuery} 
+              onFollowUp={(q) => handleQuery(q)} 
             />
           </div>
         )}

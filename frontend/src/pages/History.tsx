@@ -43,11 +43,8 @@ export const History: React.FC = () => {
     }
   };
 
-  const handleRunAgain = (question: string) => {
-    // We navigate to workspace and pass the question via state or just simple local storage
-    // But since they are separated by router, the simplest is to navigate and use a query param
-    // Since we don't have query params setup, we'll just navigate, but a robust app would use location.state
-    navigate('/', { state: { initialQuestion: question } });
+  const handleRunAgain = (question: string, sourceId?: string) => {
+    navigate('/', { state: { initialQuestion: question, sourceId: sourceId } });
   };
 
   const handleDelete = async (id: string) => {
@@ -91,31 +88,55 @@ export const History: React.FC = () => {
     );
   }
 
+  const successCount = items.filter(i => i.status === 'success').length;
+  const errorCount = items.length - successCount;
+
   return (
-    <div className="flex flex-col h-full max-w-5xl mx-auto space-y-6 animate-fade-in pt-4">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-3xl font-bold text-zinc-100 tracking-tight">Query History</h2>
-          <p className="text-zinc-400 mt-2 text-lg">Review your past database questions and results.</p>
+    <div className="flex flex-col h-full max-w-5xl mx-auto space-y-8 animate-fade-in pt-6 pb-12">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 bg-zinc-900/30 p-8 rounded-3xl border border-zinc-800/80 shadow-2xl relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/10 to-transparent pointer-events-none"></div>
+        <div className="relative z-10">
+          <div className="w-16 h-16 bg-zinc-900 border border-zinc-700/50 rounded-2xl flex items-center justify-center shadow-lg text-cyan-400 mb-6">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </div>
+          <h2 className="text-4xl font-bold text-zinc-100 tracking-tight">Query History</h2>
+          <p className="text-zinc-400 mt-3 text-lg max-w-lg">Review and re-run your past database questions, analyses, and results.</p>
         </div>
         
         {items.length > 0 && !loading && (
-          <button
-            onClick={handleClearAll}
-            disabled={clearingAll}
-            className="text-red-400 hover:text-red-300 hover:bg-red-500/10 px-4 py-2 rounded-xl transition-all text-sm font-semibold disabled:opacity-50"
-          >
-            {clearingAll ? 'Clearing...' : 'Clear All'}
-          </button>
+          <div className="relative z-10 flex items-center gap-6">
+            <div className="flex items-center gap-6 text-sm font-medium border-r border-zinc-800/80 pr-6">
+              <div className="flex flex-col items-center">
+                <span className="text-3xl font-bold text-zinc-100">{items.length}</span>
+                <span className="text-xs uppercase tracking-wider text-zinc-500">Total</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="text-xl font-bold text-emerald-400">{successCount}</span>
+                <span className="text-xs uppercase tracking-wider text-zinc-500">Success</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="text-xl font-bold text-red-400">{errorCount}</span>
+                <span className="text-xs uppercase tracking-wider text-zinc-500">Failed</span>
+              </div>
+            </div>
+            <button
+              onClick={handleClearAll}
+              disabled={clearingAll}
+              className="text-red-400 border border-red-500/20 hover:bg-red-500/10 px-5 py-2.5 rounded-xl transition-all text-sm font-semibold disabled:opacity-50 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              {clearingAll ? 'Clearing...' : 'Clear All'}
+            </button>
+          </div>
         )}
       </div>
 
       <div className="flex-1">
         {!loading && items.length === 0 ? (
-          <div className="mt-12">
+          <div className="mt-8 bg-zinc-900/30 border border-zinc-800/50 rounded-3xl p-12 shadow-xl">
             <EmptyState 
               title="No history yet" 
-              message="Your recent database queries will appear here." 
+              message="Your recent database queries and analysis sessions will appear here." 
               icon={
                 <svg className="w-16 h-16 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -124,7 +145,7 @@ export const History: React.FC = () => {
               action={
                 <button 
                   onClick={() => navigate('/')}
-                  className="mt-4 text-zinc-900 bg-zinc-100 hover:bg-zinc-200 px-6 py-2.5 rounded-xl font-medium transition-colors"
+                  className="mt-6 text-zinc-950 bg-cyan-500 hover:bg-cyan-400 px-8 py-3 rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:scale-105"
                 >
                   Start exploring your data &rarr;
                 </button>
@@ -152,4 +173,3 @@ export const History: React.FC = () => {
     </div>
   );
 };
-
