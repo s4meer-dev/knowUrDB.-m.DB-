@@ -6,17 +6,15 @@ interface LoadingExperienceProps {
 }
 
 const STAGES = [
-  "INITIALIZING INTELLIGENCE",
-  "CONNECTING TO DATA LAYER",
-  "UNDERSTANDING DATABASE STRUCTURE",
-  "PREPARING WORKSPACE"
+  "Preparing workspace",
+  "Loading database intelligence",
+  "Almost ready"
 ];
 
 export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, onComplete }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stageIndex, setStageIndex] = useState(0);
-  const [isExiting, setIsExiting] = useState(false);
-  const [isRevealingApp, setIsRevealingApp] = useState(false);
+  const [phase, setPhase] = useState<'darkness' | 'data-signal' | 'brand-energy' | 'letter-reveal' | 'focus' | 'exit'>('darkness');
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   // Handle prefers-reduced-motion
@@ -28,9 +26,66 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
     return () => mediaQuery.removeEventListener('change', handler);
   }, []);
 
-  // Message lifecycle (total ~3.6 seconds + 1s exit)
+  // Viewport & Scroll Locking
   useEffect(() => {
-    const intervalTime = 900; // 900ms per stage
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+    };
+  }, []);
+
+  // Cinematic Timeline
+  useEffect(() => {
+    // 0.0s - Darkness (initial state)
+    
+    // 0.3s - Atmosphere begins
+    // 0.5s - Data signals appear
+    const p1 = setTimeout(() => setPhase('data-signal'), 500);
+    
+    // 0.7s - Brand reveal begins
+    const p2 = setTimeout(() => setPhase('brand-energy'), 700);
+
+    // 1.1s - KnowUrDB becomes readable
+    const p3 = setTimeout(() => setPhase('letter-reveal'), 1100);
+
+    // 1.6s - Focus / Category / Product Statement appears
+    const p4 = setTimeout(() => setPhase('focus'), 1600);
+
+    // 2.8s - Begin exit transition
+    const p5 = setTimeout(() => {
+      setPhase('exit');
+      
+      // Wait for exit transition to show underlying app
+      setTimeout(() => {
+        onReveal();
+      }, 500);
+
+      // Unmount completely
+      setTimeout(() => {
+        onComplete();
+      }, 1000);
+    }, 2800);
+
+    return () => {
+      clearTimeout(p1);
+      clearTimeout(p2);
+      clearTimeout(p3);
+      clearTimeout(p4);
+      clearTimeout(p5);
+    };
+  }, [onReveal, onComplete]);
+
+  // Status Message Cycling
+  useEffect(() => {
+    if (phase !== 'focus') return;
+    
+    const intervalTime = 600; // Fast cycling for status messages
     let currentStage = 0;
     
     const interval = setInterval(() => {
@@ -39,26 +94,13 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
         setStageIndex(currentStage);
       } else {
         clearInterval(interval);
-        // Start exit sequence
-        setIsExiting(true);
-        
-        // Wait for secondary elements to fade, then reveal app
-        setTimeout(() => {
-          setIsRevealingApp(true);
-          onReveal();
-        }, 600);
-
-        // Tell parent to remove us completely after transition finishes
-        setTimeout(() => {
-          onComplete();
-        }, 1300);
       }
     }, intervalTime);
 
     return () => clearInterval(interval);
-  }, [onReveal, onComplete]);
+  }, [phase]);
 
-  // Canvas background metaphor (Nodes & Connections)
+  // Canvas background metaphor (Intelligent Schema / Data Nodes)
   useEffect(() => {
     if (prefersReducedMotion) return;
     
@@ -68,7 +110,7 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
     if (!ctx) return;
 
     let animationFrameId: number;
-    let particles: { x: number, y: number, vx: number, vy: number }[] = [];
+    let particles: { x: number, y: number, vx: number, vy: number, radius: number }[] = [];
     
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -78,13 +120,14 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
 
     const initParticles = () => {
       particles = [];
-      const numParticles = Math.floor((canvas.width * canvas.height) / 30000); // Very sparse
-      for (let i = 0; i < Math.min(numParticles, 50); i++) {
+      const numParticles = Math.floor((canvas.width * canvas.height) / 25000); // Sparse
+      for (let i = 0; i < Math.min(numParticles, 60); i++) {
         particles.push({
           x: Math.random() * canvas.width,
           y: Math.random() * canvas.height,
-          vx: (Math.random() - 0.5) * 0.2, // Extremely slow
-          vy: (Math.random() - 0.5) * 0.2
+          vx: (Math.random() - 0.5) * 0.1, // Extremely slow, organic movement
+          vy: (Math.random() - 0.5) * 0.1,
+          radius: Math.random() * 1.5 + 0.5
         });
       }
     };
@@ -92,33 +135,32 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
-      // Update & draw particles
       ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
         p.x += p.vx;
         p.y += p.vy;
 
-        // Wrap around
+        // Wrap around gently
         if (p.x < 0) p.x = canvas.width;
         if (p.x > canvas.width) p.x = 0;
         if (p.y < 0) p.y = canvas.height;
         if (p.y > canvas.height) p.y = 0;
 
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 1, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw connections
+        // Draw connections for schema effect
         for (let j = i + 1; j < particles.length; j++) {
           const p2 = particles[j];
           const dx = p.x - p2.x;
           const dy = p.y - p2.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
 
-          if (dist < 150) {
+          if (dist < 120) {
             ctx.beginPath();
-            ctx.strokeStyle = `rgba(34, 211, 238, ${0.05 * (1 - dist / 150)})`; // subtle cyan
+            ctx.strokeStyle = `rgba(34, 211, 238, ${0.04 * (1 - dist / 120)})`; // Very subtle cyan/white
             ctx.lineWidth = 0.5;
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(p2.x, p2.y);
@@ -139,79 +181,90 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
     };
   }, [prefersReducedMotion]);
 
+  // Derived states for cinematic transition
+  const showAtmosphere = phase !== 'darkness' && phase !== 'exit';
+  const showData = (phase === 'data-signal' || phase === 'brand-energy' || phase === 'letter-reveal' || phase === 'focus');
+  const showBrand = (phase === 'brand-energy' || phase === 'letter-reveal' || phase === 'focus');
+  const showLightSweep = phase === 'letter-reveal' || phase === 'focus'; // Starts after letters appear
+  const showDetails = phase === 'focus';
+  const isExiting = phase === 'exit';
+
   return (
     <div 
-      className={`fixed inset-0 z-[100] flex items-center justify-center bg-[#050507] text-zinc-100 overflow-hidden select-none transition-opacity duration-700 ease-in-out ${isRevealingApp ? 'opacity-0' : 'opacity-100'}`}
+      className={`fixed inset-0 z-[9999] h-[100dvh] w-screen flex items-center justify-center bg-[#050507] text-zinc-100 overflow-hidden select-none touch-none pointer-events-auto transition-all duration-1000 ease-in-out ${isExiting ? 'opacity-0 scale-[1.02] filter blur-[4px]' : 'opacity-100'}`}
     >
-      {/* Subtle radial glows */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-violet-900/5 blur-[120px] animate-pulse-slow"></div>
+      {/* Central expanding light on exit */}
+      <div className={`absolute inset-0 pointer-events-none transition-all duration-700 ${isExiting ? 'bg-zinc-100/5 z-50' : 'bg-transparent'}`}></div>
+
+      {/* Subtle radial glows (Atmosphere) */}
+      <div className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ${showAtmosphere ? 'opacity-100' : 'opacity-0'}`}>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-violet-900/10 blur-[120px] animate-pulse-slow"></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-cyan-900/5 blur-[80px]"></div>
       </div>
 
       {/* Canvas Background Metaphor */}
       <canvas 
         ref={canvasRef} 
-        className="absolute inset-0 pointer-events-none opacity-60"
+        className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ${showData ? 'opacity-50' : 'opacity-0'}`}
+        style={{ maskImage: 'radial-gradient(circle at center, black 30%, transparent 80%)', WebkitMaskImage: 'radial-gradient(circle at center, black 30%, transparent 80%)' }}
       />
 
-      {/* Micro details */}
-      <div className={`absolute top-8 left-8 text-[10px] font-mono tracking-widest text-zinc-600 transition-opacity duration-700 ${isExiting ? 'opacity-0' : 'animate-fade-in'}`}>
-        KNOWURDB SYSTEM INITIALIZATION
+      {/* Micro details (Edge UI) */}
+      <div className={`absolute top-6 left-6 md:top-8 md:left-8 text-[10px] font-mono tracking-widest text-zinc-600 transition-opacity duration-1000 hidden sm:block ${showDetails ? 'opacity-100' : 'opacity-0'}`}>
+        KNOWURDB <br/> INTELLIGENCE SYSTEM
       </div>
-      <div className={`absolute bottom-8 left-8 text-[10px] font-mono tracking-widest text-zinc-600 transition-opacity duration-700 ${isExiting ? 'opacity-0' : 'animate-fade-in'}`}>
-        DATABASE INTELLIGENCE PLATFORM
+      <div className={`absolute bottom-6 left-6 md:bottom-8 md:left-8 text-[10px] font-mono tracking-widest text-zinc-600 transition-opacity duration-1000 hidden sm:block ${showDetails ? 'opacity-100' : 'opacity-0'}`}>
+        NATURAL LANGUAGE → DATABASE
       </div>
-      <div className={`absolute bottom-8 right-8 text-[10px] font-mono tracking-widest text-zinc-600 transition-opacity duration-700 ${isExiting ? 'opacity-0' : 'animate-fade-in'}`}>
-        v1.0
+      <div className={`absolute bottom-6 right-6 md:bottom-8 md:right-8 text-[10px] font-mono tracking-widest text-cyan-900/50 transition-opacity duration-1000 hidden sm:block ${showDetails ? 'opacity-100 animate-pulse-slow' : 'opacity-0'}`}>
+        INITIALIZING
       </div>
 
       {/* Central Content */}
-      <div className={`relative z-10 flex flex-col items-center justify-center -mt-16 w-full max-w-lg transition-transform duration-1000 ease-out ${isRevealingApp ? 'scale-105' : 'scale-100'}`}>
+      <div className="relative z-10 flex flex-col items-center justify-center -mt-8 md:-mt-16 w-full max-w-2xl px-4">
         
-        {/* Brand Logo Reveal */}
-        <div className="relative mb-2">
-          <h1 className="text-4xl font-bold tracking-tight text-transparent bg-clip-text bg-zinc-200 animate-brand-reveal relative">
-            knowUrDB
-            {/* Horizontal light sweep */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 mix-blend-overlay animate-light-sweep pointer-events-none"></div>
-          </h1>
+        {/* Brand Reveal */}
+        <div className={`relative mb-4 md:mb-6 transition-all duration-700 ${showBrand ? 'opacity-100' : 'opacity-0'}`}>
+          {showBrand && (
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-zinc-100 relative animate-brand-reveal-premium">
+              knowUrDB
+              {/* One-time elegant light sweep */}
+              {showLightSweep && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-100/40 to-transparent mix-blend-overlay animate-light-sweep-single pointer-events-none"></div>
+              )}
+            </h1>
+          )}
         </div>
 
-        {/* Subtitle */}
-        <div className={`mb-12 transition-opacity duration-500 delay-300 ${isExiting ? 'opacity-0' : 'animate-fade-in'}`}>
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-zinc-500">
+        {/* Subtitle / Product Statement */}
+        <div className={`flex flex-col items-center transition-all duration-1000 ${showDetails ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          <div className="text-[10px] md:text-xs font-bold tracking-[0.25em] text-cyan-500/80 uppercase mb-3">
+            Database Intelligence Platform
+          </div>
+          <p className="text-sm md:text-base font-medium tracking-wide text-zinc-400 mb-12 text-center">
             Understand your data. Ask it anything.
           </p>
-        </div>
 
-        {/* Loading Indicator & Stages */}
-        <div className={`w-full max-w-[240px] flex flex-col items-center transition-opacity duration-500 ${isExiting ? 'opacity-0' : 'opacity-100'}`}>
-          
           {/* Custom minimal line indicator */}
-          <div className="w-full h-[1px] bg-zinc-800/50 relative overflow-hidden mb-6">
-            <div className="absolute top-0 left-0 h-full w-1/3 bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent animate-loading-line"></div>
-          </div>
+          <div className="w-full max-w-[200px] flex flex-col items-center">
+            <div className="w-full h-[1px] bg-zinc-800/80 relative overflow-hidden mb-4">
+              <div className="absolute top-0 left-0 h-full w-[40px] bg-cyan-400/80 shadow-[0_0_8px_rgba(34,211,238,0.8)] rounded-full animate-orbit-dot"></div>
+            </div>
 
-          {/* Messages */}
-          <div className="h-4 flex items-center justify-center relative w-full overflow-hidden mb-8">
-            {STAGES.map((msg, idx) => (
-              <span 
-                key={idx}
-                className={`absolute text-[10px] font-bold tracking-[0.15em] text-cyan-500/80 transition-all duration-500 ease-out uppercase
-                  ${idx === stageIndex ? 'opacity-100 transform-none' : 
-                    idx < stageIndex ? 'opacity-0 -translate-y-4' : 'opacity-0 translate-y-4'}`}
-              >
-                {msg}
-              </span>
-            ))}
+            {/* Status Messages */}
+            <div className="h-4 flex items-center justify-center relative w-full overflow-hidden">
+              {STAGES.map((msg, idx) => (
+                <span 
+                  key={idx}
+                  className={`absolute text-[10px] font-medium tracking-widest text-zinc-500 transition-all duration-500 ease-out
+                    ${idx === stageIndex ? 'opacity-100 transform-none' : 
+                      idx < stageIndex ? 'opacity-0 -translate-y-2' : 'opacity-0 translate-y-2'}`}
+                >
+                  {msg}
+                </span>
+              ))}
+            </div>
           </div>
-
-          {/* Stage Progress */}
-          <div className="text-[10px] font-mono tracking-widest text-zinc-600">
-            0{stageIndex + 1} / 0{STAGES.length}
-          </div>
-
         </div>
 
       </div>

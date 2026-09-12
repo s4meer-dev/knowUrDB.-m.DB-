@@ -4,10 +4,12 @@
 @theme {
   --animate-fade-in: fadeIn 0.5s ease-out forwards;
   --animate-slide-up: slideUp 0.5s ease-out forwards;
+  --animate-fade-up-slow: fadeUpSlow 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  --animate-brand-reveal: brandReveal 1s ease-out forwards;
-  --animate-light-sweep: lightSweep 2.5s ease-in-out infinite;
-  --animate-loading-line: loadingLine 2s ease-in-out infinite;
+  --animate-brand-reveal-premium: brandRevealPremium 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-light-sweep-single: lightSweepSingle 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  --animate-orbit-dot: orbitDot 2s linear infinite;
+  --animate-text-mask-reveal: textMaskReveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes fadeIn {
@@ -20,22 +22,53 @@
   100% { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes brandReveal {
-  0% { opacity: 0; filter: blur(10px) brightness(1.5); transform: scale(1.02); }
-  100% { opacity: 1; filter: blur(0px) brightness(1); transform: scale(1); }
+@keyframes fadeUpSlow {
+  0% { opacity: 0; transform: translateY(15px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes lightSweep {
-  0% { transform: translateX(-100%); opacity: 0; }
-  50% { opacity: 0.5; }
-  100% { transform: translateX(100%); opacity: 0; }
+@keyframes brandRevealPremium {
+  0% { 
+    opacity: 0; 
+    filter: blur(12px) brightness(2); 
+    transform: scale(1.05) translateY(5px);
+    letter-spacing: -0.05em;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% { 
+    opacity: 1; 
+    filter: blur(0px) brightness(1); 
+    transform: scale(1) translateY(0);
+    letter-spacing: normal;
+  }
 }
 
-@keyframes loadingLine {
-  0% { transform: translateX(-100%); opacity: 0; }
-  20% { opacity: 1; }
-  80% { opacity: 1; }
-  100% { transform: translateX(300%); opacity: 0; }
+@keyframes textMaskReveal {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+@keyframes lightSweepSingle {
+  0% { transform: translateX(-150%) skewX(-15deg); opacity: 0; }
+  20% { opacity: 0.8; }
+  80% { opacity: 0.8; }
+  100% { transform: translateX(200%) skewX(-15deg); opacity: 0; }
+}
+
+@keyframes orbitDot {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); } /* Based on 240px width container, simple slide */
 }
 
 body {
