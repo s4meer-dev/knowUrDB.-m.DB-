@@ -7,35 +7,47 @@ import { SourceLibrary } from './pages/SourceLibrary';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { CustomCursor } from './components/common/CustomCursor';
 import { LoadingExperience } from './components/LoadingExperience';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { checkHealth } from './services/api';
 
+// Module level guard to ensure it only runs once per JS execution context (page load/refresh).
+let hasRunLoadingExperience = false;
+
 function App() {
-  const [showLoading, setShowLoading] = useState(true);
-  const [appReady, setAppReady] = useState(false);
+  const [appStatus, setAppStatus] = useState<'loading' | 'revealing' | 'ready'>(
+    hasRunLoadingExperience ? 'ready' : 'loading'
+  );
 
   useEffect(() => {
-    // Fire off the health check in the background.
-    // The LoadingExperience component manages its own visual lifecycle.
     checkHealth().catch(err => {
       console.warn("Backend not yet ready or failed health check", err);
     });
+  }, []);
+
+  // Memoize callbacks to prevent new function references from triggering effects in child components
+  const handleReveal = useCallback(() => {
+    setAppStatus('revealing');
+  }, []);
+
+  const handleComplete = useCallback(() => {
+    hasRunLoadingExperience = true;
+    setAppStatus('ready');
   }, []);
 
   return (
     <ErrorBoundary>
       <CustomCursor />
       
-      {showLoading && (
+      {appStatus !== 'ready' && (
         <LoadingExperience 
-          onReveal={() => setAppReady(true)}
-          onComplete={() => setShowLoading(false)} 
+          onReveal={handleReveal}
+          onComplete={handleComplete} 
         />
       )}
 
       {/* Main App Layer */}
       <div 
-        className={`transition-all duration-700 ease-out min-h-screen bg-[#09090b] text-zinc-100 selection:bg-cyan-500/30 selection:text-cyan-100 ${appReady ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+        className={`transition-all duration-700 ease-out min-h-screen bg-[#09090b] text-zinc-100 selection:bg-cyan-500/30 selection:text-cyan-100 ${appStatus !== 'loading' ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}
       >
         <AppShell>
           <Routes>
