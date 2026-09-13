@@ -16,7 +16,10 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
   
   // DOM element refs for direct smooth manipulation
   const wordmarkRef = useRef<HTMLSpanElement>(null);
+  const wordmarkGlowRef = useRef<HTMLDivElement>(null);
+  const flareRef = useRef<HTMLDivElement>(null);
   const taglineRef = useRef<HTMLParagraphElement>(null);
+  const taglineGlowRef = useRef<HTMLSpanElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
   const railHeadRef = useRef<HTMLDivElement>(null);
 
@@ -77,26 +80,39 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
       const progress = Math.min(elapsed / TOTAL_DURATION, 1);
 
       // 1. Premium Fast Ignition Wordmark Signal (3% to 30% -> ~100ms to 1020ms, ~900ms duration)
-      if (wordmarkRef.current) {
+      if (wordmarkRef.current && flareRef.current && wordmarkGlowRef.current) {
         if (progress >= 0.03 && progress <= 0.3) {
           const signalP = easeInOutQuart((progress - 0.03) / 0.27);
           wordmarkRef.current.style.backgroundPosition = `${100 - (signalP * 100)}% 0`;
+          
+          flareRef.current.style.left = `${signalP * 100}%`;
+          flareRef.current.style.transform = `translate(-50%, -50%) scaleX(${Math.sin(signalP * Math.PI) * 2.5})`;
+          flareRef.current.style.opacity = String(Math.sin(signalP * Math.PI) * 0.8);
+          
+          wordmarkGlowRef.current.style.opacity = String(Math.sin(signalP * Math.PI));
         } else if (progress > 0.3) {
           wordmarkRef.current.style.backgroundPosition = `0% 0`;
+          flareRef.current.style.opacity = '0';
+          wordmarkGlowRef.current.style.opacity = '0';
         }
       }
 
       // 2. Supporting Tagline Materialization (16% to 35% -> ~540ms to 1190ms, ~650ms duration)
-      if (taglineRef.current) {
+      if (taglineRef.current && taglineGlowRef.current) {
         if (progress >= 0.16 && progress <= 0.35) {
           const taglineP = easeOutCubic((progress - 0.16) / 0.19);
           taglineRef.current.style.opacity = String(taglineP);
           taglineRef.current.style.transform = `translateY(${(1 - taglineP) * 12}px)`;
           taglineRef.current.style.filter = `blur(${(1 - taglineP) * 3}px)`;
+          
+          // Tiny light pass over tagline at the end of its entry
+          const passP = Math.max(0, (taglineP - 0.5) * 2); 
+          taglineGlowRef.current.style.backgroundPosition = `${100 - (passP * 100)}% 0`;
         } else if (progress > 0.35) {
           taglineRef.current.style.opacity = '1';
           taglineRef.current.style.transform = 'translateY(0px)';
           taglineRef.current.style.filter = 'blur(0px)';
+          taglineGlowRef.current.style.backgroundPosition = `0% 0`;
         }
       }
 
@@ -188,13 +204,13 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
         
         if (s.layer === 3) {
           currentAlpha = s.alpha + Math.sin(s.twinklePhase) * 0.15;
-          ctx.fillStyle = `rgba(180, 230, 255, ${Math.max(0, currentAlpha)})`;
+          ctx.fillStyle = `rgba(34, 211, 238, ${Math.max(0, currentAlpha)})`;
           s.y -= 0.015; // Very slow drift
         } else if (s.layer === 2) {
           ctx.fillStyle = `rgba(255, 255, 255, ${currentAlpha})`;
           s.y -= 0.008;
         } else {
-          ctx.fillStyle = `rgba(150, 150, 150, ${currentAlpha})`;
+          ctx.fillStyle = `rgba(167, 139, 250, ${currentAlpha})`;
           s.y -= 0.002;
         }
 
@@ -230,8 +246,8 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
 
       {/* Layer 2: Atmospheric Nebula */}
       <div className={`absolute inset-0 pointer-events-none transition-opacity duration-[2000ms] ease-in-out z-0 opacity-100`}>
-        <div className="absolute top-[45%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80vw] h-[80vw] max-w-[900px] max-h-[900px] rounded-full bg-[radial-gradient(circle,rgba(46,16,101,0.08)_0%,rgba(17,24,39,0)_70%)] animate-cinematic-breathe mix-blend-screen"></div>
-        <div className="absolute top-[55%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] rounded-full bg-[radial-gradient(circle,rgba(8,145,178,0.03)_0%,rgba(17,24,39,0)_60%)] animate-cinematic-breathe mix-blend-screen" style={{ animationDelay: '-5s' }}></div>
+        <div className="absolute top-[45%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80vw] h-[80vw] max-w-[900px] max-h-[900px] rounded-full bg-[radial-gradient(circle,rgba(46,16,101,0.12)_0%,rgba(17,24,39,0)_70%)] animate-cinematic-breathe mix-blend-screen"></div>
+        <div className="absolute top-[55%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] rounded-full bg-[radial-gradient(circle,rgba(6,182,212,0.06)_0%,rgba(17,24,39,0)_60%)] animate-cinematic-breathe mix-blend-screen" style={{ animationDelay: '-5s' }}></div>
       </div>
 
       {/* Layer 3: Universe Canvas */}
@@ -243,16 +259,31 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
       {/* Central Content Container (Z-30) */}
       <div className="relative z-30 flex flex-col items-center justify-center w-full max-w-2xl px-4">
         
-        {/* Unified Wordmark */}
+        {/* Unified Wordmark Container */}
         <div className="relative mb-6 flex justify-center items-center h-20 md:h-24">
-          <h1 className="text-[36px] md:text-[50px] lg:text-[70px] font-bold tracking-tight flex items-center justify-center">
+          
+          {/* Central Aqua Bloom Aura */}
+          <div 
+            ref={wordmarkGlowRef}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200%] h-[200%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.12)_0%,transparent_60%)] pointer-events-none opacity-0"
+          ></div>
+          
+          <h1 className="text-[36px] md:text-[50px] lg:text-[70px] font-bold tracking-tight flex items-center justify-center relative">
+            
+            {/* Optical Flare / Ignition Point */}
+            <div
+              ref={flareRef}
+              className="absolute top-1/2 -translate-y-1/2 w-[120px] h-[60px] bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.45)_0%,transparent_60%)] pointer-events-none mix-blend-screen opacity-0"
+              style={{ left: '0%', transform: 'translate(-50%, -50%) scaleX(1)' }}
+            ></div>
+            
             <span 
               ref={wordmarkRef}
-              className="text-transparent"
+              className="text-transparent relative z-10"
               style={{
-                backgroundImage: 'linear-gradient(90deg, #f4f4f5 0%, #f4f4f5 45%, rgba(167,139,250,0.4) 48%, rgba(224,231,255,0.9) 49.6%, #ffffff 50%, rgba(224,231,255,0.9) 50.4%, rgba(167,139,250,0.4) 52%, #71717a 55%, #71717a 100%)',
+                backgroundImage: 'linear-gradient(90deg, #f4f4f5 0%, #f4f4f5 45%, rgba(6,182,212,0.4) 48%, rgba(34,211,238,0.9) 49.6%, #ffffff 50%, rgba(34,211,238,0.9) 50.4%, rgba(6,182,212,0.4) 52%, #52525b 55%, #52525b 100%)',
                 backgroundSize: '300% 100%',
-                backgroundPosition: '100% 0', // 100% shows the right side (#71717a), 0% shows the left side (#f4f4f5)
+                backgroundPosition: '100% 0', // 100% shows the right side (#52525b), 0% shows the left side (#f4f4f5)
                 WebkitBackgroundClip: 'text',
                 backgroundClip: 'text'
               }}
@@ -266,9 +297,21 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
         <div className="flex flex-col items-center min-h-[40px] mb-8">
           <p 
             ref={taglineRef}
-            className="text-[13px] md:text-[15px] font-medium tracking-wide text-zinc-300 opacity-0 transform translate-y-3"
+            className="text-[13px] md:text-[15px] font-medium tracking-wide opacity-0 transform translate-y-3 relative"
           >
-            Turn questions into clarity.
+            <span 
+              ref={taglineGlowRef}
+              className="text-transparent"
+              style={{
+                backgroundImage: 'linear-gradient(90deg, #d4d4d8 0%, #d4d4d8 45%, rgba(34,211,238,0.8) 50%, #d4d4d8 55%, #d4d4d8 100%)',
+                backgroundSize: '200% 100%',
+                backgroundPosition: '100% 0',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text'
+              }}
+            >
+              Turn questions into clarity.
+            </span>
           </p>
         </div>
 
@@ -276,23 +319,23 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
         <div className="w-full max-w-[320px] flex flex-col items-center relative">
           <div className="w-full relative h-[1px]">
             {/* Inactive Base Track - highly visible against dark bg */}
-            <div className="absolute inset-0 bg-white/15"></div>
+            <div className="absolute inset-0 bg-white/10"></div>
             
             {/* Active Flow Line - width controlled exactly by progress */}
             <div 
               ref={railRef}
-              className="absolute top-0 left-0 h-[1.5px] bg-zinc-200 origin-left w-full"
+              className="absolute top-0 left-0 h-[1.5px] bg-cyan-400 origin-left w-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"
               style={{ transform: 'scaleX(0)' }}
             ></div>
 
             {/* Rail Head Point */}
             <div 
               ref={railHeadRef}
-              className="absolute top-1/2 left-0 -translate-y-1/2 w-[4px] h-[4px] rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]"
+              className="absolute top-1/2 left-0 -translate-y-1/2 w-[4px] h-[4px] rounded-full bg-white shadow-[0_0_12px_rgba(34,211,238,0.9)]"
               style={{ left: '0%' }}
             >
               {/* Tiny refined tail */}
-              <div className="absolute right-[4px] top-1/2 -translate-y-1/2 w-[6px] h-[1px] bg-zinc-300"></div>
+              <div className="absolute right-[4px] top-1/2 -translate-y-1/2 w-[8px] h-[1px] bg-cyan-200"></div>
             </div>
           </div>
         </div>
