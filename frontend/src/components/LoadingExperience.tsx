@@ -64,52 +64,51 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
 
   // Master Motion Timeline (Progress 0 -> 1)
   useEffect(() => {
-    const TOTAL_DURATION = 4800; // 4.8 seconds total loading sequence
+    const TOTAL_DURATION = 3400; // 3.4 seconds total loading sequence
 
     // Elegant motion curves
     const easeOutCubic = (x: number): number => 1 - Math.pow(1 - x, 3);
     const easeInOutQuad = (x: number): number => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+    const easeInOutQuart = (x: number): number => x < 0.5 ? 8 * x * x * x * x : 1 - Math.pow(-2 * x + 2, 4) / 2;
 
     const animate = (timestamp: number) => {
       if (!startTime.current) startTime.current = timestamp;
       const elapsed = timestamp - startTime.current;
       const progress = Math.min(elapsed / TOTAL_DURATION, 1);
 
-      // 1. Tagline Reveal (starts at 10%, finishes at 20%)
+      // 1. Premium Fast Ignition Wordmark Signal (3% to 30% -> ~100ms to 1020ms, ~900ms duration)
+      if (wordmarkRef.current) {
+        if (progress >= 0.03 && progress <= 0.3) {
+          const signalP = easeInOutQuart((progress - 0.03) / 0.27);
+          wordmarkRef.current.style.backgroundPosition = `${100 - (signalP * 100)}% 0`;
+        } else if (progress > 0.3) {
+          wordmarkRef.current.style.backgroundPosition = `0% 0`;
+        }
+      }
+
+      // 2. Supporting Tagline Materialization (16% to 35% -> ~540ms to 1190ms, ~650ms duration)
       if (taglineRef.current) {
-        if (progress >= 0.1 && progress <= 0.2) {
-          const taglineP = easeOutCubic((progress - 0.1) / 0.1);
+        if (progress >= 0.16 && progress <= 0.35) {
+          const taglineP = easeOutCubic((progress - 0.16) / 0.19);
           taglineRef.current.style.opacity = String(taglineP);
-          taglineRef.current.style.transform = `translateY(${(1 - taglineP) * 4}px)`;
-          taglineRef.current.style.filter = `blur(${(1 - taglineP) * 2}px)`;
-        } else if (progress > 0.2) {
+          taglineRef.current.style.transform = `translateY(${(1 - taglineP) * 12}px)`;
+          taglineRef.current.style.filter = `blur(${(1 - taglineP) * 3}px)`;
+        } else if (progress > 0.35) {
           taglineRef.current.style.opacity = '1';
           taglineRef.current.style.transform = 'translateY(0px)';
           taglineRef.current.style.filter = 'blur(0px)';
         }
       }
 
-      // 2. Data Rail Progression (20% to 90%)
+      // 3. Data Rail Progression (6% to 82% -> ~200ms to 2780ms)
       if (railRef.current && railHeadRef.current) {
-        if (progress >= 0.2 && progress <= 0.9) {
-          const railP = easeInOutQuad((progress - 0.2) / 0.7);
+        if (progress >= 0.06 && progress <= 0.82) {
+          const railP = easeInOutQuad((progress - 0.06) / 0.76);
           railRef.current.style.transform = `scaleX(${railP})`;
           railHeadRef.current.style.left = `${railP * 100}%`;
-        } else if (progress > 0.9) {
+        } else if (progress > 0.82) {
           railRef.current.style.transform = `scaleX(1)`;
           railHeadRef.current.style.left = `100%`;
-        }
-      }
-
-      // 3. Fast Precision Wordmark Signal (40% to 65%)
-      // 4800ms * 0.25 = 1200ms duration.
-      if (wordmarkRef.current) {
-        if (progress >= 0.4 && progress <= 0.65) {
-          const easeOutQuint = (x: number): number => 1 - Math.pow(1 - x, 5);
-          const signalP = easeOutQuint((progress - 0.4) / 0.25);
-          wordmarkRef.current.style.backgroundPosition = `${100 - (signalP * 100)}% 0`;
-        } else if (progress > 0.65) {
-          wordmarkRef.current.style.backgroundPosition = `0% 0`;
         }
       }
 
@@ -251,8 +250,8 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
               ref={wordmarkRef}
               className="text-transparent"
               style={{
-                backgroundImage: 'linear-gradient(90deg, #f4f4f5 0%, #f4f4f5 42%, rgba(34,211,238,0.3) 47%, rgba(224,231,255,0.8) 49.5%, #ffffff 50%, rgba(224,231,255,0.8) 50.5%, rgba(167,139,250,0.3) 53%, #71717a 58%, #71717a 100%)',
-                backgroundSize: '250% 100%',
+                backgroundImage: 'linear-gradient(90deg, #f4f4f5 0%, #f4f4f5 45%, rgba(167,139,250,0.4) 48%, rgba(224,231,255,0.9) 49.6%, #ffffff 50%, rgba(224,231,255,0.9) 50.4%, rgba(167,139,250,0.4) 52%, #71717a 55%, #71717a 100%)',
+                backgroundSize: '300% 100%',
                 backgroundPosition: '100% 0', // 100% shows the right side (#71717a), 0% shows the left side (#f4f4f5)
                 WebkitBackgroundClip: 'text',
                 backgroundClip: 'text'
@@ -267,9 +266,9 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
         <div className="flex flex-col items-center min-h-[40px] mb-8">
           <p 
             ref={taglineRef}
-            className="text-[12px] md:text-[14px] font-medium tracking-[0.2em] text-zinc-400 opacity-0 transform translate-y-2"
+            className="text-[13px] md:text-[15px] font-medium tracking-wide text-zinc-300 opacity-0 transform translate-y-3"
           >
-            Understand the idea. Ask it anything.
+            Turn questions into clarity.
           </p>
         </div>
 
