@@ -3,23 +3,20 @@
 
 @theme {
   --animate-fade-in: fadeIn 0.5s ease-out forwards;
-  --animate-slide-up: slideUp 0.5s ease-out forwards;
-  --animate-fade-up-slow: fadeUpSlow 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   
-  /* Next-level cinematic animations */
-  --animate-mask-reveal: maskReveal 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-  --animate-text-glow-pulse: textGlowPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  --animate-glitch-micro: glitchMicro 0.05s ease-in-out forwards;
-  --animate-breathe: breathe 10s ease-in-out infinite alternate;
+  /* Cinematic animations */
+  --animate-cinematic-breathe: cinematicBreathe 10s ease-in-out infinite alternate;
   
+  --animate-wordmark-base: wordmarkBaseReveal 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  --animate-wordmark-edge: wordmarkEdge 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  --animate-light-sweep: lightSweep 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  
+  --animate-text-reveal: textReveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  
+  --animate-rail-line: railLine 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   --animate-rail-progress: railProgress 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   --animate-rail-point: railPoint 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   --animate-rail-glow: railGlow 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  
-  --animate-pop-up-blur: popUpBlur 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-materialize: materialize 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-  --animate-light-sweep-single: lightSweepSingle 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
 @keyframes fadeIn {
@@ -27,93 +24,65 @@
   100% { opacity: 1; }
 }
 
-@keyframes slideUp {
-  0% { opacity: 0; transform: translateY(10px); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeUpSlow {
-  0% { opacity: 0; transform: translateY(15px); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-
-/* 
-  Mask Reveal Effect
-  Using a wide gradient that starts hidden (right side) and moves to visible (left side).
-*/
-@keyframes maskReveal {
-  0% {
-    mask-position: 200% 0;
-    -webkit-mask-position: 200% 0;
-    opacity: 0.2;
-    filter: blur(4px);
-  }
-  20% {
-    opacity: 0.8;
-  }
-  100% {
-    mask-position: 0 0;
-    -webkit-mask-position: 0 0;
-    opacity: 1;
-    filter: blur(0px);
-  }
-}
-
-@keyframes textGlowPulse {
-  0% { text-shadow: 0 0 10px rgba(34, 211, 238, 0.1); }
-  50% { text-shadow: 0 0 25px rgba(34, 211, 238, 0.3); }
-  100% { text-shadow: 0 0 10px rgba(34, 211, 238, 0.1); }
-}
-
-@keyframes glitchMicro {
-  0% { transform: translateX(0); clip-path: inset(0 0 0 0); }
-  20% { transform: translateX(-2px); clip-path: inset(10% 0 80% 0); filter: hue-rotate(90deg); }
-  40% { transform: translateX(2px); clip-path: inset(80% 0 10% 0); filter: hue-rotate(-90deg); }
-  60% { transform: translateX(-1px); clip-path: inset(40% 0 40% 0); }
-  100% { transform: translateX(0); clip-path: inset(0 0 0 0); filter: hue-rotate(0); }
-}
-
-@keyframes breathe {
+@keyframes cinematicBreathe {
   0% { opacity: 0.6; transform: scale(0.95); }
   100% { opacity: 1; transform: scale(1.05); }
 }
 
-@keyframes popUpBlur {
-  0% { opacity: 0; transform: translateY(10px); filter: blur(8px); }
-  100% { opacity: 1; transform: translateY(0); filter: blur(0px); }
+@keyframes wordmarkBaseReveal {
+  0% { opacity: 0; filter: blur(8px); }
+  100% { opacity: 1; filter: blur(0); }
 }
 
-@keyframes materialize {
-  0% { opacity: 0; transform: translateY(8px); filter: blur(4px); }
-  100% { opacity: 1; transform: translateY(0); filter: blur(0px); }
+@keyframes wordmarkEdge {
+  0% { text-shadow: 0 0 0px rgba(34, 211, 238, 0); color: transparent; }
+  50% { text-shadow: 0 0 4px rgba(34, 211, 238, 0.8); color: rgba(255, 255, 255, 0.2); }
+  100% { text-shadow: 0 0 0px rgba(34, 211, 238, 0); color: #f4f4f5; }
 }
 
-@keyframes lightSweepSingle {
+@keyframes lightSweep {
   0% { transform: translateX(-150%) skewX(-20deg); opacity: 0; }
-  20% { opacity: 0.9; }
-  80% { opacity: 0.9; }
+  20% { opacity: 0.8; }
+  80% { opacity: 0.8; }
   100% { transform: translateX(200%) skewX(-20deg); opacity: 0; }
+}
+
+@keyframes textReveal {
+  0% { opacity: 0; transform: translateY(8px); filter: blur(3px); }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0px); }
+}
+
+@keyframes railLine {
+  0% { transform: scaleX(0); opacity: 0; }
+  100% { transform: scaleX(1); opacity: 1; }
 }
 
 @keyframes railProgress {
   0% { transform: scaleX(0); }
-  30% { transform: scaleX(0.4); }
-  60% { transform: scaleX(0.7); }
+  30% { transform: scaleX(0.3); }
+  60% { transform: scaleX(0.8); }
   100% { transform: scaleX(1); }
 }
 
 @keyframes railPoint {
   0% { left: 0%; }
-  30% { left: 40%; }
-  60% { left: 70%; }
+  30% { left: 30%; }
+  60% { left: 80%; }
   100% { left: 100%; }
 }
 
 @keyframes railGlow {
   0% { opacity: 0; transform: scale(0.5); }
-  20% { opacity: 1; transform: scale(1.2); }
+  20% { opacity: 1; transform: scale(1.5); }
   80% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(0.8); }
+}
+
+/* Scroll Lock Classes */
+.lock-scroll {
+  overflow: hidden !important;
+  touch-action: none !important;
+  overscroll-behavior: none !important;
 }
 
 body {

@@ -6,29 +6,35 @@ interface LoadingExperienceProps {
 }
 
 const STAGES = [
+  "PREPARING YOUR INTELLIGENCE ENVIRONMENT",
   "INITIALIZING WORKSPACE",
-  "LOADING DATA INTELLIGENCE",
-  "PREPARING ENVIRONMENT",
+  "ALMOST READY",
   "READY"
 ];
 
 type Phase = 
-  | 'darkness' 
-  | 'signal-field' 
-  | 'wordmark-energy' 
-  | 'wordmark-resolves' 
-  | 'light-sweep' 
-  | 'category-popup' 
-  | 'tagline-materialize' 
-  | 'loading-rail'
+  | 'void' 
+  | 'stars' 
+  | 'atmosphere' 
+  | 'particles' 
+  | 'signal' 
+  | 'energy' 
+  | 'brand_form' 
+  | 'brand_lock' 
+  | 'light_sweep' 
+  | 'category' 
+  | 'tagline' 
+  | 'rail' 
+  | 'status' 
+  | 'stabilize' 
+  | 'ready' 
   | 'exit';
 
 export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, onComplete }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stageIndex, setStageIndex] = useState(0);
-  const [phase, setPhase] = useState<Phase>('darkness');
+  const [phase, setPhase] = useState<Phase>('void');
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-  const [glitchActive, setGlitchActive] = useState(false);
 
   // Handle prefers-reduced-motion
   useEffect(() => {
@@ -39,90 +45,76 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
     return () => mediaQuery.removeEventListener('change', handler);
   }, []);
 
-  // Viewport & Scroll Locking
+  // Viewport & Scroll Locking - STRICT
   useEffect(() => {
-    const originalBodyOverflow = document.body.style.overflow;
-    const originalHtmlOverflow = document.documentElement.style.overflow;
+    document.documentElement.classList.add('lock-scroll');
+    document.body.classList.add('lock-scroll');
+    // Lock scroll position
+    const top = window.scrollY;
     
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
+    const handleScroll = (e: Event) => {
+      e.preventDefault();
+      window.scrollTo(0, top);
+    };
+    
+    window.addEventListener('scroll', handleScroll, { passive: false });
+    window.addEventListener('wheel', handleScroll, { passive: false });
+    window.addEventListener('touchmove', handleScroll, { passive: false });
 
     return () => {
-      document.body.style.overflow = originalBodyOverflow;
-      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.documentElement.classList.remove('lock-scroll');
+      document.body.classList.remove('lock-scroll');
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('wheel', handleScroll);
+      window.removeEventListener('touchmove', handleScroll);
     };
   }, []);
 
-  // Cinematic Timeline
+  // Cinematic Timeline Master Sequence
   useEffect(() => {
-    // 0.0s - Darkness (initial state)
-    
-    // 0.3s - Signal field
-    const p1 = setTimeout(() => setPhase('signal-field'), 300);
-    
-    // 0.6s - Wordmark energy (starts mask reveal)
-    const p2 = setTimeout(() => setPhase('wordmark-energy'), 600);
+    const timeline = [
+      { t: 200, p: 'stars' as Phase },
+      { t: 400, p: 'atmosphere' as Phase },
+      { t: 600, p: 'particles' as Phase },
+      { t: 800, p: 'signal' as Phase },
+      { t: 1000, p: 'energy' as Phase },
+      { t: 1100, p: 'brand_form' as Phase },
+      { t: 1850, p: 'brand_lock' as Phase },
+      { t: 2000, p: 'light_sweep' as Phase },
+      { t: 2150, p: 'category' as Phase },
+      { t: 2350, p: 'tagline' as Phase },
+      { t: 2550, p: 'rail' as Phase },
+      { t: 2700, p: 'status' as Phase },
+      { t: 3000, p: 'stabilize' as Phase },
+      { t: 3100, p: 'ready' as Phase },
+      { t: 3200, p: 'exit' as Phase },
+    ];
 
-    // 1.1s - Wordmark resolves (trigger glitch)
-    const p3 = setTimeout(() => {
-      setPhase('wordmark-resolves');
-      if (!prefersReducedMotion) {
-        setGlitchActive(true);
-        setTimeout(() => setGlitchActive(false), 50); // 50ms glitch
-      }
-    }, 1100);
+    const timeouts = timeline.map(({ t, p }) => 
+      setTimeout(() => setPhase(p), t)
+    );
 
-    // 1.3s - Light sweep
-    const p4 = setTimeout(() => setPhase('light-sweep'), 1300);
+    // Coordinate Reveal & Unmount
+    const revealTimeout = setTimeout(() => {
+      onReveal(); // Reveal underlying app while exit transition is happening
+    }, 3700);
 
-    // 1.5s - Category popup
-    const p5 = setTimeout(() => setPhase('category-popup'), 1500);
-
-    // 1.7s - Tagline materialize
-    const p6 = setTimeout(() => setPhase('tagline-materialize'), 1700);
-
-    // 2.0s - Loading rail
-    const p7 = setTimeout(() => setPhase('loading-rail'), 2000);
-
-    // 3.0s - Begin exit transition
-    const p8 = setTimeout(() => {
-      setPhase('exit');
-      
-      // 3.5s - Wait for exit transition to show underlying app
-      setTimeout(() => {
-        onReveal();
-      }, 500);
-
-      // 4.0s - Unmount completely
-      setTimeout(() => {
-        onComplete();
-      }, 1000);
-    }, 3000);
+    const unmountTimeout = setTimeout(() => {
+      onComplete(); // Remove loading component
+    }, 4000);
 
     return () => {
-      clearTimeout(p1); clearTimeout(p2); clearTimeout(p3);
-      clearTimeout(p4); clearTimeout(p5); clearTimeout(p6);
-      clearTimeout(p7); clearTimeout(p8);
+      timeouts.forEach(clearTimeout);
+      clearTimeout(revealTimeout);
+      clearTimeout(unmountTimeout);
     };
-  }, [onReveal, onComplete, prefersReducedMotion]);
+  }, [onReveal, onComplete]);
 
-  // Status Message Cycling
+  // Status Message Master Timeline Sync
   useEffect(() => {
-    if (phase !== 'loading-rail') return;
-    
-    const intervalTime = 250; // Fast cycling for status messages to reach READY before exit
-    let currentStage = 0;
-    
-    const interval = setInterval(() => {
-      currentStage++;
-      if (currentStage < STAGES.length) {
-        setStageIndex(currentStage);
-      } else {
-        clearInterval(interval);
-      }
-    }, intervalTime);
-
-    return () => clearInterval(interval);
+    if (phase === 'status') setStageIndex(0);
+    else if (phase === 'stabilize') setStageIndex(1);
+    else if (phase === 'ready') setStageIndex(3);
   }, [phase]);
 
   // Canvas background metaphor (Intelligent Schema / Data Nodes)
@@ -135,25 +127,46 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
     if (!ctx) return;
 
     let animationFrameId: number;
-    let particles: { x: number, y: number, vx: number, vy: number, radius: number, isCore: boolean }[] = [];
+    // Layer 1: Distant Stars
+    // Layer 2: Brighter Stars
+    // Layer 3: Data Nodes
+    let stars: { x: number, y: number, r: number, alpha: number, layer: number }[] = [];
+    let nodes: { x: number, y: number, vx: number, vy: number, r: number, isCore: boolean }[] = [];
     
     const resize = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      initParticles();
+      initElements();
     };
 
-    const initParticles = () => {
-      particles = [];
-      const numParticles = Math.floor((canvas.width * canvas.height) / 25000); // Sparse
-      for (let i = 0; i < Math.min(numParticles, 50); i++) {
-        particles.push({
+    const initElements = () => {
+      stars = [];
+      nodes = [];
+      
+      const isMobile = window.innerWidth < 768;
+      const starCount = isMobile ? 80 : 200;
+      const nodeCount = isMobile ? 25 : 60;
+      
+      // Init Stars
+      for (let i = 0; i < starCount; i++) {
+        stars.push({
           x: Math.random() * canvas.width,
           y: Math.random() * canvas.height,
-          vx: (Math.random() - 0.5) * 0.15,
-          vy: (Math.random() - 0.5) * 0.15,
-          radius: Math.random() * 1.5 + 0.5,
-          isCore: Math.random() > 0.8
+          r: Math.random() * 0.8 + 0.2,
+          alpha: Math.random() * 0.5 + 0.1,
+          layer: Math.random() > 0.8 ? 2 : 1
+        });
+      }
+      
+      // Init Nodes
+      for (let i = 0; i < nodeCount; i++) {
+        nodes.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          vx: (Math.random() - 0.5) * 0.1,
+          vy: (Math.random() - 0.5) * 0.1,
+          r: Math.random() * 1.2 + 0.5,
+          isCore: Math.random() > 0.7
         });
       }
     };
@@ -162,53 +175,80 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       const centerX = canvas.width / 2;
-      const centerY = (canvas.height / 2) - 40; // Offset for wordmark
+      const centerY = (canvas.height / 2) - 60; // Offset for wordmark
       
-      // Determine if we should converge
-      const shouldConverge = phase !== 'darkness' && phase !== 'exit';
+      const pIdx = ['void', 'stars', 'atmosphere', 'particles', 'signal', 'energy', 'brand_form', 'brand_lock', 'light_sweep', 'category', 'tagline', 'rail', 'status', 'stabilize', 'ready', 'exit'].indexOf(phase);
+      
+      const showStars = pIdx >= 1;
+      const showNodes = pIdx >= 3;
+      const shouldConverge = pIdx >= 4 && pIdx < 13; // Converge from 'signal' to 'stabilize'
+      const isExit = pIdx >= 15;
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        
-        if (shouldConverge && p.isCore) {
-          // Slowly move towards center
-          const dx = centerX - p.x;
-          const dy = centerY - p.y;
-          p.x += dx * 0.001;
-          p.y += dy * 0.001;
-        } else {
-          p.x += p.vx;
-          p.y += p.vy;
-        }
+      if (isExit) {
+        ctx.globalAlpha -= 0.02;
+        if (ctx.globalAlpha < 0) ctx.globalAlpha = 0;
+      }
 
-        // Wrap around gently
-        if (p.x < 0) p.x = canvas.width;
-        if (p.x > canvas.width) p.x = 0;
-        if (p.y < 0) p.y = canvas.height;
-        if (p.y > canvas.height) p.y = 0;
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Draw connections for schema effect
-        for (let j = i + 1; j < particles.length; j++) {
-          const p2 = particles[j];
-          const dx = p.x - p2.x;
-          const dy = p.y - p2.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (dist < 120) {
-            ctx.beginPath();
-            ctx.strokeStyle = `rgba(34, 211, 238, ${0.05 * (1 - dist / 120)})`; // Very subtle cyan/white
-            ctx.lineWidth = 0.5;
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.stroke();
+      // Draw Stars
+      if (showStars) {
+        for (const s of stars) {
+          ctx.beginPath();
+          ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha * (s.layer === 2 ? 1.5 : 1)})`;
+          ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Gentle twinkle/drift for layer 2
+          if (s.layer === 2) {
+             s.y -= 0.05;
+             if (s.y < 0) s.y = canvas.height;
+             s.alpha = s.alpha + (Math.sin(Date.now() / 1000 + s.x) * 0.005);
           }
         }
       }
+
+      // Draw Data Universe
+      if (showNodes) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        for (let i = 0; i < nodes.length; i++) {
+          const p = nodes[i];
+          
+          if (shouldConverge && p.isCore) {
+            const dx = centerX - p.x;
+            const dy = centerY - p.y;
+            p.x += dx * 0.002;
+            p.y += dy * 0.002;
+          } else {
+            p.x += p.vx;
+            p.y += p.vy;
+          }
+
+          if (p.x < 0) p.x = canvas.width;
+          if (p.x > canvas.width) p.x = 0;
+          if (p.y < 0) p.y = canvas.height;
+          if (p.y > canvas.height) p.y = 0;
+
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+
+          for (let j = i + 1; j < nodes.length; j++) {
+            const p2 = nodes[j];
+            const dx = p.x - p2.x;
+            const dy = p.y - p2.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < 100) {
+              ctx.beginPath();
+              ctx.strokeStyle = `rgba(34, 211, 238, ${0.03 * (1 - dist / 100)})`;
+              ctx.lineWidth = 0.5;
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(p2.x, p2.y);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+      
       animationFrameId = requestAnimationFrame(draw);
     };
 
@@ -222,133 +262,126 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
     };
   }, [prefersReducedMotion, phase]);
 
-  // Derived states for cinematic transition
-  const showAtmosphere = phase !== 'darkness' && phase !== 'exit';
-  const showData = phase !== 'darkness';
-  const isExiting = phase === 'exit';
-
-  // State checks for elements
-  const hasWordmarkStarted = phase !== 'darkness' && phase !== 'signal-field';
-  const hasWordmarkResolved = hasWordmarkStarted && phase !== 'wordmark-energy';
-  const hasLightSweepStarted = phase === 'light-sweep' || phase === 'category-popup' || phase === 'tagline-materialize' || phase === 'loading-rail';
-  const hasCategoryStarted = phase === 'category-popup' || phase === 'tagline-materialize' || phase === 'loading-rail';
-  const hasTaglineStarted = phase === 'tagline-materialize' || phase === 'loading-rail';
-  const hasRailStarted = phase === 'loading-rail';
-
-  // We only want the light sweep to run once when triggered
-  const showLightSweep = hasLightSweepStarted && !isExiting;
+  // Derived states
+  const pIdx = ['void', 'stars', 'atmosphere', 'particles', 'signal', 'energy', 'brand_form', 'brand_lock', 'light_sweep', 'category', 'tagline', 'rail', 'status', 'stabilize', 'ready', 'exit'].indexOf(phase);
+  
+  const showAtmosphere = pIdx >= 2;
+  const showEnergy = pIdx >= 5;
+  const showBrandForm = pIdx >= 6;
+  const showBrandLock = pIdx >= 7;
+  const showLightSweep = pIdx >= 8 && pIdx < 15;
+  const showCategory = pIdx >= 9;
+  const showTagline = pIdx >= 10;
+  const showRail = pIdx >= 11;
+  const showStatus = pIdx >= 12;
+  const isExit = pIdx >= 15;
 
   return (
     <div 
-      className={`fixed inset-0 z-[9999] h-[100dvh] w-screen flex items-center justify-center bg-[#050507] text-zinc-100 overflow-hidden select-none touch-none pointer-events-auto transition-all duration-700 ease-in-out ${isExiting ? 'opacity-0' : 'opacity-100'}`}
+      className={`fixed inset-0 z-[9999] h-[100dvh] w-full flex items-center justify-center bg-[#050507] text-zinc-100 overflow-hidden select-none touch-none pointer-events-auto transition-all duration-700 ease-in-out ${isExit ? 'opacity-0 scale-[1.02]' : 'opacity-100 scale-100'}`}
     >
-      {/* Central expanding light on exit */}
-      <div className={`absolute inset-0 pointer-events-none transition-all duration-700 ${isExiting ? 'bg-zinc-100/5 z-50' : 'bg-transparent'}`}></div>
+      {/* Central Expanding Exit Light */}
+      <div className={`absolute inset-0 pointer-events-none transition-all duration-700 ${isExit ? 'bg-cyan-950/10 z-50' : 'bg-transparent'}`}></div>
 
-      {/* Subtle radial glows (Atmosphere) */}
+      {/* Atmospheric Nebula */}
       <div className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ${showAtmosphere ? 'opacity-100' : 'opacity-0'}`}>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-violet-900/10 blur-[120px] animate-breathe"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-cyan-900/5 blur-[80px]"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-violet-900/10 blur-[100px] animate-cinematic-breathe"></div>
       </div>
 
-      {/* Center Elliptical Light (Behind Wordmark) */}
-      <div className={`absolute top-[45%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] md:w-[500px] h-[150px] rounded-[100%] bg-cyan-400/5 blur-[50px] transition-all duration-1000 pointer-events-none ${hasWordmarkStarted ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}></div>
+      {/* Central Energy Field */}
+      <div className={`absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[100px] rounded-full bg-cyan-500/10 blur-[60px] transition-all duration-700 pointer-events-none ${showEnergy ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}`}></div>
 
-      {/* Canvas Background Metaphor */}
+      {/* Universe Canvas */}
       <canvas 
         ref={canvasRef} 
-        className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ${showData ? 'opacity-60' : 'opacity-0'}`}
-        style={{ maskImage: 'radial-gradient(circle at center, black 30%, transparent 80%)', WebkitMaskImage: 'radial-gradient(circle at center, black 30%, transparent 80%)' }}
+        className="absolute inset-0 pointer-events-none opacity-80"
       />
 
-      {/* Micro details (Edge UI) */}
-      <div className={`absolute top-6 left-6 md:top-8 md:left-8 text-[10px] font-mono tracking-widest text-zinc-600 transition-opacity duration-1000 hidden sm:block ${hasRailStarted ? 'opacity-40' : 'opacity-0'}`}>
-        KNOWURDB <br/> INTELLIGENCE SYSTEM
-      </div>
-      <div className={`absolute bottom-6 left-6 md:bottom-8 md:left-8 text-[10px] font-mono tracking-widest text-zinc-600 transition-opacity duration-1000 hidden sm:block ${hasRailStarted ? 'opacity-40' : 'opacity-0'}`}>
-        NATURAL LANGUAGE → DATABASE
-      </div>
-      <div className={`absolute bottom-6 right-6 md:bottom-8 md:right-8 text-[10px] font-mono tracking-widest text-cyan-900/50 transition-opacity duration-1000 hidden sm:block ${hasRailStarted ? 'opacity-100 animate-pulse-slow' : 'opacity-0'}`}>
-        INITIALIZING
-      </div>
-
-      {/* Central Content */}
-      <div className="relative z-10 flex flex-col items-center justify-center -mt-8 md:-mt-16 w-full max-w-2xl px-4">
+      {/* Central Content Container */}
+      <div className="relative z-10 flex flex-col items-center justify-center -mt-16 w-full max-w-2xl px-4">
         
-        {/* Brand Reveal */}
-        <div className={`relative mb-6 md:mb-8 transition-opacity duration-300`}>
-          {hasWordmarkStarted && (
+        {/* KnowUrDB Wordmark */}
+        <div className="relative mb-6 flex justify-center items-center h-20">
+          {showBrandForm && (
             <h1 
-              className={`text-[40px] md:text-[64px] lg:text-[96px] font-bold tracking-tight text-white relative ${glitchActive ? 'animate-glitch-micro' : ''}`}
-              style={{
-                maskImage: hasWordmarkResolved ? 'none' : 'linear-gradient(-90deg, transparent 50%, black 50%)',
-                WebkitMaskImage: hasWordmarkResolved ? 'none' : 'linear-gradient(-90deg, transparent 50%, black 50%)',
-                maskSize: '200% 100%',
-                WebkitMaskSize: '200% 100%',
-                animation: hasWordmarkResolved ? 'none' : 'maskReveal 0.5s ease-out forwards'
-              }}
+              className="text-[34px] md:text-[56px] lg:text-[78px] font-bold tracking-tight relative"
             >
-              <span className={hasWordmarkResolved ? '' : 'animate-text-glow-pulse'}>
+              {/* Internal Edge Energy / Formation Layer */}
+              <span 
+                className={`absolute inset-0 animate-wordmark-edge ${showBrandLock ? 'hidden' : ''}`}
+              >
                 KnowUrDB
               </span>
               
-              {/* One-time elegant light sweep */}
+              {/* Base Wordmark */}
+              <span 
+                className="animate-wordmark-base text-zinc-100 mix-blend-plus-lighter"
+                style={{
+                  clipPath: showBrandLock ? 'polygon(0 0, 100% 0, 100% 100%, 0 100%)' : 'polygon(0 0, 0 0, 0 100%, 0 100%)',
+                  transition: 'clip-path 0.75s cubic-bezier(0.2, 0.8, 0.2, 1)'
+                }}
+              >
+                KnowUrDB
+              </span>
+
+              {/* Light Sweep */}
               {showLightSweep && (
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-100/60 to-transparent mix-blend-overlay animate-light-sweep-single pointer-events-none"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-100/40 to-transparent mix-blend-overlay animate-light-sweep pointer-events-none"></div>
               )}
             </h1>
           )}
         </div>
 
-        {/* Subtitle / Product Statement */}
-        <div className={`flex flex-col items-center`}>
-          {hasCategoryStarted && (
-            <div className="text-[10px] md:text-xs font-bold tracking-[0.25em] text-cyan-500/80 uppercase mb-3 animate-pop-up-blur opacity-0" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
+        {/* Text Container */}
+        <div className="flex flex-col items-center min-h-[80px]">
+          {showCategory && (
+            <div className="text-[9px] md:text-[10px] font-bold tracking-[0.3em] text-cyan-500/80 uppercase mb-4 animate-text-reveal opacity-0">
               Database Intelligence Platform
             </div>
           )}
           
-          {hasTaglineStarted && (
-            <p className="text-sm md:text-base font-medium tracking-wide text-zinc-400 mb-14 text-center animate-materialize opacity-0" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
+          {showTagline && (
+            <p className="text-xs md:text-sm font-medium tracking-widest text-zinc-400 animate-text-reveal opacity-0" style={{ animationDelay: '100ms' }}>
               Understand your data. Ask it anything.
             </p>
           )}
+        </div>
 
-          {/* Custom multi-layer data rail */}
-          {hasRailStarted && (
-            <div className="w-full max-w-[240px] flex flex-col items-center opacity-0 animate-fade-in" style={{ animationFillMode: 'forwards' }}>
-              <div className="w-full relative h-[2px] mb-6">
-                {/* Layer 1: Base Line */}
-                <div className="absolute inset-0 bg-zinc-800/80 rounded-full"></div>
-                
-                {/* Layer 2: Progress Line */}
-                <div className="absolute top-0 left-0 h-full bg-cyan-900/60 rounded-full origin-left animate-rail-progress"></div>
-                
-                {/* Layer 3 & 5: Moving point & Glow */}
-                <div className="absolute top-1/2 -translate-y-1/2 w-4 h-[2px] bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)] rounded-full animate-rail-point origin-center">
-                  {/* Layer 6: Pulse */}
-                  <div className="absolute inset-0 bg-white rounded-full animate-rail-glow"></div>
-                </div>
-              </div>
-
-              {/* Status Messages */}
-              <div className="h-4 flex items-center justify-center relative w-full overflow-hidden">
-                {STAGES.map((msg, idx) => (
-                  <span 
-                    key={idx}
-                    className={`absolute text-[9px] md:text-[10px] font-medium tracking-widest text-zinc-500 transition-all duration-300 ease-out uppercase
-                      ${idx === stageIndex ? 'opacity-100 transform-none' : 
-                        idx < stageIndex ? 'opacity-0 -translate-y-4' : 'opacity-0 translate-y-4'}`}
-                  >
-                    {msg}
-                  </span>
-                ))}
+        {/* Loading Rail */}
+        <div className="mt-12 w-full max-w-[200px] flex flex-col items-center relative min-h-[40px]">
+          {showRail && (
+            <div className="w-full relative h-[1px] mb-6 opacity-0 animate-rail-line">
+              {/* Base Line */}
+              <div className="absolute inset-0 bg-zinc-800/80"></div>
+              
+              {/* Progress */}
+              <div className="absolute top-0 left-0 h-full bg-cyan-800/60 origin-left animate-rail-progress"></div>
+              
+              {/* Energy Point */}
+              <div className="absolute top-1/2 -translate-y-1/2 w-3 h-[1px] bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)] animate-rail-point origin-center">
+                {/* Glow Pulse */}
+                <div className="absolute inset-0 bg-white animate-rail-glow"></div>
               </div>
             </div>
           )}
+
+          {/* Status Message */}
+          <div className="h-4 flex items-center justify-center relative w-full overflow-hidden">
+            {showStatus && STAGES.map((msg, idx) => (
+              <span 
+                key={idx}
+                className={`absolute text-[8px] md:text-[9px] font-medium tracking-[0.2em] text-zinc-500 transition-all duration-300 ease-out uppercase
+                  ${idx === stageIndex ? 'opacity-100 transform-none' : 
+                    idx < stageIndex ? 'opacity-0 -translate-y-4' : 'opacity-0 translate-y-4'}`}
+              >
+                {msg}
+              </span>
+            ))}
+          </div>
         </div>
 
       </div>
     </div>
   );
 };
+
