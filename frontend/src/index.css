@@ -7,14 +7,7 @@
   /* Cinematic animations */
   --animate-cinematic-breathe: cinematicBreathe 12s ease-in-out infinite alternate;
   
-  /* Text and Wordmark */
-  --animate-tracking-settle: trackingSettle 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-text-reveal: textReveal 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-light-sweep: lightSweep 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-gradient-shift: gradientShift 2.5s linear infinite;
-  
   /* Rail */
-  --animate-rail-flow: railFlow 3s cubic-bezier(0.25, 1, 0.3, 1) forwards;
   --animate-rail-spark: railSpark 1.5s ease-in-out infinite;
 }
 
@@ -26,36 +19,6 @@
 @keyframes cinematicBreathe {
   0% { opacity: 0.4; transform: scale(0.98); }
   100% { opacity: 1; transform: scale(1.02); }
-}
-
-@keyframes gradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-@keyframes lightSweep {
-  0% { transform: translateX(-150%) skewX(-15deg); opacity: 0; }
-  20% { opacity: 0.6; }
-  80% { opacity: 0.6; }
-  100% { transform: translateX(250%) skewX(-15deg); opacity: 0; }
-}
-
-@keyframes trackingSettle {
-  0% { letter-spacing: 0.5em; opacity: 0; filter: blur(4px); transform: translateY(6px); }
-  100% { letter-spacing: 0.35em; opacity: 1; filter: blur(0px); transform: translateY(0); }
-}
-
-@keyframes textReveal {
-  0% { opacity: 0; transform: translateY(6px); filter: blur(3px); }
-  100% { opacity: 1; transform: translateY(0); filter: blur(0px); }
-}
-
-@keyframes railFlow {
-  0% { transform: scaleX(0); }
-  20% { transform: scaleX(0.1); }
-  60% { transform: scaleX(0.85); }
-  100% { transform: scaleX(1); }
 }
 
 @keyframes railSpark {
