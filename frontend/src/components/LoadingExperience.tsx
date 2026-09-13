@@ -14,10 +14,11 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
   const rAF = useRef<number>(0);
   const startTime = useRef<number>(0);
   
-  // DOM element refs for direct smooth manipulation
+  const wordmarkContainerRef = useRef<HTMLDivElement>(null);
   const wordmarkRef = useRef<HTMLSpanElement>(null);
   const wordmarkGlowRef = useRef<HTMLDivElement>(null);
   const flareRef = useRef<HTMLDivElement>(null);
+  const particlesRef = useRef<HTMLDivElement>(null);
   const taglineRef = useRef<HTMLParagraphElement>(null);
   const taglineGlowRef = useRef<HTMLSpanElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
@@ -80,20 +81,30 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
       const progress = Math.min(elapsed / TOTAL_DURATION, 1);
 
       // 1. Premium Fast Ignition Wordmark Signal (3% to 30% -> ~100ms to 1020ms, ~900ms duration)
-      if (wordmarkRef.current && flareRef.current && wordmarkGlowRef.current) {
+      if (wordmarkRef.current && flareRef.current && wordmarkGlowRef.current && wordmarkContainerRef.current && particlesRef.current) {
         if (progress >= 0.03 && progress <= 0.3) {
           const signalP = easeInOutQuart((progress - 0.03) / 0.27);
           wordmarkRef.current.style.backgroundPosition = `${100 - (signalP * 100)}% 0`;
           
           flareRef.current.style.left = `${signalP * 100}%`;
           flareRef.current.style.transform = `translate(-50%, -50%) scaleX(${Math.sin(signalP * Math.PI) * 2.5})`;
-          flareRef.current.style.opacity = String(Math.sin(signalP * Math.PI) * 0.8);
+          flareRef.current.style.opacity = String(Math.sin(signalP * Math.PI) * 0.85);
           
+          particlesRef.current.style.left = `${(signalP * 100) - 1.5}%`;
+          particlesRef.current.style.transform = `translateY(-50%) scale(${Math.sin(signalP * Math.PI)})`;
+          particlesRef.current.style.opacity = String(Math.sin(signalP * Math.PI));
+
           wordmarkGlowRef.current.style.opacity = String(Math.sin(signalP * Math.PI));
+          
+          // Subtle dimensional scale (Depth Layer)
+          const scale = 1 + (Math.sin(signalP * Math.PI) * 0.015);
+          wordmarkContainerRef.current.style.transform = `scale(${scale})`;
         } else if (progress > 0.3) {
           wordmarkRef.current.style.backgroundPosition = `0% 0`;
           flareRef.current.style.opacity = '0';
+          particlesRef.current.style.opacity = '0';
           wordmarkGlowRef.current.style.opacity = '0';
+          wordmarkContainerRef.current.style.transform = `scale(1)`;
         }
       }
 
@@ -104,6 +115,7 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
           taglineRef.current.style.opacity = String(taglineP);
           taglineRef.current.style.transform = `translateY(${(1 - taglineP) * 12}px)`;
           taglineRef.current.style.filter = `blur(${(1 - taglineP) * 3}px)`;
+          taglineRef.current.style.letterSpacing = `${(1 - taglineP) * 0.1 + 0.025}em`;
           
           // Tiny light pass over tagline at the end of its entry
           const passP = Math.max(0, (taglineP - 0.5) * 2); 
@@ -112,6 +124,7 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
           taglineRef.current.style.opacity = '1';
           taglineRef.current.style.transform = 'translateY(0px)';
           taglineRef.current.style.filter = 'blur(0px)';
+          taglineRef.current.style.letterSpacing = '0.025em';
           taglineGlowRef.current.style.backgroundPosition = `0% 0`;
         }
       }
@@ -260,12 +273,15 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
       <div className="relative z-30 flex flex-col items-center justify-center w-full max-w-2xl px-4">
         
         {/* Unified Wordmark Container */}
-        <div className="relative mb-6 flex justify-center items-center h-20 md:h-24">
+        <div 
+          ref={wordmarkContainerRef}
+          className="relative mb-6 flex justify-center items-center h-20 md:h-24 origin-center will-change-transform"
+        >
           
           {/* Central Aqua Bloom Aura */}
           <div 
             ref={wordmarkGlowRef}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200%] h-[200%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.12)_0%,transparent_60%)] pointer-events-none opacity-0"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] h-[250%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.15)_0%,transparent_60%)] pointer-events-none opacity-0"
           ></div>
           
           <h1 className="text-[36px] md:text-[50px] lg:text-[70px] font-bold tracking-tight flex items-center justify-center relative">
@@ -273,15 +289,28 @@ export const LoadingExperience: React.FC<LoadingExperienceProps> = ({ onReveal, 
             {/* Optical Flare / Ignition Point */}
             <div
               ref={flareRef}
-              className="absolute top-1/2 -translate-y-1/2 w-[120px] h-[60px] bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.45)_0%,transparent_60%)] pointer-events-none mix-blend-screen opacity-0"
+              className="absolute top-1/2 -translate-y-1/2 w-[140px] h-[70px] bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.5)_0%,transparent_60%)] pointer-events-none mix-blend-screen opacity-0"
               style={{ left: '0%', transform: 'translate(-50%, -50%) scaleX(1)' }}
             ></div>
+
+            {/* Trailing Micro-Particles */}
+            <div
+              ref={particlesRef}
+              className="absolute top-1/2 left-0 -translate-y-1/2 w-[30px] h-[60px] pointer-events-none opacity-0 mix-blend-screen"
+            >
+              {/* Refined tiny sparkles trailing the flare */}
+              <div className="absolute top-[15%] left-[20%] w-[2.5px] h-[2.5px] bg-cyan-200 rounded-full blur-[0.5px]"></div>
+              <div className="absolute top-[75%] left-[40%] w-[1.5px] h-[1.5px] bg-white rounded-full blur-[0.3px]"></div>
+              <div className="absolute top-[35%] left-[70%] w-[2px] h-[2px] bg-cyan-300 rounded-full blur-[0.4px]"></div>
+              <div className="absolute top-[60%] left-[10%] w-[1px] h-[1px] bg-cyan-100 rounded-full blur-[0.2px]"></div>
+              <div className="absolute top-[45%] left-[85%] w-[3px] h-[3px] bg-white rounded-full blur-[0.8px] shadow-[0_0_4px_rgba(34,211,238,0.8)]"></div>
+            </div>
             
             <span 
               ref={wordmarkRef}
               className="text-transparent relative z-10"
               style={{
-                backgroundImage: 'linear-gradient(90deg, #f4f4f5 0%, #f4f4f5 45%, rgba(6,182,212,0.4) 48%, rgba(34,211,238,0.9) 49.6%, #ffffff 50%, rgba(34,211,238,0.9) 50.4%, rgba(6,182,212,0.4) 52%, #52525b 55%, #52525b 100%)',
+                backgroundImage: 'linear-gradient(90deg, #f4f4f5 0%, #f4f4f5 46%, rgba(6,182,212,0.3) 48.5%, rgba(34,211,238,0.9) 49.8%, #ffffff 50%, rgba(34,211,238,0.9) 50.2%, rgba(6,182,212,0.3) 51.5%, #52525b 54%, #52525b 100%)',
                 backgroundSize: '300% 100%',
                 backgroundPosition: '100% 0', // 100% shows the right side (#52525b), 0% shows the left side (#f4f4f5)
                 WebkitBackgroundClip: 'text',
