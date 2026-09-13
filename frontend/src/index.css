@@ -5,17 +5,17 @@
   --animate-fade-in: fadeIn 0.5s ease-out forwards;
   
   /* Cinematic animations */
-  --animate-cinematic-breathe: cinematicBreathe 10s ease-in-out infinite alternate;
+  --animate-cinematic-breathe: cinematicBreathe 12s ease-in-out infinite alternate;
   
-  --animate-trace-sweep: traceSweep 0.8s ease-out forwards;
-  --animate-light-sweep: lightSweep 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  /* Text and Wordmark */
+  --animate-tracking-settle: trackingSettle 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-text-reveal: textReveal 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-light-sweep: lightSweep 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-gradient-shift: gradientShift 2.5s linear infinite;
   
-  --animate-text-reveal: textReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  
-  --animate-rail-appear: railAppear 0.5s ease-out forwards;
-  --animate-rail-flow: railFlow 3.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-  --animate-rail-energy: railEnergy 3.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-  --animate-rail-spark: railSpark 2s ease-in-out infinite;
+  /* Rail */
+  --animate-rail-flow: railFlow 3s cubic-bezier(0.25, 1, 0.3, 1) forwards;
+  --animate-rail-spark: railSpark 1.5s ease-in-out infinite;
 }
 
 @keyframes fadeIn {
@@ -24,14 +24,8 @@
 }
 
 @keyframes cinematicBreathe {
-  0% { opacity: 0.6; transform: scale(0.95); }
-  100% { opacity: 1; transform: scale(1.05); }
-}
-
-@keyframes traceSweep {
-  0% { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); opacity: 0; }
-  10% { opacity: 1; }
-  100% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); opacity: 1; }
+  0% { opacity: 0.4; transform: scale(0.98); }
+  100% { opacity: 1; transform: scale(1.02); }
 }
 
 @keyframes gradientShift {
@@ -41,41 +35,40 @@
 }
 
 @keyframes lightSweep {
-  0% { transform: translateX(-150%) skewX(-12deg); opacity: 0; }
-  20% { opacity: 0.7; }
-  80% { opacity: 0.7; }
-  100% { transform: translateX(200%) skewX(-12deg); opacity: 0; }
+  0% { transform: translateX(-150%) skewX(-15deg); opacity: 0; }
+  20% { opacity: 0.6; }
+  80% { opacity: 0.6; }
+  100% { transform: translateX(250%) skewX(-15deg); opacity: 0; }
+}
+
+@keyframes trackingSettle {
+  0% { letter-spacing: 0.5em; opacity: 0; filter: blur(4px); transform: translateY(6px); }
+  100% { letter-spacing: 0.35em; opacity: 1; filter: blur(0px); transform: translateY(0); }
 }
 
 @keyframes textReveal {
-  0% { opacity: 0; transform: translateY(8px); filter: blur(3px); }
+  0% { opacity: 0; transform: translateY(6px); filter: blur(3px); }
   100% { opacity: 1; transform: translateY(0); filter: blur(0px); }
-}
-
-@keyframes railAppear {
-  0% { transform: scaleX(0); opacity: 0; }
-  100% { transform: scaleX(1); opacity: 1; }
 }
 
 @keyframes railFlow {
   0% { transform: scaleX(0); }
-  30% { transform: scaleX(0.15); }
-  70% { transform: scaleX(0.75); }
+  20% { transform: scaleX(0.1); }
+  60% { transform: scaleX(0.85); }
   100% { transform: scaleX(1); }
-}
-
-@keyframes railEnergy {
-  0% { left: 0%; opacity: 0; }
-  10% { opacity: 1; }
-  30% { left: 15%; }
-  70% { left: 75%; }
-  90% { opacity: 1; }
-  100% { left: 100%; opacity: 0; }
 }
 
 @keyframes railSpark {
   0%, 100% { opacity: 0; transform: scale(0.5); }
   50% { opacity: 1; transform: scale(1.5); }
+}
+
+/* Material Grain Texture */
+.bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  pointer-events: none;
 }
 
 /* Scroll Lock Classes */
