@@ -530,8 +530,9 @@ const WarpText = ({
     );
     intersectionObserver.observe(container);
 
-    canvas.addEventListener('pointermove', onPointerMove);
-    canvas.addEventListener('pointerleave', onPointerLeave);
+    const target = container.closest('.brand-area') || container.parentElement || canvas;
+    target.addEventListener('pointermove', onPointerMove);
+    target.addEventListener('pointerleave', onPointerLeave);
     canvas.addEventListener('webglcontextlost', onContextLost, false);
     document.addEventListener('visibilitychange', onVisibility);
     mediaQuery?.addEventListener('change', onReducedMotion);
@@ -547,8 +548,8 @@ const WarpText = ({
       if (raf) cancelAnimationFrame(raf);
       resizeObserver?.disconnect();
       intersectionObserver?.disconnect();
-      canvas.removeEventListener('pointermove', onPointerMove);
-      canvas.removeEventListener('pointerleave', onPointerLeave);
+      target.removeEventListener('pointermove', onPointerMove);
+      target.removeEventListener('pointerleave', onPointerLeave);
       canvas.removeEventListener('webglcontextlost', onContextLost);
       document.removeEventListener('visibilitychange', onVisibility);
       mediaQuery?.removeEventListener('change', onReducedMotion);

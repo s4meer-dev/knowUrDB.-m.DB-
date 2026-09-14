@@ -43,7 +43,7 @@ export const Header: React.FC = () => {
 
   return (
     <header className="bg-[#09090b]/80 backdrop-blur-xl border-b border-zinc-800/50 px-6 py-4 flex items-center justify-between sticky top-0 z-20 w-full transition-all">
-        <div className="flex items-center space-x-3">
+        <div className="brand-area flex items-center space-x-3 cursor-default">
           <div className="relative w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shadow-[0_0_15px_rgba(34,211,238,0.1)]">
             <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
@@ -52,16 +52,16 @@ export const Header: React.FC = () => {
           <h1 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center" aria-label="KnowUrDB">
             <WarpText
               text="KnowUrDB"
-              color="#f4f4f5"
-              warpStrength={0.18}
-              warpScale={1.9}
-              speed={0}
-              pointerInfluence={0.31}
+              color="#f8f5ff"
+              warpStrength={0.08}
+              warpScale={2.1}
+              speed={1.5}
+              pointerInfluence={0.42}
               pointerStrength={0.8}
               refraction={0.05}
               ripple={true}
               fontSize={20}
-              fontWeight={700}
+              fontWeight={800}
               letterSpacing="-0.025em"
               className="!min-h-0 h-[32px] w-[120px]"
               style={{ minHeight: '0' }}
