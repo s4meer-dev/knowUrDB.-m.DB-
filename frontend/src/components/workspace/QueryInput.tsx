@@ -47,15 +47,15 @@ export const QueryInput: React.FC<QueryInputProps> = ({
   return (
     <BorderGlow
       className="shadow-lg w-full"
-      edgeSensitivity={16}
+      edgeSensitivity={8}
       glowColor="40 80 80"
       backgroundColor="#18181b"
       borderRadius={16}
-      glowRadius={15}
-      glowIntensity={1.5}
-      coneSpread={15}
+      glowRadius={10}
+      glowIntensity={1}
+      coneSpread={10}
       animated={true}
-      fillOpacity={0.1}
+      fillOpacity={0.02}
       colors={['#a855f7', '#22d3ee', '#3b82f6']}
     >
       <div className="flex flex-col p-2 w-full h-full relative">

@@ -249,7 +249,7 @@ const BorderGlow: React.FC<BorderGlowProps> = ({
       <span
         className="absolute pointer-events-none z-[1] rounded-[inherit]"
         style={{
-          inset: `${-glowRadius}px`,
+          inset: `-80px`, // large enough to prevent shadow clipping
           maskImage: `conic-gradient(from ${angleDeg} at center, black 2.5%, transparent 10%, transparent 90%, black 97.5%)`,
           WebkitMaskImage: `conic-gradient(from ${angleDeg} at center, black 2.5%, transparent 10%, transparent 90%, black 97.5%)`,
           opacity: glowOpacity,
@@ -260,13 +260,13 @@ const BorderGlow: React.FC<BorderGlowProps> = ({
         <span
           className="absolute rounded-[inherit]"
           style={{
-            inset: `${glowRadius}px`,
+            inset: `80px`, // reverse the inset to match the original border
             boxShadow: buildBoxShadow(glowColor, glowIntensity),
           }}
         />
       </span>
 
-      <div className="flex flex-col relative overflow-auto z-[1] w-full h-full">
+      <div className="flex flex-col relative overflow-visible z-[1] w-full h-full">
         {children}
       </div>
     </div>
