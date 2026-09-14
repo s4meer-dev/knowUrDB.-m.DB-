@@ -47,13 +47,13 @@ export const QueryInput: React.FC<QueryInputProps> = ({
   return (
     <BorderGlow
       className="shadow-lg w-full"
-      edgeSensitivity={8}
+      edgeSensitivity={4}
       glowColor="40 80 80"
       backgroundColor="#18181b"
       borderRadius={16}
       glowRadius={10}
       glowIntensity={1}
-      coneSpread={10}
+      coneSpread={3}
       animated={true}
       fillOpacity={0.02}
       colors={['#a855f7', '#22d3ee', '#3b82f6']}
@@ -85,7 +85,7 @@ export const QueryInput: React.FC<QueryInputProps> = ({
         <div className="flex flex-col relative">
           <textarea
             ref={textareaRef}
-            className="w-full bg-transparent border-none rounded-xl p-4 pr-16 text-zinc-100 placeholder-zinc-500 focus:ring-0 focus:outline-none resize-none min-h-[80px] text-lg font-medium leading-relaxed disabled:opacity-50"
+            className="w-full bg-transparent border-none rounded-xl p-4 pr-16 text-zinc-100 placeholder-zinc-500 focus:ring-0 focus:outline-none resize-none overflow-hidden min-h-[80px] text-lg font-medium leading-relaxed disabled:opacity-50"
             placeholder="Ask anything about your database..."
             value={value}
             onChange={(e) => onChange(e.target.value)}
