@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { QueryInput } from '../components/workspace/QueryInput';
 import { SuggestionsPanel } from '../components/workspace/SuggestionsPanel';
 import { QueryResult } from '../components/workspace/QueryResult';
+import TextType from '../components/TextType/TextType';
 
 import { queryDatabase, getSources } from '../services/api';
 import type { QueryResponse, SourceMetadata } from '../types';
@@ -82,15 +83,25 @@ export const Workspace: React.FC = () => {
           <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-6 border border-cyan-500/20 shadow-[0_0_30px_rgba(34,211,238,0.15)] relative overflow-hidden">
              <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 to-transparent"></div>
              <svg className="w-8 h-8 text-cyan-400 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
              </svg>
           </div>
-          <h2 className="text-4xl font-bold text-zinc-100 tracking-tight mb-4">Ask your database anything.</h2>
-          <p className="text-zinc-400 text-lg max-w-lg">Explore your connected data using natural language.</p>
+          <h2 className="text-4xl font-bold text-zinc-100 tracking-tight mb-4 min-h-[40px]">
+            <TextType
+              text={["Ask your database anything.", "Explore data in natural language.", "Unlock intelligent insights."]}
+              typingSpeed={50}
+              pauseDuration={2000}
+              deletingSpeed={30}
+              showCursor={true}
+              cursorCharacter="|"
+              cursorBlinkDuration={0.6}
+              cursorClassName="text-cyan-400"
+            />
+          </h2>
         </div>
       )}
 
-      <div className={`transition-all duration-500 ease-in-out ${result || loading ? 'mb-6' : 'mb-10 transform translate-y-4'}`}>
+      <div className={`transition-all duration-500 ease-in-out max-w-3xl mx-auto w-full ${result || loading ? 'mb-6' : 'mb-10 transform translate-y-4'}`}>
         <QueryInput 
           value={question} 
           onChange={setQuestion} 
