@@ -18,6 +18,7 @@ export interface Props {
   lineHeight?: string | number;
   className?: string;
   style?: CSSProperties;
+  mode?: 'text' | 'knowurdb-logo';
 }
 
 interface RuntimeProps {
@@ -35,6 +36,7 @@ interface RuntimeProps {
   pointerStrength: number;
   refraction: number;
   ripple: boolean;
+  mode?: 'text' | 'knowurdb-logo';
 }
 
 interface RuntimeContext {
@@ -185,6 +187,9 @@ const buildTextCanvas = ({ container, width, height, dpr, props }: BuildTextCanv
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
 
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
   const probe = document.createElement('span');
   probe.textContent = props.text;
   Object.assign(probe.style, {
@@ -211,20 +216,63 @@ const buildTextCanvas = ({ container, width, height, dpr, props }: BuildTextCanv
   }
   probe.remove();
 
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, width, height);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = props.color;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 
-  const lines = String(props.text || '').split('\n');
   const applyFont = () => {
     ctx.font = `${fontWeight} ${fontSizePx}px ${fontFamily}`;
   };
   applyFont();
 
+  if (props.mode === 'knowurdb-logo') {
+    const boxSize = 40;
+    const boxX = 20; // Padding for shadow
+    const boxY = height / 2 - boxSize / 2;
+
+    // Draw shadow and box
+    ctx.save();
+    ctx.shadowColor = 'rgba(34, 211, 238, 0.4)';
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.roundRect(boxX, boxY, boxSize, boxSize, 12);
+    ctx.fillStyle = 'rgba(6, 182, 212, 0.1)';
+    ctx.fill();
+    ctx.restore();
+
+    // Draw border
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(boxX, boxY, boxSize, boxSize, 12);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(6, 182, 212, 0.2)';
+    ctx.stroke();
+    ctx.restore();
+
+    // Draw SVG icon
+    ctx.save();
+    ctx.translate(boxX + (boxSize - 24) / 2, boxY + (boxSize - 24) / 2);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#22d3ee'; // cyan-400
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const p = new Path2D("M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4");
+    ctx.stroke(p);
+    ctx.restore();
+
+    // Draw text
+    const textX = boxX + boxSize + 12; // box + gap
+    const lines = String(props.text || '').split('\n');
+    const startY = height / 2 - (lineHeight * (lines.length - 1)) / 2;
+    lines.forEach((line, index) => drawLine(ctx, line, textX + measureLine(ctx, line, letterSpacing) / 2, startY + index * lineHeight, letterSpacing));
+    
+    return canvas;
+  }
+
+  // Original text-only logic
+  const lines = String(props.text || '').split('\n');
   const maxWidth = width * 0.86;
   const maxHeight = height * 0.78;
   const widest = Math.max(...lines.map(line => measureLine(ctx, line, letterSpacing)), 1);
@@ -271,7 +319,8 @@ const WarpText = ({
   letterSpacing = '-0.06em',
   lineHeight = 0.9,
   className = '',
-  style
+  style,
+  mode
 }: Props) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const propsRef = useRef<RuntimeProps>({
@@ -288,7 +337,8 @@ const WarpText = ({
     pointerInfluence,
     pointerStrength,
     refraction,
-    ripple
+    ripple,
+    mode
   });
   const contextRef = useRef<RuntimeContext | null>(null);
 
@@ -307,7 +357,8 @@ const WarpText = ({
       pointerInfluence,
       pointerStrength,
       refraction,
-      ripple
+      ripple,
+      mode
     };
 
     if (contextRef.current) {
@@ -328,7 +379,8 @@ const WarpText = ({
     pointerInfluence,
     pointerStrength,
     refraction,
-    ripple
+    ripple,
+    mode
   ]);
 
   useEffect(() => {
