@@ -4,6 +4,7 @@ import { QueryInput } from '../components/workspace/QueryInput';
 import { SuggestionsPanel } from '../components/workspace/SuggestionsPanel';
 import { QueryResult } from '../components/workspace/QueryResult';
 import TextType from '../components/TextType/TextType';
+import { motion, AnimatePresence } from 'motion/react';
 
 import { queryDatabase, getSources } from '../services/api';
 import type { QueryResponse, SourceMetadata } from '../types';
@@ -17,6 +18,7 @@ export const Workspace: React.FC = () => {
   const [sources, setSources] = useState<SourceMetadata[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string>('all');
   const [loadingSources, setLoadingSources] = useState(true);
+  const [textIndex, setTextIndex] = useState(0);
 
   useEffect(() => {
     fetchSources();
@@ -82,13 +84,39 @@ export const Workspace: React.FC = () => {
         <div className="mb-12 text-center animate-slide-up flex flex-col items-center">
           <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-6 border border-cyan-500/20 shadow-[0_0_30px_rgba(34,211,238,0.15)] relative overflow-hidden">
              <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 to-transparent"></div>
-             <svg className="w-8 h-8 text-cyan-400 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-             </svg>
+             <AnimatePresence mode="wait">
+               {textIndex === 0 ? (
+                 <motion.svg
+                   key="box-icon"
+                   initial={{ opacity: 0, scale: 0.8, rotate: -90 }}
+                   animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                   exit={{ opacity: 0, scale: 0.8, rotate: 90 }}
+                   transition={{ duration: 0.3 }}
+                   className="w-8 h-8 text-cyan-400 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                 >
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                 </motion.svg>
+               ) : (
+                 <motion.svg
+                   key="smile-icon"
+                   initial={{ opacity: 0, scale: 0.8, rotate: -90 }}
+                   animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                   exit={{ opacity: 0, scale: 0.8, rotate: 90 }}
+                   transition={{ duration: 0.3 }}
+                   className="w-8 h-8 text-cyan-400 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                 >
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 14C8 14 9.5 16 12 16C14.5 16 16 14 16 14" />
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 9H9.01" />
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 9H15.01" />
+                 </motion.svg>
+               )}
+             </AnimatePresence>
           </div>
           <h2 className="text-4xl font-bold text-zinc-100 tracking-tight mb-4 min-h-[40px]">
             <TextType
-              text={["Ask your database anything.", "hehehehhe ;)", "Unlock intelligent insights."]}
+              text={["Ask your database anything.", "hehehehehe :))"]}
+              onIndexChange={setTextIndex}
               typingSpeed={50}
               pauseDuration={2000}
               deletingSpeed={30}

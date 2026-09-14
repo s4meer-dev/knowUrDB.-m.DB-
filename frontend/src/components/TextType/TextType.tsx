@@ -20,6 +20,7 @@ interface TextTypeProps {
   textColors?: string[];
   variableSpeed?: { min: number; max: number };
   onSentenceComplete?: (sentence: string, index: number) => void;
+  onIndexChange?: (index: number) => void;
   startOnVisible?: boolean;
   reverseMode?: boolean;
 }
@@ -41,6 +42,7 @@ const TextType = ({
   textColors = [],
   variableSpeed,
   onSentenceComplete,
+  onIndexChange,
   startOnVisible = false,
   reverseMode = false,
   ...props
@@ -52,6 +54,12 @@ const TextType = ({
   const [isVisible, setIsVisible] = useState(!startOnVisible);
   const cursorRef = useRef<HTMLSpanElement>(null);
   const containerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (onIndexChange) {
+      onIndexChange(currentTextIndex);
+    }
+  }, [currentTextIndex, onIndexChange]);
 
   const textArray = useMemo(() => (Array.isArray(text) ? text : [text]), [text]);
 
