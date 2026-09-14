@@ -30,8 +30,8 @@ describe('App Component', () => {
       </MemoryRouter>
     );
 
-    // Header title
-    expect(screen.getByText('KnowUrDB')).toBeInTheDocument();
+    // Header title (also present in cinematic intro overlay)
+    expect(screen.getAllByText('KnowUrDB').length).toBeGreaterThanOrEqual(1);
     
     // Check if connected state is shown after mock resolves
     await waitFor(() => {

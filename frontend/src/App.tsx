@@ -6,7 +6,7 @@ import { Schema } from './pages/Schema';
 import { SourceLibrary } from './pages/SourceLibrary';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { CustomCursor } from './components/common/CustomCursor';
-import { LoadingExperience } from './components/LoadingExperience';
+import { CinematicIntro } from './components/cinematic/CinematicIntro';
 import { useEffect, useState, useCallback } from 'react';
 import { checkHealth } from './services/api';
 
@@ -39,7 +39,7 @@ function App() {
       <CustomCursor />
       
       {appStatus !== 'ready' && (
-        <LoadingExperience 
+        <CinematicIntro 
           onReveal={handleReveal}
           onComplete={handleComplete} 
         />

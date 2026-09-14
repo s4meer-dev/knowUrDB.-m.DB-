@@ -1,0 +1,182 @@
+/* ═══════════════════════════════════════════════════
+   CINEMATIC INTRO — "The Intelligence Field"
+   KnowUrDB signature opening experience
+   ═══════════════════════════════════════════════════ */
+
+/* ─── Root container ─── */
+.cinematic-root {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  width: 100%;
+  height: 100dvh;
+  background: #020204;
+  overflow: hidden;
+  user-select: none;
+  touch-action: none;
+  pointer-events: auto;
+  /* Exit transition */
+  transition: opacity 700ms cubic-bezier(0.25, 1, 0.5, 1),
+              transform 700ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.cinematic-root.cinematic-exit {
+  opacity: 0;
+  transform: scale(1.015);
+  pointer-events: none;
+}
+
+/* ─── Canvas layer ─── */
+.cinematic-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  will-change: transform;
+}
+
+/* ─── Film grain overlay ─── */
+.cinematic-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+/* ─── DOM overlay (wordmark + subtitle + signal) ─── */
+.cinematic-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* ─── KnowUrDB Wordmark ─── */
+.cinematic-wordmark {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  font-size: 70px;
+  letter-spacing: -0.02em;
+  color: #f4f4f5;
+  line-height: 1;
+  margin: 0;
+  padding: 0;
+  will-change: filter, opacity, transform;
+  /* Initial state — invisible, set by JS */
+  opacity: 0;
+  filter: blur(12px);
+}
+
+/* ─── Subtitle ─── */
+.cinematic-subtitle {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  color: #d4d4d8;
+  line-height: 1;
+  margin: 0;
+  padding: 0;
+  margin-top: 24px;
+  will-change: filter, opacity, transform;
+  /* Initial state — invisible, set by JS */
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(6px);
+}
+
+/* ─── Signal path (progress filament) ─── */
+.cinematic-signal-path {
+  position: relative;
+  width: 280px;
+  height: 1px;
+  margin-top: 40px;
+  will-change: opacity;
+  opacity: 0;
+}
+
+.cinematic-signal-base {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 1px;
+}
+
+.cinematic-signal-active {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.15), rgba(34, 211, 238, 0.6));
+  border-radius: 1px;
+  will-change: width;
+}
+
+.cinematic-signal-head {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, rgba(34, 211, 238, 0.6) 40%, transparent 100%);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.5),
+              0 0 20px rgba(34, 211, 238, 0.2);
+  will-change: left;
+  left: 0%;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 1023px) and (min-width: 768px) {
+  .cinematic-wordmark {
+    font-size: 50px;
+  }
+  .cinematic-subtitle {
+    font-size: 13px;
+    margin-top: 20px;
+  }
+  .cinematic-signal-path {
+    width: 240px;
+    margin-top: 36px;
+  }
+}
+
+@media (max-width: 767px) {
+  .cinematic-wordmark {
+    font-size: 36px;
+  }
+  .cinematic-subtitle {
+    font-size: 12px;
+    margin-top: 16px;
+  }
+  .cinematic-signal-path {
+    width: 200px;
+    margin-top: 30px;
+  }
+}
+
+/* ─── Reduced motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  .cinematic-root {
+    transition: opacity 400ms ease;
+  }
+  .cinematic-root.cinematic-exit {
+    transform: none;
+  }
+  .cinematic-wordmark {
+    filter: none !important;
+    transition: opacity 800ms ease !important;
+  }
+  .cinematic-subtitle {
+    filter: none !important;
+    transform: none !important;
+    transition: opacity 600ms ease 300ms !important;
+  }
+}
