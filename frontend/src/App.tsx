@@ -19,6 +19,7 @@ function App() {
   );
 
   useEffect(() => {
+    (window as any).__appReady = hasRunLoadingExperience;
     checkHealth().catch(err => {
       console.warn("Backend not yet ready or failed health check", err);
     });
@@ -31,6 +32,8 @@ function App() {
 
   const handleComplete = useCallback(() => {
     hasRunLoadingExperience = true;
+    (window as any).__appReady = true;
+    window.dispatchEvent(new Event('appReady'));
     setAppStatus('ready');
   }, []);
 

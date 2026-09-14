@@ -72,16 +72,6 @@ export const CinematicIntro: React.FC<CinematicIntroProps> = ({ onReveal, onComp
     onCompleteRef.current = onComplete;
   }, [onReveal, onComplete]);
 
-  // Reduced motion detection
-  const reducedMotionRef = useRef(false);
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    reducedMotionRef.current = mq.matches;
-    const handler = (e: MediaQueryListEvent) => { reducedMotionRef.current = e.matches; };
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
   // Scroll lock
   useEffect(() => {
     document.documentElement.classList.add('lock-scroll');
@@ -495,59 +485,10 @@ export const CinematicIntro: React.FC<CinematicIntroProps> = ({ onReveal, onComp
       }
     };
 
-    // ─── Reduced motion path ───
-    const animateReduced = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const elapsed = timestamp - startTime;
-      const progress = Math.min(elapsed / REDUCED_DURATION, 1);
-
-      ctx.clearRect(0, 0, w, h);
-
-      // Simple atmosphere
-      const atmosAlpha = easeOutCubic(Math.min(progress / 0.3, 1)) * 0.1;
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.5);
-      grad.addColorStop(0, `rgba(4, 30, 50, ${atmosAlpha})`);
-      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-
-      // Show wordmark immediately with opacity
-      const wordmark = wordmarkRef.current;
-      const subtitle = subtitleRef.current;
-      const signalPath = signalPathRef.current;
-      const signalActive = signalActiveRef.current;
-      const signalHead = signalHeadRef.current;
-
-      if (wordmark) {
-        const alpha = easeOutCubic(Math.min(progress / 0.5, 1));
-        wordmark.style.opacity = `${alpha}`;
-        wordmark.style.filter = 'none';
-        wordmark.style.textShadow = 'none';
-      }
-      if (subtitle) {
-        const alpha = easeOutCubic(Math.max(0, (progress - 0.25) / 0.4));
-        subtitle.style.opacity = `${alpha}`;
-        subtitle.style.filter = 'none';
-        subtitle.style.transform = 'translateY(0)';
-      }
-      if (signalPath && signalActive && signalHead) {
-        signalPath.style.opacity = `${easeOutCubic(Math.min(progress / 0.3, 1))}`;
-        signalActive.style.width = `${easeInOutCubic(progress) * 100}%`;
-        signalHead.style.left = `${easeInOutCubic(progress) * 100}%`;
-        signalHead.style.opacity = progress > 0.05 && progress < 0.95 ? '1' : '0';
-      }
-
-      if (progress < 1) {
-        rAF = requestAnimationFrame(animateReduced);
-      } else {
-        triggerExit();
-      }
-    };
-
     // ─── Initialize and start ───
     window.addEventListener('resize', resize);
     resize();
-    rAF = requestAnimationFrame(reducedMotionRef.current ? animateReduced : animate);
+    rAF = requestAnimationFrame(animate);
 
     return () => {
       window.removeEventListener('resize', resize);

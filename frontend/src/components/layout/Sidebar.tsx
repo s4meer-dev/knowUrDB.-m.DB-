@@ -50,7 +50,7 @@ export const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="w-[100px] bg-transparent flex-shrink-0 hidden md:flex flex-col items-center pt-8 h-[calc(100vh-65px)] sticky top-[65px] z-40">
+    <aside className="w-[100px] bg-transparent flex-shrink-0 hidden md:flex flex-col items-center pt-8 h-full relative z-40">
       <VerticalDock 
         items={items} 
         magnification={75}

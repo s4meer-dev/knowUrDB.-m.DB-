@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getSources, deleteSource } from '../services/api';
 import type { SourceMetadata } from '../types';
 import { MultiUpload } from '../components/workspace/MultiUpload';
+import { CustomDropdown } from '../components/common/CustomDropdown';
 
 export const SourceLibrary: React.FC = () => {
   const navigate = useNavigate();
@@ -137,33 +138,36 @@ export const SourceLibrary: React.FC = () => {
                 />
               </div>
               <div className="flex gap-2">
-                <select 
+                <CustomDropdown 
                   value={statusFilter} 
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="bg-zinc-950/50 border border-zinc-800/80 rounded-lg px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:ring-1 focus:ring-cyan-500 flex-1 cursor-pointer"
-                >
-                  <option value="all">All Status</option>
-                  <option value="ready">Ready</option>
-                  <option value="failed">Failed</option>
-                </select>
-                <select 
+                  onChange={setStatusFilter}
+                  options={[
+                    { value: 'all', label: 'All Status' },
+                    { value: 'ready', label: 'Ready' },
+                    { value: 'failed', label: 'Failed' }
+                  ]}
+                  triggerClassName="bg-zinc-950/50 border border-zinc-800/80 rounded-lg px-3 py-2 text-xs text-zinc-300 hover:text-zinc-100 transition-colors flex-1"
+                />
+                <CustomDropdown 
                   value={typeFilter} 
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  className="bg-zinc-950/50 border border-zinc-800/80 rounded-lg px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:ring-1 focus:ring-cyan-500 flex-1 cursor-pointer"
-                >
-                  <option value="all">All Types</option>
-                  {availableTypes.map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}
-                </select>
-                <select 
+                  onChange={setTypeFilter}
+                  options={[
+                    { value: 'all', label: 'All Types' },
+                    ...availableTypes.map(t => ({ value: t, label: t.toUpperCase() }))
+                  ]}
+                  triggerClassName="bg-zinc-950/50 border border-zinc-800/80 rounded-lg px-3 py-2 text-xs text-zinc-300 hover:text-zinc-100 transition-colors flex-1"
+                />
+                <CustomDropdown 
                   value={sortOrder} 
-                  onChange={(e) => setSortOrder(e.target.value)}
-                  className="bg-zinc-950/50 border border-zinc-800/80 rounded-lg px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:ring-1 focus:ring-cyan-500 flex-1 cursor-pointer"
-                >
-                  <option value="recent">Recent</option>
-                  <option value="oldest">Oldest</option>
-                  <option value="name">Name</option>
-                  <option value="size">Size</option>
-                </select>
+                  onChange={setSortOrder}
+                  options={[
+                    { value: 'recent', label: 'Recent' },
+                    { value: 'oldest', label: 'Oldest' },
+                    { value: 'name', label: 'Name' },
+                    { value: 'size', label: 'Size' }
+                  ]}
+                  triggerClassName="bg-zinc-950/50 border border-zinc-800/80 rounded-lg px-3 py-2 text-xs text-zinc-300 hover:text-zinc-100 transition-colors flex-1"
+                />
               </div>
             </div>
 

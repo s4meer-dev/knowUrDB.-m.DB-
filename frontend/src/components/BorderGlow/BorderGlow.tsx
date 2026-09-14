@@ -139,29 +139,39 @@ const BorderGlow: React.FC<BorderGlowProps> = ({
 
   useEffect(() => {
     if (!animated) return;
-    const angleStart = 110;
-    const angleEnd = 465;
-    setSweepActive(true);
-    setCursorAngle(angleStart);
+    
+    const startAnimation = () => {
+      const angleStart = 110;
+      const angleEnd = 465;
+      setSweepActive(true);
+      setCursorAngle(angleStart);
 
-    // Initial fade in
-    animateValue({ duration: 800, onUpdate: v => setEdgeProximity(v / 100) });
-    
-    // Sweep first half
-    animateValue({ ease: easeInCubic, duration: 2500, end: 50, onUpdate: v => {
-      setCursorAngle((angleEnd - angleStart) * (v / 100) + angleStart);
-    }});
-    
-    // Sweep second half
-    animateValue({ ease: easeOutCubic, delay: 2500, duration: 3500, start: 50, end: 100, onUpdate: v => {
-      setCursorAngle((angleEnd - angleStart) * (v / 100) + angleStart);
-    }});
-    
-    // Fade out
-    animateValue({ ease: easeInCubic, delay: 4500, duration: 2500, start: 100, end: 0,
-      onUpdate: v => setEdgeProximity(v / 100),
-      onEnd: () => setSweepActive(false),
-    });
+      // Initial fade in
+      animateValue({ duration: 800, onUpdate: v => setEdgeProximity(v / 100) });
+      
+      // Sweep first half
+      animateValue({ ease: easeInCubic, duration: 2500, end: 50, onUpdate: v => {
+        setCursorAngle((angleEnd - angleStart) * (v / 100) + angleStart);
+      }});
+      
+      // Sweep second half
+      animateValue({ ease: easeOutCubic, delay: 2500, duration: 3500, start: 50, end: 100, onUpdate: v => {
+        setCursorAngle((angleEnd - angleStart) * (v / 100) + angleStart);
+      }});
+      
+      // Fade out
+      animateValue({ ease: easeInCubic, delay: 4500, duration: 2500, start: 100, end: 0,
+        onUpdate: v => setEdgeProximity(v / 100),
+        onEnd: () => setSweepActive(false),
+      });
+    };
+
+    if ((window as any).__appReady) {
+      startAnimation();
+    } else {
+      window.addEventListener('appReady', startAnimation, { once: true });
+      return () => window.removeEventListener('appReady', startAnimation);
+    }
   }, [animated]);
 
   const colorSensitivity = edgeSensitivity + 20;

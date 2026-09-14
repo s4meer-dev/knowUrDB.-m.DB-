@@ -66,46 +66,69 @@ export const Header: React.FC = () => {
           </h1>
         </div>
       
-      <div className="flex items-center space-x-4 text-sm font-semibold bg-zinc-900/50 px-5 py-2.5 rounded-xl border border-zinc-800 shadow-sm backdrop-blur-md">
-        <div className="flex items-center space-x-2 border-r border-zinc-700/50 pr-4">
-          <span className="text-zinc-500 tracking-wider">API</span>
+      <div className="group relative flex items-center space-x-5 text-sm font-semibold bg-zinc-900/60 px-6 py-2.5 rounded-2xl border border-zinc-800/80 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-md cursor-default transition-all duration-500 hover:border-cyan-500/40 hover:bg-zinc-900/80 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] overflow-hidden">
+        {/* Animated Background Gradient on Hover */}
+        <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-cyan-500/5 to-purple-500/5 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-in-out pointer-events-none"></div>
+        
+        {/* API Status */}
+        <div className="flex items-center space-x-2.5 relative z-10">
+          <span className="text-zinc-500 text-xs tracking-[0.2em] uppercase transition-colors duration-300 group-hover:text-zinc-400">API</span>
           {backendLoading ? (
             <span className="flex items-center">
               <span className="w-2 h-2 rounded-full bg-zinc-600 animate-pulse"></span>
             </span>
           ) : health ? (
-            <span className="flex items-center gap-2 text-zinc-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-              Online
+            <span className="flex items-center gap-2 text-zinc-300 transition-colors duration-300 group-hover:text-zinc-100">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+              </span>
+              <span className="text-[13px]">Online</span>
             </span>
           ) : (
             <span className="flex items-center gap-2 text-zinc-300">
-              <span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></span>
-              Offline
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+              </span>
+              <span className="text-[13px]">Offline</span>
             </span>
           )}
         </div>
         
-        <div className="flex items-center space-x-2">
-          <span className="text-zinc-500 tracking-wider">AI</span>
+        {/* Divider with glow */}
+        <div className="w-[1px] h-6 bg-zinc-800/80 group-hover:bg-cyan-500/30 transition-colors duration-500 relative z-10 shadow-[0_0_10px_rgba(34,211,238,0)] group-hover:shadow-[0_0_10px_rgba(34,211,238,0.5)]"></div>
+        
+        {/* AI Status */}
+        <div className="flex items-center space-x-2.5 relative z-10">
+          <span className="text-zinc-500 text-xs tracking-[0.2em] uppercase transition-colors duration-300 group-hover:text-zinc-400">AI</span>
           {backendLoading ? (
             <span className="flex items-center">
               <span className="w-2 h-2 rounded-full bg-zinc-600 animate-pulse"></span>
             </span>
           ) : aiStatus?.status === 'ready' ? (
-            <span className="flex items-center gap-2 text-zinc-300">
-              <span className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(34,211,238,0.5)]"></span>
-              Ready
+            <span className="flex items-center gap-2 text-zinc-300 transition-colors duration-300 group-hover:text-zinc-100">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500 shadow-[0_0_8px_rgba(34,211,238,0.8)]"></span>
+              </span>
+              <span className="text-[13px]">Ready</span>
             </span>
           ) : aiStatus?.configured === false ? (
-            <span className="flex items-center gap-2 text-zinc-300">
-              <span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></span>
-              Setup
+            <span className="flex items-center gap-2 text-zinc-300 transition-colors duration-300 group-hover:text-zinc-100">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]"></span>
+              </span>
+              <span className="text-[13px]">Setup</span>
             </span>
           ) : (
             <span className="flex items-center gap-2 text-zinc-300">
-              <span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></span>
-              Down
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+              </span>
+              <span className="text-[13px]">Down</span>
             </span>
           )}
         </div>

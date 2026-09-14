@@ -4,6 +4,7 @@ import type { DatabaseSchema, TableInfo, SourceMetadata } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { ErrorState } from '../components/common/ErrorState';
 import { ResultsTable } from '../components/workspace/ResultsTable';
+import { CustomDropdown } from '../components/common/CustomDropdown';
 
 export const Schema: React.FC = () => {
   const [sources, setSources] = useState<SourceMetadata[]>([]);
@@ -133,18 +134,14 @@ export const Schema: React.FC = () => {
           </p>
         </div>
         
-        <div className="relative">
+        <div className="relative mt-2">
           <label className="absolute -top-2.5 left-3 px-1 bg-[#09090b] text-[10px] font-bold uppercase tracking-wider text-cyan-500 z-10">Active Source</label>
-          <select 
+          <CustomDropdown 
             value={selectedSourceId || ''} 
-            onChange={(e) => setSelectedSourceId(e.target.value)}
-            className="bg-zinc-900/50 border border-zinc-800 rounded-xl pl-4 pr-10 py-3 text-zinc-100 font-medium focus:outline-none focus:ring-2 focus:ring-cyan-500/50 appearance-none min-w-[250px] shadow-sm relative z-0 transition-shadow hover:bg-zinc-800/50"
-          >
-            {sources.map(s => (
-              <option key={s.source_id} value={s.source_id}>{s.name}</option>
-            ))}
-          </select>
-          <svg className="w-5 h-5 absolute right-3 top-3.5 text-zinc-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
+            onChange={(val) => setSelectedSourceId(val)}
+            options={sources.map(s => ({ value: s.source_id, label: s.name }))}
+            triggerClassName="bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 font-medium hover:bg-zinc-800/50 transition-colors min-w-[250px]"
+          />
         </div>
       </div>
 
