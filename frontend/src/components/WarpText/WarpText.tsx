@@ -348,7 +348,7 @@ const WarpText = ({
     let contextLost = false;
     let visible = true;
     let pageVisible = !document.hidden;
-    let reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    let reduceMotion = false;
     let rasterVersion = 0;
 
     const pointer = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5, active: 0, activeTarget: 0 };
@@ -457,7 +457,7 @@ const WarpText = ({
 
     const onPointerMove = (event: PointerEvent): void => {
       if (event.pointerType === 'touch') return;
-      const rect = canvas.getBoundingClientRect();
+      const rect = target.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
       pointer.tx = (event.clientX - rect.left) / rect.width;
       pointer.ty = 1 - (event.clientY - rect.top) / rect.height;
