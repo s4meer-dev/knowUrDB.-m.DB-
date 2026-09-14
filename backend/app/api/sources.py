@@ -12,6 +12,7 @@ from app.models.source import SourceMetadata, SourceType
 from app.services.source_manager import SourceManager
 from app.services.schema_service import SchemaService
 from app.core.database import DatabaseManager
+from app.services.demo_generator import DemoGenerator
 
 router = APIRouter()
 source_manager = SourceManager()
@@ -24,6 +25,36 @@ class BasicResponse(BaseModel):
 @router.get("", response_model=List[SourceMetadata])
 async def list_sources():
     return source_manager.list_sources()
+
+@router.post("/generate-demo", response_model=SourceMetadata)
+async def generate_demo_source():
+    generator = DemoGenerator()
+    
+    try:
+        file_path, filename = generator.generate_demo_database()
+        size = Path(file_path).stat().st_size
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate demo database: {e}")
+
+    try:
+        # Register and process
+        metadata = source_manager.register_source(
+            original_filename=filename,
+            file_path=file_path,
+            mime_type="application/x-sqlite3",
+            size_bytes=size
+        )
+        
+        # Cleanup temp
+        if Path(file_path).exists():
+            Path(file_path).unlink()
+            
+        return metadata
+    except Exception as e:
+        if Path(file_path).exists():
+            Path(file_path).unlink()
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={"error_code": "INTERNAL_ERROR", "message": f"An unexpected error occurred during processing: {e}"})
 
 @router.post("/upload", response_model=SourceMetadata)
 async def upload_source(file: UploadFile = File(...)):

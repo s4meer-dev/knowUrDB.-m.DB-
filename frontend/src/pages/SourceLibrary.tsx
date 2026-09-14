@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getSources, deleteSource } from '../services/api';
+import { getSources, deleteSource, generateDemoDatabase } from '../services/api';
 import type { SourceMetadata } from '../types';
 import { MultiUpload } from '../components/workspace/MultiUpload';
 import { CustomDropdown } from '../components/common/CustomDropdown';
@@ -9,6 +9,7 @@ export const SourceLibrary: React.FC = () => {
   const navigate = useNavigate();
   const [sources, setSources] = useState<SourceMetadata[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generatingDemo, setGeneratingDemo] = useState(false);
   
   // Selection and filtering state
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
@@ -46,6 +47,20 @@ export const SourceLibrary: React.FC = () => {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleGenerateDemo = async () => {
+    setGeneratingDemo(true);
+    try {
+      const newSource = await generateDemoDatabase();
+      await loadSources();
+      setSelectedSourceId(newSource.source_id);
+    } catch (e) {
+      console.error("Failed to generate demo database:", e);
+      alert("Failed to generate demo database. See console for details.");
+    } finally {
+      setGeneratingDemo(false);
     }
   };
 
@@ -105,8 +120,22 @@ export const SourceLibrary: React.FC = () => {
         <p className="text-zinc-400">Manage your connected databases, datasets, and documents.</p>
       </div>
 
-      <div className="mb-6 flex-shrink-0">
+      <div className="mb-6 flex-shrink-0 flex flex-col gap-4">
         <MultiUpload onUploadSuccess={() => loadSources()} />
+        <div className="flex justify-center">
+          <button 
+            onClick={handleGenerateDemo} 
+            disabled={generatingDemo}
+            className="text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 shadow-[0_0_15px_rgba(34,211,238,0.1)] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {generatingDemo ? (
+              <div className="w-4 h-4 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin"></div>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+            )}
+            {generatingDemo ? "Generating Random E-Commerce DB..." : "Generate Random Demo Database"}
+          </button>
+        </div>
       </div>
 
       {loading ? (

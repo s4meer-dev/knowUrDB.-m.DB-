@@ -130,7 +130,16 @@ class SourceManager:
         # Delete from disk
         source_dir = Path(metadata.storage_location)
         if source_dir.exists():
-            shutil.rmtree(source_dir)
+            try:
+                # Do not delete files in the 'demo' directory to preserve the demo db
+                if "demo" not in source_dir.parts:
+                    if source_dir.is_file():
+                        source_dir.unlink()
+                    else:
+                        shutil.rmtree(source_dir)
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to delete disk storage for {source_id}: {e}")
 
         # Delete from DB
         with self.db.get_connection() as conn:

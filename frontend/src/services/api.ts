@@ -120,3 +120,8 @@ export const uploadBatchSources = async (files: File[]): Promise<SourceMetadata[
   });
   return response.data;
 };
+
+export const generateDemoDatabase = async (): Promise<SourceMetadata> => {
+  const response = await apiClient.post<SourceMetadata>('/api/sources/generate-demo');
+  return response.data;
+};
