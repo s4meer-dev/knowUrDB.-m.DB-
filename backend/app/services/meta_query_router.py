@@ -1,73 +1,68 @@
-import re
+import json
+import logging
 from typing import Any
 
 from app.services.query_executor import QueryExecutor
 from app.services.schema_service import SchemaService
+from app.services.gemini_provider import GeminiProvider
 
+logger = logging.getLogger(__name__)
 
 class MetaQueryRouter:
     """
     Handles meta-queries such as "Show all tables", "Describe database", or "How many total records".
-    These queries can be answered deterministically without AI or direct user SQL execution.
+    These queries can be answered deterministically without direct user SQL execution.
     """
 
-    def __init__(self, schema_service: SchemaService, query_executor: QueryExecutor):
+    def __init__(self, schema_service: SchemaService, query_executor: QueryExecutor, ai_provider: GeminiProvider):
         self.schema_service = schema_service
         self.query_executor = query_executor
-
-    def normalize_question(self, question: str) -> str:
-        q = question.lower().strip()
-        # Remove common punctuation
-        q = re.sub(r'[^\w\s]', '', q)
-        # Normalize whitespace
-        q = re.sub(r'\s+', ' ', q)
-        return q.strip()
+        self.ai = ai_provider
 
     def route_meta_query(self, question: str) -> dict[str, Any] | None:
         """
-        Attempts to answer the question using deterministic schema rules.
+        Attempts to answer the question using AI-driven intent classification.
         Returns a dictionary representing the response data (columns, rows, execution_time_ms, explanation)
         if matched, otherwise returns None.
         """
-        q = self.normalize_question(question)
-        words = set(q.split())
+        prompt = f"""
+You are a classification system for database questions.
+Analyze the user's question and determine if it is asking for high-level metadata about the database itself, or if it requires querying the actual data records.
 
-        # 1. Table Listing & Schema Summary
-        table_keywords = {"tables", "table"}
-        discovery_keywords = {"show", "list", "what", "which", "available", "exist"}
-        
-        schema_keywords = {"schema", "database", "structure", "information", "data", "summary", "describe", "explain", "contain"}
+Categories:
+1. LIST_TABLES: User wants to know what tables exist, how many tables there are, or list the tables. Examples: "how many tables are there in the dataset", "what tables do we have", "list tables".
+2. SCHEMA_SUMMARY: User wants to know the structure of the database, what columns exist, or a general description of the data schema. Examples: "describe the database", "what is the schema", "what columns are in users".
+3. GLOBAL_COUNT: User wants to know the total number of records/rows across the entire database or asking for "total data" overall. Examples: "total data", "how many rows total", "record count".
+4. DATA_QUERY: User is asking for specific data, aggregations, or conditional queries that require writing a SQL SELECT statement. Examples: "how many users are from USA", "what is the average price", "show me John's orders", "total revenue".
 
-        # If they ask about tables
-        if table_keywords.intersection(words) and discovery_keywords.intersection(words):
-            # E.g. "what tables are available", "show database tables", "list all tables"
-            if not schema_keywords.intersection(words) - {"database"}: 
-                # Avoid triggering if they just said "what data is in the tables" -> that's schema/overview
-                return self._handle_list_tables()
+Question: "{question}"
 
-        # If they ask for database overview/schema
-        if ("database" in words or "schema" in words or "data" in words or "information" in words) and (
-            "describe" in words or "explain" in words or "summary" in words or "structure" in words or 
-            ("what" in words and ("stored" in words or "available" in words or "contain" in words or "in" in words)) or
-            "about" in words
-        ):
-            # E.g. "describe the database", "what data is available in the database", "give me information about the database"
-            return self._handle_schema_summary()
-
-        # 2. Global Record Counts
-        count_keywords = {"count", "number", "how", "many", "total"}
-        record_keywords = {"records", "rows", "data"}
-        
-        if ("total" in words and "number" in words and "records" in words) or \
-           ("how" in words and "many" in words and "records" in words) or \
-           ("total" in words and "row" in words and "count" in words):
-            return self._handle_global_record_count()
+Return EXACTLY a JSON object with this structure (no markdown, no backticks):
+{{
+  "category": "LIST_TABLES" | "SCHEMA_SUMMARY" | "GLOBAL_COUNT" | "DATA_QUERY"
+}}
+"""
+        try:
+            response_text = self.ai.generate_text(prompt)
+            if response_text.startswith("```json"):
+                response_text = response_text[7:-3]
+            elif response_text.startswith("```"):
+                response_text = response_text[3:-3]
+                
+            data = json.loads(response_text.strip())
+            category = data.get("category", "DATA_QUERY")
             
-        # Add basic count all records as well
-        if "count" in words and "records" in words:
-            return self._handle_global_record_count()
-
-        return None
+            if category == "LIST_TABLES":
+                return self._handle_list_tables()
+            elif category == "SCHEMA_SUMMARY":
+                return self._handle_schema_summary()
+            elif category == "GLOBAL_COUNT":
+                return self._handle_global_record_count()
+            else:
+                return None
+        except Exception as e:
+            logger.error(f"Error classifying meta query: {e}")
+            return None
 
     def _handle_list_tables(self) -> dict[str, Any]:
         tables = self.schema_service.get_table_names()

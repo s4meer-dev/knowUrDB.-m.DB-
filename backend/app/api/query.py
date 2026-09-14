@@ -26,7 +26,7 @@ ai_provider = GeminiProvider()
 ai_service = AIService()
 history_service = HistoryService()
 query_intelligence_service = QueryIntelligenceService(ai_service, schema_service)
-meta_router = MetaQueryRouter(schema_service, query_executor)
+meta_router = MetaQueryRouter(schema_service, query_executor, ai_provider)
 source_manager = SourceManager()
 query_router = QueryRouter(ai_provider, source_manager)
 document_processor = DocumentProcessor(ai_provider)
@@ -35,32 +35,6 @@ document_processor = DocumentProcessor(ai_provider)
 async def query_database(request: NaturalLanguageQueryRequest):
     if not request.question or not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
-
-    # 0. Deterministic Meta Query Router (Bypass AI entirely for simple schema/count questions)
-    meta_response = meta_router.route_meta_query(request.question)
-    if meta_response:
-        history_service.log_query(
-            question=request.question,
-            query_source="fallback",
-            source_id=request.source_ids[0] if request.source_ids else None,
-            status="success",
-            generated_sql=meta_response.get("generated_sql", ""),
-            row_count=meta_response["row_count"],
-            execution_time_ms=meta_response["execution_time_ms"],
-        )
-        return NaturalLanguageQueryResponse(
-            question=request.question,
-            generated_sql=meta_response.get("generated_sql", ""),
-            columns=meta_response["columns"],
-            rows=meta_response["rows"],
-            row_count=meta_response["row_count"],
-            execution_time_ms=meta_response["execution_time_ms"],
-            status="success",
-            query_source="fallback",
-            explanation=meta_response["explanation"],
-            follow_up_suggestions=[],
-            error=None,
-        )
 
     # 1. New Routing Logic
     routing_decision = query_router.route_query(request.question, request.source_ids)
@@ -142,6 +116,34 @@ async def query_database(request: NaturalLanguageQueryRequest):
     # Set this source as active for the query execution
     db_path = source_manager.get_internal_db_path(source_metadata.source_id)
     DatabaseManager.set_active_database(db_path)
+
+    # 2.5 Deterministic Meta Query Router (Bypass AI entirely for simple schema/count questions)
+    meta_response = meta_router.route_meta_query(request.question)
+    if meta_response:
+        history_service.log_query(
+            question=request.question,
+            query_source="meta",
+            source_id=source_metadata.source_id,
+            status="success",
+            generated_sql=meta_response.get("generated_sql", ""),
+            row_count=meta_response["row_count"],
+            execution_time_ms=meta_response["execution_time_ms"],
+        )
+        return NaturalLanguageQueryResponse(
+            question=request.question,
+            generated_sql=meta_response.get("generated_sql", ""),
+            columns=meta_response["columns"],
+            rows=meta_response["rows"],
+            row_count=meta_response["row_count"],
+            execution_time_ms=meta_response["execution_time_ms"],
+            status="success",
+            query_source="meta",
+            explanation=meta_response["explanation"],
+            follow_up_suggestions=[],
+            error=None,
+            sources=citations,
+            confidence=routing_decision["confidence"]
+        )
 
     sql = None
     query_source = None
