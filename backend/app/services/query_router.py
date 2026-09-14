@@ -43,13 +43,27 @@ class QueryRouter:
         # Build a context of available sources for the LLM
         sources_context = []
         for s in sources:
-            sources_context.append({
+            source_info = {
                 "id": s.source_id,
                 "name": s.name,
                 "type": s.detected_format,
-                "tables": s.table_count,
                 "records": s.record_count
-            })
+            }
+            if s.detected_format == "sqlite" or s.detected_format == "database":
+                # Provide table names if possible for better matching
+                try:
+                    from app.core.database import DatabaseManager
+                    from app.services.schema_service import SchemaService
+                    db_path = self.source_manager.get_internal_db_path(s.source_id)
+                    DatabaseManager.set_active_database(db_path)
+                    schema = SchemaService().get_schema()
+                    source_info["tables"] = [t["name"] for t in schema["tables"]]
+                except Exception:
+                    source_info["tables"] = s.table_count
+            else:
+                source_info["tables"] = s.table_count
+            
+            sources_context.append(source_info)
             
         prompt = f"""
 You are an intelligent query router for a multi-source data system.
@@ -81,10 +95,13 @@ Return EXACTLY a JSON object with this structure (no markdown, no backticks):
             # We enforce strict JSON generation
             response_text = self.ai.generate_text(prompt)
             # Clean up potential markdown formatting
+            response_text = response_text.strip()
             if response_text.startswith("```json"):
-                response_text = response_text[7:-3]
+                response_text = response_text[7:]
             elif response_text.startswith("```"):
-                response_text = response_text[3:-3]
+                response_text = response_text[3:]
+            if response_text.endswith("```"):
+                response_text = response_text[:-3]
                 
             decision_data = json.loads(response_text.strip())
             
@@ -119,6 +136,40 @@ Return EXACTLY a JSON object with this structure (no markdown, no backticks):
             
         except Exception as e:
             logger.error(f"Error in query router: {e}")
+            
+            # Deterministic heuristic fallback to prevent unrelated queries from passing
+            q = question.lower()
+            import re
+            q_clean = re.sub(r'[^\w\s]', '', q)
+            q_clean = re.sub(r'\s+', ' ', q_clean)
+            words = set(q_clean.split())
+            
+            db_keywords = {
+                "database", "table", "tables", "record", "records", "row", "rows", "data", "schema", 
+                "structure", "summary", "count", "number", "total", "average", "maximum", "minimum",
+                "show", "list", "give", "find", "what", "which", "how", "many"
+            }
+            
+            # If no DB keywords or source names are found, consider it UNRELATED
+            is_valid = False
+            if db_keywords.intersection(words):
+                is_valid = True
+            else:
+                for s in sources:
+                    s_name_clean = re.sub(r'[^\w\s]', '', s.name.lower())
+                    if any(w in words for w in s_name_clean.split() if len(w) > 3):
+                        is_valid = True
+                        break
+            
+            if not is_valid:
+                return {
+                    "decision": "UNRELATED",
+                    "sources": [],
+                    "candidates": [],
+                    "confidence": 0.5,
+                    "reasoning": "Fallback heuristics detected an unrelated question."
+                }
+            
             # Safe fallback if AI parsing fails
             if len(sources) == 1:
                 return {

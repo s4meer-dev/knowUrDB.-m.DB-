@@ -145,49 +145,63 @@ async def query_database(request: NaturalLanguageQueryRequest):
             confidence=routing_decision["confidence"]
         )
 
+    # 2.6 Intent Analysis (Are they actually asking a database question?)
+    intent = query_intelligence_service.analyze_intent(request.question)
+    if intent == "UNRELATED":
+        error_msg = "I couldn't find data related to that concept in the available database."
+        history_service.log_query(
+            question=request.question,
+            query_source="intent_filter",
+            source_id=source_metadata.source_id,
+            status="error",
+            error_message=error_msg,
+        )
+        return NaturalLanguageQueryResponse(
+            question=request.question, status="error", error=error_msg
+        )
+
     sql = None
     query_source = None
 
     # 3. AI Generation (with retries)
-    if not sql:
-        ai_status = ai_service.get_status()
-        if not (ai_status.get("configured") and ai_status.get("status") == "ready"):
-            try:
-                sql = text_to_sql_service.translate(request.question)
-                query_source = "nlp_lite"
-                
-                # Still need to validate safety for deterministic output (e.g. from mock tests)
-                SQLValidator.validate(sql)
-                SQLValidator.validate_against_db(sql, DatabaseManager.get_active_provider())
-            except SQLSafetyError:
-                error_msg = "The generated query was rejected because it did not meet database safety requirements."
-                history_service.log_query(
-                    question=request.question,
-                    query_source="nlp_lite",
-                    source_id=source_metadata.source_id,
-                    status="error",
-                    generated_sql=sql,
-                    error_message=error_msg,
-                )
-                return NaturalLanguageQueryResponse(
-                    question=request.question, status="error", error=error_msg
-                )
-            except ValueError:
-                error_msg = "I couldn't find data related to that concept in the available database."
-                history_service.log_query(
-                    question=request.question,
-                    query_source="fallback",
-                    source_id=source_metadata.source_id,
-                    status="error",
-                    error_message=error_msg,
-                )
-                return NaturalLanguageQueryResponse(
-                    question=request.question, status="error", error=error_msg
-                )
+    ai_status = ai_service.get_status()
+    if not (ai_status.get("configured") and ai_status.get("status") == "ready"):
+        try:
+            sql = text_to_sql_service.translate(request.question)
+            query_source = "nlp_lite"
+            
+            # Still need to validate safety for deterministic output
+            SQLValidator.validate(sql)
+            SQLValidator.validate_against_db(sql, DatabaseManager.get_active_provider())
+        except SQLSafetyError:
+            error_msg = "The generated query was rejected because it did not meet database safety requirements."
+            history_service.log_query(
+                question=request.question,
+                query_source="nlp_lite",
+                source_id=source_metadata.source_id,
+                status="error",
+                generated_sql=sql,
+                error_message=error_msg,
+            )
+            return NaturalLanguageQueryResponse(
+                question=request.question, status="error", error=error_msg
+            )
+        except ValueError:
+            error_msg = "I couldn't find data related to that concept in the available database."
+            history_service.log_query(
+                question=request.question,
+                query_source="fallback",
+                source_id=source_metadata.source_id,
+                status="error",
+                error_message=error_msg,
+            )
+            return NaturalLanguageQueryResponse(
+                question=request.question, status="error", error=error_msg
+            )
 
-        if not sql:
-            schema_summary = schema_service.get_schema_summary().summary
-            prompt = f"""You are a SQL generation assistant for a SQLite database.
+    if not sql:
+        schema_summary = schema_service.get_schema_summary().summary
+        prompt = f"""You are a SQL generation assistant for a SQLite database.
 The database schema is as follows:
 {schema_summary}
 
@@ -205,7 +219,7 @@ IMPORTANT RULES:
         max_retries = 2
         last_error = None
         current_sql = None
-
+    
         for attempt in range(max_retries + 1):
             try:
                 if attempt == 0:
@@ -218,23 +232,23 @@ IMPORTANT RULES:
                     )
                     if not current_sql:
                         break  # Give up if repair fails to generate
-
+    
                 # Clean up AI output
                 if current_sql.startswith("```sql"):
                     current_sql = current_sql[6:]
                 elif current_sql.startswith("```"):
                     current_sql = current_sql[3:]
                 current_sql = current_sql.removesuffix("```").strip()
-
+    
                 # Validate safety and schema
                 SQLValidator.validate(current_sql)
                 SQLValidator.validate_against_db(current_sql, DatabaseManager.get_active_provider())
-
+    
                 # If we get here, it's valid
                 sql = current_sql
                 query_source = "ai"
                 break
-
+    
             except SQLSafetyError:
                 # Do not retry safety violations
                 error_msg = "The generated query was rejected because it did not meet database safety requirements."
@@ -272,7 +286,7 @@ IMPORTANT RULES:
             except Exception as e:  # noqa: BLE001
                 last_error = str(e)
                 # Loop will continue and try to repair
-
+    
         if not sql:
             # Exhausted retries
             error_msg = "I could not confidently interpret that database request. Please ask about the available tables, columns, records, or data in the connected database."

@@ -12,6 +12,10 @@ class GeminiProvider:
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
         self.model = settings.GEMINI_MODEL
+        if self.model and not self.model.startswith("models/"):
+            self.model = f"models/{self.model}"
+        logger.info(f"GeminiProvider initialized with model: {self.model}")
+            
         if self.api_key:
             self.client = genai.Client(api_key=self.api_key)
         else:
@@ -36,7 +40,10 @@ class GeminiProvider:
 
         # Attempt to get the model details to verify the key and provider are actually usable
         try:
-            self.client.models.get(model=self.model)
+            model_name = self.model
+            if not model_name.startswith("models/"):
+                model_name = f"models/{model_name}"
+            self.client.models.get(model=model_name)
             return {"configured": True, "status": "ready"}
         except (genai_errors.APIError, genai_errors.ClientError) as e:
             error_str = str(e).lower()
@@ -71,6 +78,7 @@ class GeminiProvider:
             raise ValueError("AI provider is not configured.")
 
         try:
+            logger.info(f"DEBUG: Calling generate_content with model={self.model}")
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt,
@@ -78,20 +86,27 @@ class GeminiProvider:
             if not response.text:
                 raise ValueError("Empty response from AI provider.")
             return response.text
-        except (genai_errors.APIError, genai_errors.ClientError) as e:
+        except Exception as e:
+            logger.error(f"DEBUG: Exception type={type(e)}, e={e}")
             error_str = str(e).lower()
+            if "quota exceeded" in error_str or "429" in error_str or "resource_exhausted" in error_str:
+                logger.error(f"Gemini API Error: Quota Exceeded")
+                raise RuntimeError("Quota Exceeded")
             if (
                 "api key" in error_str
                 or "api_key" in error_str
                 or "invalid_argument" in error_str
+                or "permission" in error_str
+                or "unauthenticated" in error_str
+                or "forbidden" in error_str
             ):
                 logger.error("Gemini API Error: Invalid API Key")
-                raise RuntimeError("AI provider error: Invalid API Key")
-            if "not_found" in error_str or "model" in error_str:
+                raise RuntimeError("Invalid API Key")
+            if "not_found" in error_str or "invalid model" in error_str:
                 logger.error("Gemini API Error: Invalid Model")
-                raise RuntimeError("AI provider error: Invalid Model")
-            logger.error("Gemini API Error: External provider failure")
-            raise RuntimeError("AI provider error: External provider failure")
+                raise RuntimeError("Invalid Model")
+            logger.error(f"Gemini API Error: {str(e)}")
+            raise RuntimeError(f"AI provider error: {str(e)}")
         except Exception:  # noqa: BLE001
             logger.error("Unexpected error calling Gemini API")
             raise RuntimeError(

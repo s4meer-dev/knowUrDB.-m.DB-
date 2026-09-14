@@ -69,12 +69,14 @@ class SQLValidator:
             raise SQLSafetyError("Multiple SQL statements are not allowed.")
 
         # 3. Reject forbidden keywords
-        # Using word boundaries to avoid matching keywords inside valid identifiers/strings (partially)
-        # However, a simple regex is safer for a strict sandbox
+        # Remove string literals to avoid false positives on data like 'drop_rate' or 'insert'
+        # A string literal in SQL starts and ends with a single quote.
+        sql_no_strings = re.sub(r"'(?:''|[^'])*'", "''", cleaned_sql)
+        
         for keyword in cls.FORBIDDEN_KEYWORDS:
             # Check if the keyword exists as a whole word
             pattern = rf"\b{keyword}\b"
-            if re.search(pattern, cleaned_sql):
+            if re.search(pattern, sql_no_strings):
                 raise SQLSafetyError(
                     f"Dangerous SQL pattern detected: {keyword} is not allowed."
                 )
