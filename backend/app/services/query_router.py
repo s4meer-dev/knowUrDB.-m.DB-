@@ -31,15 +31,6 @@ class QueryRouter:
         if explicit_source_ids:
             sources = [s for s in sources if s.source_id in explicit_source_ids]
             
-        if not sources:
-            return {
-                "decision": "UNRELATED",
-                "sources": [],
-                "candidates": [],
-                "confidence": 1.0,
-                "reasoning": "No sources available."
-            }
-            
         # Build a context of available sources for the LLM
         sources_context = []
         for s in sources:
@@ -75,11 +66,11 @@ Available Sources:
 User Question: "{question}"
 
 Rules:
-1. If the question is a general greeting or unrelated to any data (e.g., "what is the weather", "2+2", "write a poem"), decision is UNRELATED.
+1. If the question is a general greeting or unrelated to any data (e.g., "what is the weather", "2+2", "write a poem", "how many dataset are there" when 0 sources are available), decision is UNRELATED.
 2. If the user explicitly asks about the available files/sources (e.g. "what files have I uploaded", "what sources are available"), decision is META.
 3. If the question clearly refers to ONE specific source (by filename, context, or uniqueness of data requested), decision is SINGLE_SOURCE.
-4. If the question explicitly asks to compare or join multiple specific sources, decision is MULTI_SOURCE.
-5. IF THE QUESTION IS AMBIGUOUS and could apply to multiple sources equally (e.g. asking "what are the sales" when there are both 'sales_q1' and 'sales_q2'), YOU MUST NOT GUESS. The decision must be CLARIFICATION.
+4. If the question explicitly asks to compare, join, or query "all" or multiple specific sources (e.g., "describe all", "show me data from all tables"), decision is MULTI_SOURCE. Return ALL relevant source_ids in the source_ids list.
+5. IF THE QUESTION IS AMBIGUOUS and could apply to multiple sources equally, BUT the user DOES NOT explicitly specify "all" (e.g. asking "what are the sales" when there are both 'sales_q1' and 'sales_q2'), YOU MUST NOT GUESS. The decision must be CLARIFICATION.
 6. Return a confidence score between 0.0 and 1.0.
 
 Return EXACTLY a JSON object with this structure (no markdown, no backticks):
@@ -87,7 +78,8 @@ Return EXACTLY a JSON object with this structure (no markdown, no backticks):
   "decision": "SINGLE_SOURCE" | "MULTI_SOURCE" | "CLARIFICATION" | "UNRELATED" | "META",
   "source_ids": ["id1", "id2"], // Empty if UNRELATED or META. If CLARIFICATION, list the possible candidates here.
   "confidence": 0.95,
-  "reasoning": "Explain why you made this decision briefly."
+  "reasoning": "Explain why you made this decision briefly.",
+  "friendly_message": "If UNRELATED, provide a helpful message to the user explaining why their question cannot be answered or fulfilled, directly addressing their question based on the Available Sources context. For example, if they ask how many datasets there are and there are none, say 'There are no datasets in the collection right now, please upload a dataset.' Be polite, conversational, and direct."
 }}
 """
         
@@ -109,6 +101,7 @@ Return EXACTLY a JSON object with this structure (no markdown, no backticks):
             source_ids = decision_data.get("source_ids", [])
             confidence = decision_data.get("confidence", 0.0)
             reasoning = decision_data.get("reasoning", "")
+            friendly_message = decision_data.get("friendly_message")
             
             selected_sources = []
             candidates = []
@@ -131,7 +124,8 @@ Return EXACTLY a JSON object with this structure (no markdown, no backticks):
                 "sources": selected_sources,
                 "candidates": candidates,
                 "confidence": confidence,
-                "reasoning": reasoning
+                "reasoning": reasoning,
+                "friendly_message": friendly_message
             }
             
         except Exception as e:
@@ -167,7 +161,8 @@ Return EXACTLY a JSON object with this structure (no markdown, no backticks):
                     "sources": [],
                     "candidates": [],
                     "confidence": 0.5,
-                    "reasoning": "Fallback heuristics detected an unrelated question."
+                    "reasoning": "Fallback heuristics detected an unrelated question.",
+                    "friendly_message": "There doesn't appear to be any relevant data for that question. If you haven't uploaded a dataset yet, please upload one to get started." if not sources else "I couldn't find data matching your question in the available sources."
                 }
             
             # Safe fallback if AI parsing fails

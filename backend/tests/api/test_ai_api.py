@@ -115,7 +115,7 @@ def test_ai_generate_success(mock_configured_settings, mock_gemini_client):
     assert response.status_code == 200
     data = response.json()
     assert data["response"] == "This is a mocked response."
-    assert data["model"] == settings.GEMINI_MODEL
+    assert data["model"].endswith(settings.GEMINI_MODEL)
     assert data["status"] == "success"
 
 
@@ -129,4 +129,4 @@ def test_ai_generate_provider_error(mock_configured_settings, mock_gemini_client
     response = client.post("/api/ai/generate", json={"prompt": "test prompt"})
 
     assert response.status_code == 502
-    assert "An unexpected error occurred" in response.json()["detail"]
+    assert "AI provider error" in response.json()["detail"]

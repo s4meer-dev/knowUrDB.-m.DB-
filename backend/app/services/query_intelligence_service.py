@@ -119,6 +119,7 @@ IMPORTANT RULES:
 - Do NOT wrap the SQL in markdown formatting or backticks (no ```sql ... ```).
 - Do NOT include any explanations or conversational text.
 - Only generate SELECT statements. No data mutation is allowed.
+- IMPORTANT: When joining tables, you MUST alias all returned columns to be completely unambiguous (e.g. SELECT u.id AS user_id, o.id AS order_id) so the frontend does not receive duplicate column names.
 """
         try:
             response = self.ai_service.generate(prompt)
@@ -133,42 +134,85 @@ IMPORTANT RULES:
         except Exception:  # noqa: BLE001
             return None
 
-    def generate_explanation(self, sql: str, question: str) -> str | None:
+    def generate_analysis(self, sql: str, question: str, rows: list[dict], columns: list[str]) -> dict:
         """
-        Generates a plain-English explanation for the given SQL query.
-        Returns None if generation fails, so as not to break the main query flow.
+        Generates a succinct answer and a plain-English explanation for the given SQL query result.
+        Returns dict with 'answer' and 'insights'.
         """
         if not sql:
-            return None
+            return {"answer": None, "insights": []}
 
-        # 1. Try AI explanation
+        # 1. Deterministic extraction for single-value answers
+        val_str = None
+        if len(rows) == 1 and len(columns) == 1:
+            val = rows[0][columns[0]]
+            if isinstance(val, (int, float)):
+                val_str = f"{val:,}"
+            else:
+                val_str = str(val)
+        elif len(rows) == 0:
+            val_str = "0"
+
+        # 2. Try AI explanation
         ai_status = self.ai_service.get_status()
         if ai_status.get("configured") and ai_status.get("status") == "ready":
-            prompt = f"""Explain this SQL query in a short, simple sentence for a non-technical user.
-Do not use technical terms like 'JOIN', 'GROUP BY', or 'ORDER BY'.
-Just explain what the query is finding based on their question.
+            data_snippet = ""
+            if len(rows) > 0:
+                snippet = str(rows[:5])
+                data_snippet = f"First few rows of result:\n{snippet}\nTotal rows: {len(rows)}"
+            else:
+                data_snippet = "Result is empty (0 rows)."
+
+            prompt = f"""Analyze this SQL query and its exact returned result data to answer the user's question.
 
 Question: "{question}"
 SQL: {sql}
+{data_snippet}
 
-Explanation:"""
+Return EXACTLY a JSON object with this exact structure:
+{{
+  "answer": {{
+    "headline": "A short, all-caps title (e.g. 'TOTAL STUDENTS', 'TOP DEPARTMENT', 'AVERAGE REVENUE', 'ANALYSIS COMPLETE')",
+    "value": "The primary exact value (e.g. '540', 'Computer Science'). Do NOT invent numbers. Use the exact rows data.",
+    "unit": "The unit or suffix (e.g. 'registered users', 'orders'). Keep it short.",
+    "summary": "A 1-2 sentence plain-English explanation of the finding, citing the exact numbers if relevant."
+  }},
+  "insights": [
+    "One or two key insights derived STRICTLY from the data provided. Do not hallucinate."
+  ]
+}}
+
+JSON:"""
             try:
+                import json
                 response = self.ai_service.generate(prompt)
-                return response["response"].strip()
-            except Exception:  # noqa: BLE001, S110
-                # Ignore AI errors and fall back
+                resp_text = response["response"].strip()
+                if resp_text.startswith("```json"):
+                    resp_text = resp_text[7:]
+                elif resp_text.startswith("```"):
+                    resp_text = resp_text[3:]
+                resp_text = resp_text.removesuffix("```").strip()
+                
+                parsed = json.loads(resp_text)
+                return parsed
+            except Exception:  # noqa: BLE001
                 pass
 
-        # 2. Deterministic fallback
-        return self._generate_deterministic_explanation(sql)
+        # 3. Deterministic fallback
+        summary = self._generate_deterministic_explanation(sql)
+        ans = {
+            "headline": "QUERY RESULT",
+            "value": val_str if val_str else f"{len(rows)}",
+            "unit": "records" if not val_str else "",
+            "summary": summary
+        }
+        return {"answer": ans, "insights": []}
 
     def _generate_deterministic_explanation(self, sql: str) -> str | None:
         """Simple deterministic explanation for common SQL patterns."""
         sql_upper = sql.upper()
         if "COUNT(" in sql_upper and "GROUP BY" not in sql_upper:
-            return (
-                "This query counts the total number of records matching your criteria."
-            )
+            return "This query counts the total number of records matching your criteria."
         if "SELECT * " in sql_upper and "WHERE" not in sql_upper:
             return "This query retrieves all the available records."
         if "ORDER BY" in sql_upper and "DESC" in sql_upper and "LIMIT" in sql_upper:

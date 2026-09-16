@@ -73,8 +73,11 @@ Return EXACTLY a JSON object with this structure (no markdown, no backticks):
             "rows": rows,
             "row_count": len(rows),
             "execution_time_ms": 0.0,
-            "explanation": "Here is the list of all available tables in the database.",
-            "generated_sql": "",
+            "headline": "DATABASE STRUCTURE",
+            "value": str(len(rows)),
+            "unit": "tables",
+            "summary": "Here is the list of all available tables in the database.",
+            "generated_sql": "Metadata operation — no user query SQL executed",
         }
 
     def _handle_schema_summary(self) -> dict[str, Any]:
@@ -102,8 +105,11 @@ Return EXACTLY a JSON object with this structure (no markdown, no backticks):
             "rows": rows,
             "row_count": len(rows),
             "execution_time_ms": 0.0,
-            "explanation": "This is a summary of the database structure, including tables, columns, and relationships.",
-            "generated_sql": "",
+            "headline": "SCHEMA OVERVIEW",
+            "value": str(len(rows)),
+            "unit": "tables",
+            "summary": "This is a summary of the database structure, including tables, columns, and relationships.",
+            "generated_sql": "Metadata operation — no user query SQL executed",
         }
 
     def _handle_global_record_count(self) -> dict[str, Any]:
@@ -124,11 +130,15 @@ Return EXACTLY a JSON object with this structure (no markdown, no backticks):
             except Exception:  # noqa: BLE001
                 rows.append({"table_name": table, "record_count": 0})
 
+        total_records = sum(r["record_count"] for r in rows)
         return {
             "columns": columns,
             "rows": rows,
             "row_count": len(rows),
             "execution_time_ms": round(total_time, 2),
-            "explanation": "Here is the total number of records stored in each table across the database.",
-            "generated_sql": "",
+            "headline": "DATABASE OVERVIEW",
+            "value": f"{total_records:,}",
+            "unit": "total rows",
+            "summary": "Here is the total number of records stored in each table across the database.",
+            "generated_sql": "Metadata operation — no user query SQL executed",
         }

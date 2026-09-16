@@ -107,7 +107,6 @@ export const CinematicIntro: React.FC<CinematicIntroProps> = ({ onReveal, onComp
     if (!ctx) return;
 
     const TOTAL_DURATION = 3100; // ms — ~3.1 seconds
-    const REDUCED_DURATION = 1200; // ms for reduced motion
 
     // Mutable refs for RAF
     let rAF = 0;

@@ -44,7 +44,7 @@ def test_query_history_workflow(client):
             "app.api.query.query_router.route_query",
             return_value={
                 "decision": "SINGLE_SOURCE",
-                "sources": [{"source_id": "demo-source-id", "type": "sqlite3"}],
+                "sources": [{"source_ids": ["demo-source-id"], "type": "sqlite3"}],
                 "candidates": [],
                 "confidence": 1.0
             }

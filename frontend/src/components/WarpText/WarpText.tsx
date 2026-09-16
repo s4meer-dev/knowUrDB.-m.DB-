@@ -507,7 +507,7 @@ const WarpText = ({
       rasterize();
     };
 
-    const onPointerMove = (event: PointerEvent): void => {
+    const onPointerMove = (event: any): void => {
       if (event.pointerType === 'touch') return;
       const rect = canvas.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;

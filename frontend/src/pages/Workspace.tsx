@@ -133,7 +133,7 @@ export const Workspace: React.FC = () => {
         </div>
       )}
 
-      <div className={`transition-all duration-500 ease-in-out max-w-3xl mx-auto w-full ${result || loading ? 'mb-6' : 'mb-10 transform translate-y-4'}`}>
+      <div className={`relative z-20 transition-all duration-500 ease-in-out max-w-3xl mx-auto w-full ${result || loading ? 'mb-6' : 'mb-10 transform translate-y-4'}`}>
         <QueryInput 
           value={question} 
           onChange={setQuestion} 
@@ -153,7 +153,7 @@ export const Workspace: React.FC = () => {
             <QueryResult 
               result={result} 
               isLoading={loading} 
-              onFollowUp={(q) => handleQuery(q)} 
+              onFollowUp={(q, sourceIds) => handleQuery(q, sourceIds)} 
             />
           </div>
         )}

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.core.database import DatabaseManager
-from app.models.query import NaturalLanguageQueryRequest, NaturalLanguageQueryResponse
+from app.models.query import NaturalLanguageQueryRequest, NaturalLanguageQueryResponse, AnswerModel
 from app.services.ai_service import AIService
 from app.services.history_service import HistoryService
 from app.services.meta_query_router import MetaQueryRouter
@@ -40,9 +40,9 @@ async def query_database(request: NaturalLanguageQueryRequest):
     routing_decision = query_router.route_query(request.question, request.source_ids)
     
     if routing_decision["decision"] == "UNRELATED":
-        error_msg = "I couldn't find relevant data for your question. Please ask something related to the available sources."
+        error_msg = routing_decision.get("friendly_message") or "I couldn't find relevant data for your question. Please ask something related to the available sources."
         return NaturalLanguageQueryResponse(
-            question=request.question, status="error", error=error_msg, confidence=routing_decision["confidence"]
+            question=request.question, status="error", error=error_msg, error_code="UNRELATED_QUERY", confidence=routing_decision["confidence"]
         )
 
     if routing_decision["decision"] == "META":
@@ -53,7 +53,12 @@ async def query_database(request: NaturalLanguageQueryRequest):
         return NaturalLanguageQueryResponse(
             question=request.question,
             status="success",
-            explanation=f"You have {len(sources)} available sources: {', '.join(names)}",
+            answer=AnswerModel(
+                headline="AVAILABLE SOURCES",
+                value=str(len(sources)),
+                unit="sources",
+                summary=f"You have {len(sources)} available sources: {', '.join(names)}"
+            ),
             query_source="meta",
             confidence=routing_decision["confidence"]
         )
@@ -68,13 +73,73 @@ async def query_database(request: NaturalLanguageQueryRequest):
         )
 
     # 2. Execution for SINGLE_SOURCE or MULTI_SOURCE
-    # For now, we take the first source if multiple (we can implement advanced cross-source later)
+    if routing_decision["decision"] == "MULTI_SOURCE":
+        # Handle cross-source purely as an AI explanation/summary for now, as we don't support cross-db SQL joins.
+        sources_info = []
+        citations = []
+        for src in routing_decision["sources"]:
+            meta = source_manager.get_source(src["source_id"])
+            if meta:
+                citations.append({
+                    "source_id": meta.source_id,
+                    "name": meta.name,
+                    "type": meta.file_type
+                })
+                schema_str = "No schema available"
+                if meta.detected_format in ["sqlite", "database"]:
+                    try:
+                        db_path = source_manager.get_internal_db_path(meta.source_id)
+                        DatabaseManager.set_active_database(db_path)
+                        schema_str = schema_service.get_schema_summary().summary
+                    except Exception:
+                        pass
+                sources_info.append(f"--- Source: {meta.name} ---\nType: {meta.detected_format}\nSchema:\n{schema_str}")
+                
+        prompt = f"""Answer the user's question by summarizing or describing the provided sources. Do not write SQL. Just explain in natural language.
+Return EXACTLY a JSON object with two keys:
+"answer": A very short, direct answer (e.g. "3 Databases Found", or "Multiple E-commerce Sources").
+"explanation": A detailed breakdown of the schemas or insights.
+
+User Question: {request.question}
+
+Sources:
+""" + "\n\n".join(sources_info)
+        
+        try:
+            import json
+            response_text = ai_provider.generate_text(prompt)
+            if response_text.startswith("```json"):
+                response_text = response_text[7:]
+            elif response_text.startswith("```"):
+                response_text = response_text[3:]
+            response_text = response_text.removesuffix("```").strip()
+            parsed = json.loads(response_text)
+            ans = parsed.get("answer", "Multiple Sources")
+            exp = parsed.get("explanation", response_text)
+        except Exception:
+            ans = "Multiple Sources"
+            exp = "I found multiple sources, but encountered an error while trying to summarize them."
+            
+        return NaturalLanguageQueryResponse(
+            question=request.question,
+            status="success",
+            answer=AnswerModel(
+                headline="MULTI-SOURCE ANALYSIS",
+                value=ans,
+                unit="",
+                summary=exp
+            ),
+            query_source="meta",
+            sources=citations,
+            confidence=routing_decision["confidence"]
+        )
+
     target_source = routing_decision["sources"][0]
     source_metadata = source_manager.get_source(target_source["source_id"])
     
     if not source_metadata:
         return NaturalLanguageQueryResponse(
-            question=request.question, status="error", error="Selected source not found."
+            question=request.question, status="error", error="Selected source not found.", error_code="SOURCE_NOT_FOUND"
         )
 
     citations = [{
@@ -89,7 +154,12 @@ async def query_database(request: NaturalLanguageQueryRequest):
         if not results:
              return NaturalLanguageQueryResponse(
                 question=request.question, status="success",
-                explanation="I could not find a specific answer to that question in the document.",
+                answer=AnswerModel(
+                    headline="NO MATCHING DATA",
+                    value="0",
+                    unit="results",
+                    summary="I could not find a specific answer to that question in the document."
+                ),
                 sources=citations
             )
         
@@ -106,7 +176,12 @@ async def query_database(request: NaturalLanguageQueryRequest):
                 
         return NaturalLanguageQueryResponse(
             question=request.question, status="success",
-            explanation=answer,
+            answer=AnswerModel(
+                headline="DOCUMENT ANALYSIS",
+                value="Found",
+                unit="match",
+                summary=answer
+            ),
             query_source="single_source",
             sources=citations,
             confidence=routing_decision["confidence"]
@@ -138,7 +213,12 @@ async def query_database(request: NaturalLanguageQueryRequest):
             execution_time_ms=meta_response["execution_time_ms"],
             status="success",
             query_source="meta",
-            explanation=meta_response["explanation"],
+            answer=AnswerModel(
+                headline=meta_response.get("headline", "DATABASE OVERVIEW"),
+                value=meta_response.get("value", str(meta_response["row_count"])),
+                unit=meta_response.get("unit", "records"),
+                summary=meta_response.get("summary", meta_response.get("explanation", ""))
+            ),
             follow_up_suggestions=[],
             error=None,
             sources=citations,
@@ -157,7 +237,7 @@ async def query_database(request: NaturalLanguageQueryRequest):
             error_message=error_msg,
         )
         return NaturalLanguageQueryResponse(
-            question=request.question, status="error", error=error_msg
+            question=request.question, status="error", error=error_msg, error_code="UNRELATED_QUERY"
         )
 
     sql = None
@@ -184,7 +264,7 @@ async def query_database(request: NaturalLanguageQueryRequest):
                 error_message=error_msg,
             )
             return NaturalLanguageQueryResponse(
-                question=request.question, status="error", error=error_msg
+                question=request.question, status="error", error=error_msg, error_code="UNSAFE_SQL"
             )
         except ValueError:
             error_msg = "I couldn't find data related to that concept in the available database."
@@ -196,7 +276,7 @@ async def query_database(request: NaturalLanguageQueryRequest):
                 error_message=error_msg,
             )
             return NaturalLanguageQueryResponse(
-                question=request.question, status="error", error=error_msg
+                question=request.question, status="error", error=error_msg, error_code="UNRELATED_QUERY"
             )
 
     if not sql:
@@ -265,6 +345,7 @@ IMPORTANT RULES:
                     generated_sql=current_sql,
                     status="error",
                     error=error_msg,
+                    error_code="UNSAFE_SQL",
                     query_source="ai",
                 )
             except RuntimeError:
@@ -281,6 +362,7 @@ IMPORTANT RULES:
                     question=request.question,
                     status="error",
                     error=error_msg,
+                    error_code="AI_GENERATION_FAILED",
                     query_source="ai",
                 )
             except Exception as e:  # noqa: BLE001
@@ -301,6 +383,7 @@ IMPORTANT RULES:
                 question=request.question,
                 status="error",
                 error=error_msg,
+                error_code="AI_GENERATION_FAILED",
                 query_source="ai",
             )
 
@@ -309,9 +392,12 @@ IMPORTANT RULES:
         columns, rows, exec_time = query_executor.execute(sql)
         row_count = len(rows)
 
-        explanation = query_intelligence_service.generate_explanation(
-            sql, request.question
+        analysis = query_intelligence_service.generate_analysis(
+            sql, request.question, rows, columns
         )
+        answer = analysis.get("answer")
+        insights = analysis.get("insights", [])
+        
         follow_ups = query_intelligence_service.generate_follow_up_suggestions(
             request.question, sql
         )
@@ -326,6 +412,26 @@ IMPORTANT RULES:
             execution_time_ms=exec_time,
         )
 
+        # Ensure we construct AnswerModel if it's a dict
+        ans_obj = None
+        if answer:
+            if isinstance(answer, dict):
+                ans_obj = AnswerModel(
+                    headline=answer.get("headline"),
+                    value=answer.get("value"),
+                    unit=answer.get("unit"),
+                    summary=answer.get("summary")
+                )
+            else:
+                ans_obj = AnswerModel(
+                    headline="ANALYSIS COMPLETE",
+                    value=str(answer),
+                    unit="",
+                    summary=""
+                )
+
+        insights = analysis.get("insights", [])
+
         return NaturalLanguageQueryResponse(
             question=request.question,
             generated_sql=sql,
@@ -335,7 +441,8 @@ IMPORTANT RULES:
             execution_time_ms=round(exec_time, 2),
             status="success",
             query_source=query_source,
-            explanation=explanation,
+            answer=ans_obj,
+            insights=insights,
             follow_up_suggestions=follow_ups,
             sources=citations,
             confidence=routing_decision["confidence"],
@@ -358,6 +465,7 @@ IMPORTANT RULES:
             generated_sql=sql,
             status="error",
             error=error_msg,
+            error_code="UNSAFE_SQL",
             query_source=query_source,
         )
     except QueryExecutionError as e:
@@ -381,5 +489,6 @@ IMPORTANT RULES:
             generated_sql=sql,
             status="error",
             error=error_msg,
+            error_code="QUERY_EXECUTION_ERROR",
             query_source=query_source,
         )

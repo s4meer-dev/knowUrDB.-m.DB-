@@ -12,7 +12,7 @@ def client():
 
 def test_query_metadata_success(client):
     response = client.post(
-        "/api/query", json={"question": "how many students are there", "source_id": "demo-source-id"}
+        "/api/query", json={"question": "how many students are there", "source_ids": ["demo-source-id"]}
     )
     assert response.status_code == 200
     data = response.json()
@@ -40,7 +40,7 @@ def test_query_zero_rows_success(client, monkeypatch):
 
     # Ask a question that will return 0 rows
     response = client.post(
-        "/api/query", json={"question": "list students named asdfghjklqwerty", "source_id": "demo-source-id"}
+        "/api/query", json={"question": "list students named asdfghjklqwerty", "source_ids": ["demo-source-id"]}
     )
     assert response.status_code == 200
     data = response.json()

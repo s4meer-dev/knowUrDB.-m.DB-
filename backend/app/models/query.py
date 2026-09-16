@@ -23,6 +23,13 @@ class ClarificationCandidate(BaseModel):
     source_id: str
     name: str
 
+class AnswerModel(BaseModel):
+    headline: str | None = Field(None, description="The title of the primary answer (e.g., 'TOTAL STUDENTS')")
+    value: str | None = Field(None, description="The primary value (e.g., '4,000', 'Computer Science')")
+    unit: str | None = Field(None, description="The unit or suffix for the value (e.g., 'registered users')")
+    summary: str | None = Field(None, description="A full-sentence summary of the finding.")
+
+
 class NaturalLanguageQueryResponse(BaseModel):
     question: str = Field(..., description="The original natural language question.")
     generated_sql: str | None = Field(
@@ -42,11 +49,15 @@ class NaturalLanguageQueryResponse(BaseModel):
         ..., description="The status of the query execution (e.g., 'success', 'clarification_required', 'error')."
     )
     error: str | None = Field(None, description="The error message, if any.")
+    error_code: str | None = Field(None, description="The semantic error code (e.g., 'SOURCE_NOT_FOUND', 'UNRELATED_QUERY', 'UNSAFE_SQL').")
     query_source: str | None = Field(
         None, description="The source of the generated query (e.g., 'single_source', 'multi_source')."
     )
-    explanation: str | None = Field(
-        None, description="Plain English explanation of the executed SQL."
+    answer: AnswerModel | None = Field(
+        None, description="The highly structured primary answer to the question."
+    )
+    insights: list[str] = Field(
+        default_factory=list, description="List of key insights from the data."
     )
     follow_up_suggestions: list[str] = Field(
         default_factory=list, description="Follow-up question suggestions."

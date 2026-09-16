@@ -4,6 +4,13 @@ export interface HealthResponse {
   version: string;
 }
 
+export interface Answer {
+  headline?: string;
+  value?: string;
+  unit?: string;
+  summary?: string;
+}
+
 export interface AiStatusResponse {
   configured: boolean;
   status: string;
@@ -37,8 +44,10 @@ export interface QueryResponse {
   execution_time_ms: number;
   status: 'success' | 'clarification_required' | 'error';
   error?: string;
+  error_code?: string;
   query_source?: string;
-  explanation?: string;
+  answer?: Answer;
+  insights?: string[];
   follow_up_suggestions?: string[];
   sources?: QuerySourceCitation[];
   candidates?: ClarificationCandidate[];
