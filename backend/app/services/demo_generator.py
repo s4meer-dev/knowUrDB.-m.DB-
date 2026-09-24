@@ -2,66 +2,77 @@ import datetime
 import random
 from typing import Any
 
-import pymongo
-
 from app.core.mongodb import MongoDBManager
 from app.models.source import SourceMetadata, SourceStatus
 
 
 class DemoGenerator:
     """
-    Generates rich, MongoDB-native multi-collection datasets with nested documents,
-    embedded arrays, cross-collection references, and intelligent indexes.
+    Generates rich, MongoDB-native datasets inside the single `knowurdb` database.
+    Consolidates all 5 demo tables (`products`, `customers`, `orders`, `employees`, `students`)
+    into ONE single MongoDB collection (`demo_database`) under `knowurdb` so MongoDB Compass
+    shows a single `demo_database` item inside `knowurdb` with 5 expandable table documents!
     """
 
     def seed_initial_demo_if_empty(self) -> SourceMetadata:
-        sys_db = MongoDBManager.get_db()
-        existing = sys_db[MongoDBManager.SYS_SOURCES].find_one({"source_id": "demo-source-id"})
+        db = MongoDBManager.get_db()
+        existing = db[MongoDBManager.SYS_SOURCES].find_one({"source_id": "demo-source-id"})
         if existing:
             return SourceMetadata(**{k: v for k, v in existing.items() if k != "_id"})
         return self.generate_And_register_demo(
-            source_id="demo-source-id", name="knowUrDB Demo Folder (knowurdb_demo)"
+            source_id="demo-source-id",
+            name="Enterprise & Campus Intelligence (demo_database)",
+            container_collection="demo_database",
         )
 
     def generate_demo_database(self) -> tuple[str, str]:
         """
-        Generates/refreshes the unified MongoDB Demo folder (`knowurdb_demo` in MongoDB Compass)
-        so all 5 collections (`products`, `customers`, `orders`, `employees`, `students`)
-        stay neatly organized inside a single `knowurdb_demo` database folder.
+        Generates or refreshes the single `demo_database` folder collection inside `knowurdb`
+        so MongoDB Compass always stays clean under `knowurdb -> demo_database`.
         """
         source_id = "demo-source-id"
-        display_name = "knowUrDB Demo Folder (knowurdb_demo)"
-        self.generate_And_register_demo(source_id=source_id, name=display_name)
+        display_name = "Enterprise & Campus Intelligence (demo_database)"
+        self.generate_And_register_demo(
+            source_id=source_id,
+            name=display_name,
+            container_collection="demo_database",
+        )
         return source_id, display_name
 
     def generate_And_register_demo(
-        self, source_id: str = "demo-source-id", name: str = "knowUrDB Demo Folder (knowurdb_demo)"
+        self,
+        source_id: str = "demo-source-id",
+        name: str = "Enterprise & Campus Intelligence (demo_database)",
+        container_collection: str = "demo_database",
     ) -> SourceMetadata:
-        sys_db = MongoDBManager.get_db()
-        db_name = MongoDBManager.allocate_source_db_name("demo", source_id)
-        db = MongoDBManager.get_client()[db_name]
+        db = MongoDBManager.get_db()
 
         col_customers = "customers"
         col_products = "products"
         col_orders = "orders"
         col_employees = "employees"
         col_students = "students"
-
         collections = [col_customers, col_products, col_orders, col_employees, col_students]
-        for c in collections:
-            db[c].drop()
 
-        # Remove any old duplicate demo-* sources from _sys_sources
-        sys_db[MongoDBManager.SYS_SOURCES].delete_many(
+        # Drop old container collection and any legacy top-level collections
+        db[container_collection].drop()
+        for c in collections:
+            try:
+                db[c].drop()
+            except Exception:
+                pass
+
+        # Clean up any duplicate demo-* entries in _system
+        db[MongoDBManager.SYS_SOURCES].delete_many(
             {"source_id": {"$regex": "^demo-", "$ne": source_id}}
         )
-        sys_db[MongoDBManager.SYS_COLLECTIONS_METADATA].delete_many(
+        db[MongoDBManager.SYS_COLLECTIONS_METADATA].delete_many(
             {"source_id": {"$regex": "^demo-"}}
         )
 
         rng = random.Random(42)
 
-        # 1. Products Collection (with tags array & category)
+        # 1. Products
         product_names = [
             ("Quantum NVMe SSD 2TB", "Electronics", 18500.0),
             ("Neural GPU Workstation", "AI Hardware", 145000.0),
@@ -94,12 +105,8 @@ class DemoGenerator:
                     "tags": [cat.lower().replace(" ", "-"), "premium", "verified"],
                 }
             )
-        db[col_products].insert_many(products_docs)
-        db[col_products].create_index("product_id", unique=True)
-        db[col_products].create_index("category")
-        db[col_products].create_index([("revenue", pymongo.DESCENDING)])
 
-        # 2. Customers Collection (with nested contact & address objects)
+        # 2. Customers (with nested contact & address objects)
         cities = [
             ("Bengaluru", "Karnataka"),
             ("Mumbai", "Maharashtra"),
@@ -108,8 +115,14 @@ class DemoGenerator:
             ("Pune", "Maharashtra"),
             ("Chennai", "Tamil Nadu"),
         ]
-        first_names = ["Aarav", "Vivaan", "Aditya", "Diya", "Ananya", "Rohan", "Sneha", "Kabir", "Meera", "Vikram", "Priya", "Karan"]
-        last_names = ["Sharma", "Patel", "Verma", "Iyer", "Reddy", "Nair", "Kapoor", "Malhotra", "Joshi", "Gupta"]
+        first_names = [
+            "Aarav", "Vivaan", "Aditya", "Diya", "Ananya", "Rohan",
+            "Sneha", "Kabir", "Meera", "Vikram", "Priya", "Karan",
+        ]
+        last_names = [
+            "Sharma", "Patel", "Verma", "Iyer", "Reddy",
+            "Nair", "Kapoor", "Malhotra", "Joshi", "Gupta",
+        ]
         tiers = ["Enterprise", "Gold", "Silver", "Platinum"]
 
         customers_docs: list[dict[str, Any]] = []
@@ -140,12 +153,8 @@ class DemoGenerator:
                     "joined_at": f"2025-0{rng.randint(1, 9)}-{rng.randint(10, 28)}",
                 }
             )
-        db[col_customers].insert_many(customers_docs)
-        db[col_customers].create_index("customer_id", unique=True)
-        db[col_customers].create_index([("total_spent", pymongo.DESCENDING)])
-        db[col_customers].create_index("address.city")
 
-        # 3. Orders Collection (with embedded items[] array and monthly dates)
+        # 3. Orders (with embedded items[] array)
         months = ["January", "February", "March", "April", "May", "June"]
         statuses = ["completed", "completed", "completed", "processing", "shipped"]
         orders_docs: list[dict[str, Any]] = []
@@ -184,15 +193,13 @@ class DemoGenerator:
                     "created_at": f"2025-0{month_idx}-{rng.randint(10, 28)}",
                 }
             )
-        db[col_orders].insert_many(orders_docs)
-        db[col_orders].create_index("order_id", unique=True)
-        db[col_orders].create_index("customer_id")
-        db[col_orders].create_index("month")
-        db[col_orders].create_index("status")
 
-        # 4. Employees Collection
+        # 4. Employees
         departments = ["Engineering", "AI Research", "Product", "Sales", "Cloud Operations", "Finance"]
-        roles = ["Senior Engineer", "Staff Architect", "Principal Scientist", "Account Executive", "Product Manager", "Data Analyst"]
+        roles = [
+            "Senior Engineer", "Staff Architect", "Principal Scientist",
+            "Account Executive", "Product Manager", "Data Analyst",
+        ]
         employees_docs: list[dict[str, Any]] = []
         for idx in range(1, 61):
             eid = f"EMP-{idx:03d}"
@@ -219,13 +226,12 @@ class DemoGenerator:
                     "hired_at": f"202{rng.randint(1, 5)}-0{rng.randint(1, 9)}-15",
                 }
             )
-        db[col_employees].insert_many(employees_docs)
-        db[col_employees].create_index("employee_id", unique=True)
-        db[col_employees].create_index("department")
-        db[col_employees].create_index([("salary", pymongo.DESCENDING)])
 
-        # 5. Students Collection (Academic intelligence dataset)
-        majors = ["Computer Science", "Data Science", "Electrical Engineering", "Mechanical Engineering", "Mathematics", "Physics"]
+        # 5. Students
+        majors = [
+            "Computer Science", "Data Science", "Electrical Engineering",
+            "Mechanical Engineering", "Mathematics", "Physics",
+        ]
         students_docs: list[dict[str, Any]] = []
         for idx in range(1, 101):
             sid = f"STU-{idx:04d}"
@@ -248,40 +254,52 @@ class DemoGenerator:
                     "status": "active" if gpa >= 2.5 else "probation",
                 }
             )
-        db[col_students].insert_many(students_docs)
-        db[col_students].create_index("student_id", unique=True)
-        db[col_students].create_index("department")
-        db[col_students].create_index([("gpa", pymongo.DESCENDING)])
 
-        total_docs = (
-            len(products_docs)
-            + len(customers_docs)
-            + len(orders_docs)
-            + len(employees_docs)
-            + len(students_docs)
-        )
+        # Store all 5 datasets inside ONE single collection (`demo_database`) under `knowurdb`!
+        grouped_map = {
+            col_products: products_docs,
+            col_customers: customers_docs,
+            col_orders: orders_docs,
+            col_employees: employees_docs,
+            col_students: students_docs,
+        }
+        folder_documents = [
+            {
+                "_id": table_key,
+                "folder_name": container_collection,
+                "table_name": table_key,
+                "document_count": len(records_list),
+                "records": records_list,
+            }
+            for table_key, records_list in grouped_map.items()
+        ]
+        db[container_collection].insert_many(folder_documents)
+        db[container_collection].create_index("table_name")
 
-        # Register collection metadata in _sys_collections_metadata
-        for col_name in collections:
-            sys_db[MongoDBManager.SYS_COLLECTIONS_METADATA].update_one(
+        total_docs = sum(len(v) for v in grouped_map.values())
+        now_iso = datetime.datetime.now(datetime.UTC).isoformat()
+
+        for col_name, records_list in grouped_map.items():
+            db[MongoDBManager.SYS_COLLECTIONS_METADATA].update_one(
                 {"source_id": source_id, "collection_name": col_name},
                 {
                     "$set": {
                         "source_id": source_id,
-                        "database_name": db_name,
+                        "database_name": f"knowurdb/{container_collection}",
+                        "container_collection": container_collection,
+                        "is_grouped": True,
                         "collection_name": col_name,
-                        "document_count": db[col_name].count_documents({}),
-                        "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
+                        "document_count": len(records_list),
+                        "created_at": now_iso,
                     }
                 },
                 upsert=True,
             )
 
-        now_iso = datetime.datetime.now(datetime.UTC).isoformat()
         source_doc = {
             "source_id": source_id,
             "name": name,
-            "original_filename": "knowurdb_demo.mongodb",
+            "original_filename": f"{container_collection}.mongodb",
             "file_type": ".mongodb",
             "mime_type": "application/x-mongodb",
             "detected_format": "mongodb",
@@ -289,19 +307,19 @@ class DemoGenerator:
             "size_bytes": total_docs * 380,
             "uploaded_at": now_iso,
             "status": SourceStatus.READY.value,
-            "database_name": db_name,
+            "database_name": f"knowurdb / {container_collection}",
             "collections": collections,
             "table_count": len(collections),
             "record_count": total_docs,
-            "index_count": 16,
+            "index_count": 5,
             "schema_summary": (
-                f"MongoDB Folder '{db_name}' -> Collections: {', '.join(collections)} ({total_docs} total documents)"
+                f"MongoDB Folder 'knowurdb.{container_collection}' -> Tables: {', '.join(collections)} ({total_docs} total documents)"
             ),
-            "storage_location": f"mongodb://localhost:27017/{db_name}",
+            "storage_location": f"mongodb://localhost:27017/knowurdb/{container_collection}",
             "is_demo": True,
         }
 
-        sys_db[MongoDBManager.SYS_SOURCES].update_one(
+        db[MongoDBManager.SYS_SOURCES].update_one(
             {"source_id": source_id},
             {"$set": source_doc},
             upsert=True,

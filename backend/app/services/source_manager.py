@@ -158,25 +158,26 @@ class SourceManager:
         if not src:
             return
 
-        # Drop the dedicated MongoDB Database folder for this source
-        db_name = src.get("database_name")
-        if db_name:
-            MongoDBManager.drop_source_db(source_id, db_name)
-        else:
-            source_db = MongoDBManager.get_source_db(source_id)
-            for col_name in src.get("collections", []):
-                if col_name not in MongoDBManager.SYSTEM_COLLECTIONS:
-                    try:
-                        source_db[col_name].drop()
-                    except Exception:
-                        pass
+        metas = list(db[MongoDBManager.SYS_COLLECTIONS_METADATA].find({"source_id": source_id}))
+        for m in metas:
+            ccol = m.get("container_collection")
+            if ccol and ccol not in MongoDBManager.SYSTEM_COLLECTIONS:
+                try:
+                    db[ccol].drop()
+                except Exception:
+                    pass
 
-        # Remove metadata & RAG chunks from knowurdb_system
+        for col_name in src.get("collections", []):
+            if col_name not in MongoDBManager.SYSTEM_COLLECTIONS:
+                try:
+                    db[col_name].drop()
+                except Exception:
+                    pass
+
         db[MongoDBManager.SYS_COLLECTIONS_METADATA].delete_many({"source_id": source_id})
         db[MongoDBManager.SYS_DOCUMENT_CHUNKS].delete_many({"source_id": source_id})
         db[MongoDBManager.SYS_SOURCES].delete_one({"source_id": source_id})
 
-        # Clean up any local document directory if present
         local_dir = self.storage_dir / source_id
         if local_dir.exists() and local_dir.is_dir():
             shutil.rmtree(local_dir, ignore_errors=True)

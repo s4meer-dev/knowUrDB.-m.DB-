@@ -121,25 +121,38 @@ class MongoSchemaService:
 
         # First pass: collect fields and primary keys for each collection
         for coll_name in collection_names:
-            coll = db[coll_name]
-            doc_count = coll.count_documents({})
-            samples = list(coll.find({}).limit(25))
+            container_col, is_grouped = MongoDBManager.resolve_container_for_table(
+                coll_name, active_source_id
+            )
+            coll = db[container_col]
 
-            # Inspect indexes
-            indexes_info = []
-            pk_fields = {"_id"}
-            try:
-                raw_indexes = coll.index_information()
-                for idx_name, idx_spec in raw_indexes.items():
-                    keys = [k[0] for k in idx_spec.get("key", [])]
-                    unique = bool(idx_spec.get("unique", False)) or idx_name == "_id_"
-                    if unique or any(k.endswith("_id") and k == f"{coll_name.rstrip('s')}_id" for k in keys):
-                        pk_fields.update(keys)
-                    indexes_info.append(
-                        {"name": idx_name, "keys": keys, "unique": unique}
-                    )
-            except Exception:
-                indexes_info = [{"name": "_id_", "keys": ["_id"], "unique": True}]
+            if is_grouped:
+                folder_doc = coll.find_one({"_id": coll_name}) or {}
+                records_list = folder_doc.get("records", [])
+                doc_count = len(records_list)
+                samples = records_list[:25]
+                pk_fields = {"_id"}
+                indexes_info = [
+                    {"name": "_id_", "keys": ["_id"], "unique": True},
+                    {"name": f"{coll_name}_idx", "keys": [f"{coll_name.rstrip('s')}_id"], "unique": True},
+                ]
+            else:
+                doc_count = coll.count_documents({})
+                samples = list(coll.find({}).limit(25))
+                indexes_info = []
+                pk_fields = {"_id"}
+                try:
+                    raw_indexes = coll.index_information()
+                    for idx_name, idx_spec in raw_indexes.items():
+                        keys = [k[0] for k in idx_spec.get("key", [])]
+                        unique = bool(idx_spec.get("unique", False)) or idx_name == "_id_"
+                        if unique or any(k.endswith("_id") and k == f"{coll_name.rstrip('s')}_id" for k in keys):
+                            pk_fields.update(keys)
+                        indexes_info.append(
+                            {"name": idx_name, "keys": keys, "unique": unique}
+                        )
+                except Exception:
+                    indexes_info = [{"name": "_id_", "keys": ["_id"], "unique": True}]
 
             # Also recognize explicit entity IDs (e.g., customer_id on customers)
             singular = coll_name.lower().rstrip("s")
@@ -234,7 +247,14 @@ class MongoSchemaService:
         if not matched_col:
             raise ValueError(f"Collection '{table_name}' not found.")
 
-        docs = list(db[matched_col].find({}).limit(min(limit, 200)))
+        container_col, is_grouped = MongoDBManager.resolve_container_for_table(
+            matched_col, active_source_id
+        )
+        if is_grouped:
+            folder_doc = db[container_col].find_one({"_id": matched_col}) or {}
+            docs = folder_doc.get("records", [])[: min(limit, 200)]
+        else:
+            docs = list(db[container_col].find({}).limit(min(limit, 200)))
         if not docs:
             return [], []
 

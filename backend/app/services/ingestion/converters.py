@@ -142,68 +142,104 @@ class FormatConverter:
     def convert_to_mongodb(
         file_path: str, format_type: str, source_id: str, original_filename: str
     ) -> dict[str, Any]:
-        sys_db = MongoDBManager.get_db()
+        db = MongoDBManager.get_db()
         base_stem = os.path.splitext(original_filename)[0]
-        db_name = MongoDBManager.allocate_source_db_name(base_stem, source_id)
-        db = MongoDBManager.get_client()[db_name]
+        folder_col = MongoDBManager.allocate_collection_folder_name(base_stem, is_demo=False)
         collections_created: list[str] = []
         total_records = 0
         total_indexes = 0
+        extracted_tables: list[tuple[str, list[dict[str, Any]]]] = []
 
-        def _ingest_dataframe(df: pd.DataFrame, table_name: str) -> None:
-            nonlocal total_records, total_indexes
+        def _collect_dataframe(df: pd.DataFrame, table_name: str) -> None:
             if df.empty and len(df.columns) == 0:
                 raise ConversionError(f"Dataset '{table_name}' contains no columns or valid structure.")
 
-            # Clean column names
             df.columns = [
                 _sanitize_field_name(str(c)) if str(c).strip() else f"col_{i}"
                 for i, c in enumerate(df.columns)
             ]
-
-            col_name = _sanitize_collection_name(table_name, "")
-            coll = db[col_name]
-            coll.drop()
-
+            clean_tname = _sanitize_collection_name(table_name, "")
             raw_records = df.to_dict(orient="records")
             mongo_docs = [_structure_mongo_document(r) for r in raw_records if any(pd.notna(v) for v in r.values())]
+            extracted_tables.append((clean_tname, mongo_docs))
 
-            if mongo_docs:
-                # Batch insert in chunks of 2000 for memory & wire efficiency
-                batch_size = 2000
-                for i in range(0, len(mongo_docs), batch_size):
-                    coll.insert_many(mongo_docs[i : i + batch_size])
+        def _finalize_storage() -> None:
+            nonlocal total_records, total_indexes
+            coll = db[folder_col]
+            coll.drop()
+            now_iso = datetime.datetime.now(datetime.UTC).isoformat()
 
-            idx_count = _create_intelligent_indexes(coll, mongo_docs[:20])
-            doc_count = len(mongo_docs)
-            total_records += doc_count
-            total_indexes += idx_count
-            collections_created.append(col_name)
+            if len(extracted_tables) == 1:
+                _, mongo_docs = extracted_tables[0]
+                if mongo_docs:
+                    for i in range(0, len(mongo_docs), 2000):
+                        coll.insert_many(mongo_docs[i : i + 2000])
+                idx_count = _create_intelligent_indexes(coll, mongo_docs[:20])
+                doc_count = len(mongo_docs)
+                total_records += doc_count
+                total_indexes += idx_count
+                collections_created.append(folder_col)
 
-            sys_db[MongoDBManager.SYS_COLLECTIONS_METADATA].update_one(
-                {"source_id": source_id, "collection_name": col_name},
-                {
-                    "$set": {
-                        "source_id": source_id,
-                        "database_name": db_name,
-                        "collection_name": col_name,
-                        "original_name": table_name,
-                        "document_count": doc_count,
-                        "index_count": idx_count,
-                        "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
-                    }
-                },
-                upsert=True,
-            )
+                db[MongoDBManager.SYS_COLLECTIONS_METADATA].update_one(
+                    {"source_id": source_id, "collection_name": folder_col},
+                    {
+                        "$set": {
+                            "source_id": source_id,
+                            "database_name": f"knowurdb / {folder_col}",
+                            "container_collection": folder_col,
+                            "is_grouped": False,
+                            "collection_name": folder_col,
+                            "original_name": base_stem,
+                            "document_count": doc_count,
+                            "index_count": idx_count,
+                            "created_at": now_iso,
+                        }
+                    },
+                    upsert=True,
+                )
+            elif len(extracted_tables) > 1:
+                folder_docs = []
+                for clean_tname, mongo_docs in extracted_tables:
+                    doc_count = len(mongo_docs)
+                    total_records += doc_count
+                    total_indexes += 1
+                    collections_created.append(clean_tname)
+                    folder_docs.append(
+                        {
+                            "_id": clean_tname,
+                            "folder_name": folder_col,
+                            "table_name": clean_tname,
+                            "document_count": doc_count,
+                            "records": mongo_docs,
+                        }
+                    )
+                    db[MongoDBManager.SYS_COLLECTIONS_METADATA].update_one(
+                        {"source_id": source_id, "collection_name": clean_tname},
+                        {
+                            "$set": {
+                                "source_id": source_id,
+                                "database_name": f"knowurdb / {folder_col}",
+                                "container_collection": folder_col,
+                                "is_grouped": True,
+                                "collection_name": clean_tname,
+                                "original_name": clean_tname,
+                                "document_count": doc_count,
+                                "index_count": 1,
+                                "created_at": now_iso,
+                            }
+                        },
+                        upsert=True,
+                    )
+                coll.insert_many(folder_docs)
 
         try:
             if format_type == FileFormat.CSV:
                 df = pd.read_csv(file_path)
-                _ingest_dataframe(df, base_stem)
+                _collect_dataframe(df, base_stem)
 
             elif format_type == FileFormat.TSV:
                 df = pd.read_csv(file_path, sep="\t")
-                _ingest_dataframe(df, base_stem)
+                _collect_dataframe(df, base_stem)
 
             elif format_type == FileFormat.EXCEL:
                 import io
@@ -225,33 +261,32 @@ class FormatConverter:
                     wb.close()
                 for sheet_name, df in sheets.items():
                     tname = f"{base_stem}_{sheet_name}" if len(sheets) > 1 else base_stem
-                    _ingest_dataframe(df, tname)
+                    _collect_dataframe(df, tname)
 
             elif format_type == FileFormat.PARQUET:
                 df = pd.read_parquet(file_path)
-                _ingest_dataframe(df, base_stem)
+                _collect_dataframe(df, base_stem)
 
             elif format_type == FileFormat.JSON:
                 with open(file_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 if isinstance(data, dict):
-                    # Check if dict of collection_name -> list of docs
                     if all(isinstance(v, list) for v in data.values()) and len(data) > 0:
                         for key_name, items in data.items():
                             df = pd.DataFrame(items)
-                            _ingest_dataframe(df, key_name)
+                            _collect_dataframe(df, key_name)
                     else:
                         df = pd.DataFrame([data])
-                        _ingest_dataframe(df, base_stem)
+                        _collect_dataframe(df, base_stem)
                 elif isinstance(data, list):
                     df = pd.DataFrame(data)
-                    _ingest_dataframe(df, base_stem)
+                    _collect_dataframe(df, base_stem)
                 else:
                     raise ConversionError("JSON root must be an object or array of objects.")
 
             elif format_type == FileFormat.JSONL:
                 df = pd.read_json(file_path, lines=True)
-                _ingest_dataframe(df, base_stem)
+                _collect_dataframe(df, base_stem)
 
             elif format_type in (
                 FileFormat.SQLITE,
@@ -259,23 +294,25 @@ class FormatConverter:
                 FileFormat.MYSQL_DUMP,
                 FileFormat.POSTGRES_DUMP,
             ):
-                # Isolated migration importer for legacy SQL/SQLite files into MongoDB collections
                 from app.services.ingestion.sql_migration_importer import (
                     import_sql_source_to_mongodb,
                 )
 
                 migrated = import_sql_source_to_mongodb(file_path, format_type, base_stem)
                 for table_name, df in migrated.items():
-                    _ingest_dataframe(df, table_name)
+                    _collect_dataframe(df, table_name)
 
             else:
                 raise ConversionError(f"Unsupported format for MongoDB ingestion: {format_type}")
+
+            _finalize_storage()
 
             if not collections_created:
                 raise ConversionError("No collections could be extracted from the uploaded file.")
 
             return {
-                "database_name": db_name,
+                "database_name": f"knowurdb / {folder_col}",
+                "container_collection": folder_col,
                 "collections": collections_created,
                 "table_count": len(collections_created),
                 "record_count": total_records,

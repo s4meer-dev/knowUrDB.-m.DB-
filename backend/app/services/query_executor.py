@@ -33,40 +33,80 @@ class MongoQueryExecutor:
 
         db = MongoDBManager.get_source_db()
         collection_name = structured["collection"]
-        coll = db[collection_name]
+        container_col, is_grouped = MongoDBManager.resolve_container_for_table(collection_name)
+        coll = db[container_col]
         operation = structured["operation"]
         max_limit = structured.get("limit", settings.MAX_QUERY_LIMIT)
+
+        unwrap_prefix = (
+            [
+                {"$match": {"_id": collection_name}},
+                {"$unwind": "$records"},
+                {"$replaceRoot": {"newRoot": "$records"}},
+            ]
+            if is_grouped
+            else []
+        )
 
         try:
             raw_docs: list[dict[str, Any]] = []
 
             if operation == "count":
                 flt = structured.get("filter") or {}
-                cnt = coll.count_documents(flt)
+                if is_grouped:
+                    pipe = list(unwrap_prefix)
+                    if flt:
+                        pipe.append({"$match": flt})
+                    pipe.append({"$count": "count"})
+                    res = list(coll.aggregate(pipe))
+                    cnt = res[0]["count"] if res else 0
+                else:
+                    cnt = coll.count_documents(flt)
                 raw_docs = [{"count": cnt}]
 
             elif operation == "distinct":
                 field = structured.get("distinct_field") or "_id"
                 flt = structured.get("filter") or {}
-                values = coll.distinct(field, flt)
+                if is_grouped:
+                    pipe = list(unwrap_prefix)
+                    if flt:
+                        pipe.append({"$match": flt})
+                    pipe.append({"$group": {"_id": f"${field}"}})
+                    pipe.append({"$limit": max_limit})
+                    values = [r["_id"] for r in coll.aggregate(pipe) if r.get("_id") is not None]
+                else:
+                    values = coll.distinct(field, flt)
                 raw_docs = [{field: _serialize_bson_value(v)} for v in values[:max_limit]]
 
             elif operation == "find":
                 flt = structured.get("filter") or {}
                 proj = structured.get("projection")
-                cursor = coll.find(flt, proj)
                 sort_spec = structured.get("sort")
-                if sort_spec:
-                    if isinstance(sort_spec, dict):
-                        cursor = cursor.sort(list(sort_spec.items()))
-                    elif isinstance(sort_spec, list):
-                        cursor = cursor.sort(sort_spec)
-                cursor = cursor.limit(max_limit)
-                raw_docs = list(cursor)
+                if is_grouped:
+                    pipe = list(unwrap_prefix)
+                    if flt:
+                        pipe.append({"$match": flt})
+                    if sort_spec:
+                        if isinstance(sort_spec, dict) and sort_spec:
+                            pipe.append({"$sort": sort_spec})
+                        elif isinstance(sort_spec, list) and sort_spec:
+                            pipe.append({"$sort": dict(sort_spec)})
+                    if proj and isinstance(proj, dict):
+                        pipe.append({"$project": proj})
+                    pipe.append({"$limit": max_limit})
+                    raw_docs = list(coll.aggregate(pipe))
+                else:
+                    cursor = coll.find(flt, proj)
+                    if sort_spec:
+                        if isinstance(sort_spec, dict):
+                            cursor = cursor.sort(list(sort_spec.items()))
+                        elif isinstance(sort_spec, list):
+                            cursor = cursor.sort(sort_spec)
+                    cursor = cursor.limit(max_limit)
+                    raw_docs = list(cursor)
 
             elif operation == "aggregate":
-                pipeline = list(structured.get("pipeline") or [])
-                # Ensure a safe $limit exists at the end if neither $count nor $limit is present
+                pipeline = list(unwrap_prefix) + list(structured.get("pipeline") or [])
                 has_terminal_limit_or_count = any(
                     "$limit" in stage or "$count" in stage for stage in pipeline if isinstance(stage, dict)
                 )
