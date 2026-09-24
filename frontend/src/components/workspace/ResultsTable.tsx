@@ -9,6 +9,11 @@ interface ResultsTableProps {
 export const ResultsTable: React.FC<ResultsTableProps> = ({ columns, rows, pageSize = 50 }) => {
   const [currentPage, setCurrentPage] = useState(1);
 
+  const currentRows = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return rows.slice(startIndex, startIndex + pageSize);
+  }, [rows, currentPage, pageSize]);
+
   if (columns.length === 0) {
     return (
       <div className="p-8 text-center text-zinc-400 bg-zinc-900/50 rounded-xl border border-zinc-800/80">
@@ -25,11 +30,6 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ columns, rows, pageS
   };
 
   const totalPages = Math.ceil(rows.length / pageSize);
-  
-  const currentRows = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    return rows.slice(startIndex, startIndex + pageSize);
-  }, [rows, currentPage, pageSize]);
 
   return (
     <div className="rounded-xl border border-zinc-800/60 shadow-lg relative bg-zinc-950/40 overflow-hidden flex flex-col">

@@ -2,6 +2,12 @@ export interface HealthResponse {
   status: string;
   service: string;
   version: string;
+  database?: {
+    connected: boolean;
+    engine: string;
+    version?: string;
+    database?: string;
+  };
 }
 
 export interface Answer {
@@ -22,6 +28,7 @@ export interface QuerySourceCitation {
   name: string;
   type: string;
   table?: string;
+  collection?: string;
   page?: number;
 }
 
@@ -37,6 +44,8 @@ export interface QueryRequest {
 
 export interface QueryResponse {
   question: string;
+  generated_mongo_query?: string;
+  structured_query?: Record<string, any>;
   generated_sql?: string;
   columns: string[];
   rows: Record<string, any>[];
@@ -57,11 +66,13 @@ export interface QueryResponse {
 export interface HistoryItem {
   id: string;
   question: string;
+  generated_mongo_query?: string;
   generated_sql?: string;
   status: 'success' | 'error';
   row_count: number;
   execution_time_ms: number;
   error?: string;
+  error_message?: string;
   query_source?: string;
   source_id?: string;
   created_at: string;
@@ -84,7 +95,12 @@ export interface SuggestionsResponse {
 export interface ColumnInfo {
   name: string;
   type: string;
+  data_type?: string;
   primary_key: boolean;
+  nullable?: boolean;
+  is_nested?: boolean;
+  is_array?: boolean;
+  sample_values?: any[];
   foreign_key?: {
     table: string;
     column: string;
@@ -97,15 +113,25 @@ export interface ForeignKeyInfo {
   referenced_column: string;
 }
 
+export interface IndexInfo {
+  name: string;
+  keys: string[];
+  unique: boolean;
+}
+
 export interface TableInfo {
   name: string;
+  document_count?: number;
   columns: ColumnInfo[];
   primary_keys: string[];
   foreign_keys: ForeignKeyInfo[];
+  indexes?: IndexInfo[];
+  sample_document?: Record<string, any> | null;
 }
 
 export interface DatabaseSchema {
   tables: TableInfo[];
+  collections?: TableInfo[];
 }
 
 export interface SchemaSummary {
@@ -123,8 +149,10 @@ export interface SourceMetadata {
   size_bytes: number;
   uploaded_at: string;
   status: 'uploading' | 'analyzing' | 'indexing' | 'ready' | 'failed' | 'deleting' | 'deleted';
+  collections?: string[];
   table_count?: number;
   record_count?: number;
+  index_count?: number;
   schema_summary?: any;
   error_message?: string;
 }

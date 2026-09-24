@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { uploadBatchSources } from '../../services/api';
+import { uploadSource } from '../../services/api';
 import type { SourceMetadata } from '../../types';
 
 interface MultiUploadProps {
@@ -86,40 +86,31 @@ export const MultiUpload: React.FC<MultiUploadProps> = ({ onUploadSuccess }) => 
   const uploadAll = async () => {
     if (isUploading) return;
     
-    // Find all waiting or errored files
     const toUpload = uploadQueue.filter(q => q.status === 'WAITING' || q.status === 'ERROR');
     if (toUpload.length === 0) return;
     
     setIsUploading(true);
     
-    // Mark them as uploading
     setUploadQueue(prev => prev.map(q => 
       (q.status === 'WAITING' || q.status === 'ERROR') ? { ...q, status: 'UPLOADING', error: undefined } : q
     ));
 
-    try {
-      const filesToUpload = toUpload.map(q => q.file);
-      const results = await uploadBatchSources(filesToUpload);
-      
-      setUploadQueue(prev => prev.map(q => {
-        if (toUpload.some(t => t.id === q.id)) {
-          return { ...q, status: 'SUCCESS' };
-        }
-        return q;
-      }));
-      
-      results.forEach(res => onUploadSuccess(res));
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.detail?.message || err.response?.data?.detail || 'Failed to upload batch';
-      setUploadQueue(prev => prev.map(q => {
-        if (toUpload.some(t => t.id === q.id)) {
-          return { ...q, status: 'ERROR', error: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage) };
-        }
-        return q;
-      }));
-    } finally {
-      setIsUploading(false);
+    for (const item of toUpload) {
+      try {
+        const res = await uploadSource(item.file);
+        setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'SUCCESS' } : q));
+        onUploadSuccess(res);
+      } catch (err: any) {
+        const errorMessage = err?.response?.data?.detail?.message || err?.response?.data?.detail || 'Upload failed';
+        setUploadQueue(prev => prev.map(q => q.id === item.id ? {
+          ...q,
+          status: 'ERROR',
+          error: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage)
+        } : q));
+      }
     }
+
+    setIsUploading(false);
   };
 
   return (
@@ -140,8 +131,8 @@ export const MultiUpload: React.FC<MultiUploadProps> = ({ onUploadSuccess }) => 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
           </svg>
         </div>
-        <p className="text-zinc-300 font-medium mb-1">Drop your data sources here</p>
-        <p className="text-zinc-500 text-sm mb-4">CSV • JSON • SQL • XLSX • PDF</p>
+        <p className="text-zinc-300 font-medium mb-1">Drop datasets or documents to ingest into MongoDB</p>
+        <p className="text-zinc-500 text-sm mb-4">CSV • JSON • JSONL • XLSX • PARQUET • PDF • MD</p>
         
         <label className={`cursor-pointer ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
           <span className="px-4 py-2 rounded-lg bg-cyan-500 text-zinc-900 hover:bg-cyan-400 font-medium text-sm transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)]">

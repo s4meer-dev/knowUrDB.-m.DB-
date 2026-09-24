@@ -14,7 +14,7 @@ interface QueryResultProps {
 }
 
 export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onFollowUp }) => {
-  const [showTechDetails, setShowTechDetails] = useState<boolean>(false);
+  const [showTechDetails, setShowTechDetails] = useState<boolean>(true);
 
   if (!result && !isLoading) {
     return null;
@@ -26,13 +26,15 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
 
   if (!result) return null;
 
+  const mongoPipelineCode = result.generated_mongo_query || result.generated_sql;
+
   return (
     <div className="bg-[#09090b]/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.8)] border border-zinc-800/80 flex flex-col mt-6 animate-in slide-in-from-bottom-4 fade-in duration-700 ease-out relative overflow-hidden ring-1 ring-white/5">
       <div className="absolute inset-0 bg-gradient-to-b from-cyan-900/5 to-transparent pointer-events-none"></div>
       
       {/* 1. Result Header */}
       <div className="bg-zinc-900/40 border-b border-zinc-800/60 px-6 py-4 flex flex-wrap items-center justify-between gap-4 relative z-10">
-        <div>
+        <div className="flex items-center gap-3">
           <h2 className="font-semibold text-zinc-100 flex items-center tracking-tight text-[15px]">
             {isLoading ? (
               <>
@@ -40,7 +42,7 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Analyzing Database...
+                Executing MongoDB Pipeline...
               </>
             ) : (
               <>
@@ -52,6 +54,11 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
               </>
             )}
           </h2>
+          {result.query_source && (
+            <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+              {result.query_source === 'rag' ? 'MongoDB Vector RAG' : `MongoDB • ${result.query_source}`}
+            </span>
+          )}
         </div>
       </div>
 
@@ -97,8 +104,8 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
             </div>
           ) : (
             <ErrorState 
-              title={result.error_code === 'UNSAFE_SQL' ? "Safety Violation" : result.error_code === 'AI_GENERATION_FAILED' ? "AI Analysis Error" : "Query Error"} 
-              message={result.error || 'Please try rephrasing your question or checking the schema.'}
+              title={result.error_code === 'UNSAFE_SQL' || result.error_code === 'UNSAFE_QUERY' ? "MongoDB Safety Violation" : result.error_code === 'AI_GENERATION_FAILED' ? "AI Analysis Error" : "Query Error"} 
+              message={result.error || 'Please try rephrasing your question or checking the collection schema.'}
               type="error"
             />
           )
@@ -172,27 +179,27 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
               disabled={isLoading}
             />
 
-            {/* 6. Technical Details (Collapsible) */}
+            {/* 6. MongoDB Pipeline & Execution Details */}
             <div className="mt-8 border-t border-white/5 pt-6">
               <button 
                 onClick={() => setShowTechDetails(!showTechDetails)}
-                className="flex items-center text-xs font-semibold text-zinc-500 hover:text-cyan-400 uppercase tracking-widest transition-colors mb-4 focus:outline-none"
+                className="flex items-center text-xs font-semibold text-zinc-400 hover:text-cyan-400 uppercase tracking-widest transition-colors mb-4 focus:outline-none"
               >
                 <svg className={`w-4 h-4 mr-2 transition-transform duration-300 ${showTechDetails ? 'rotate-90 text-cyan-400' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
-                Technical Details
+                MongoDB Pipeline & Telemetry
               </button>
               
-              <div className={`transition-all duration-500 overflow-hidden ${showTechDetails ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+              <div className={`transition-all duration-500 overflow-hidden ${showTechDetails ? 'max-h-[1200px] opacity-100' : 'max-h-0 opacity-0'}`}>
                 <div className="space-y-4">
                   
                   {/* Execution Metadata */}
                   <div className="flex flex-wrap gap-4">
-                    <div className="bg-black/30 border border-white/5 rounded-lg px-4 py-3 flex flex-col min-w-[120px]">
+                    <div className="bg-black/30 border border-white/5 rounded-lg px-4 py-3 flex flex-col min-w-[140px]">
                        <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-1">Execution Time</span>
                        <span className="text-zinc-300 font-mono text-sm">{result.execution_time_ms} ms</span>
                     </div>
-                    <div className="bg-black/30 border border-white/5 rounded-lg px-4 py-3 flex flex-col min-w-[120px]">
-                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-1">Rows Returned</span>
+                    <div className="bg-black/30 border border-white/5 rounded-lg px-4 py-3 flex flex-col min-w-[140px]">
+                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-1">Documents Returned</span>
                        <span className="text-zinc-300 font-mono text-sm">{result.row_count}</span>
                     </div>
                   </div>
@@ -200,12 +207,12 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                   {/* Sources Citation */}
                   {result.sources && result.sources.length > 0 && (
                     <div className="bg-black/30 border border-white/5 p-4 rounded-xl text-xs text-zinc-400">
-                      <span className="font-bold text-zinc-500 uppercase tracking-widest text-[10px] mr-2 block mb-2">Data Sources</span>
+                      <span className="font-bold text-zinc-500 uppercase tracking-widest text-[10px] mr-2 block mb-2">MongoDB Data Sources</span>
                       <div className="flex flex-wrap gap-2">
                         {result.sources.map((s) => (
                           <div key={s.source_id} className="bg-white/5 px-3 py-1.5 rounded-md flex items-center border border-white/5 shadow-inner min-w-0 max-w-full">
                             <span className="text-cyan-400/90 font-medium mr-2 truncate">{s.name}</span>
-                            {s.table && <span className="text-zinc-500 border-l border-white/10 pl-2 mr-2 shrink-0">{s.table}</span>}
+                            {(s.collection || s.table) && <span className="text-emerald-400/90 font-mono border-l border-white/10 pl-2 mr-2 shrink-0">{s.collection || s.table}</span>}
                             {s.page && <span className="text-zinc-500 border-l border-white/10 pl-2 shrink-0">Page {s.page}</span>}
                           </div>
                         ))}
@@ -213,9 +220,9 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                     </div>
                   )}
 
-                  {/* SQL */}
-                  {result.generated_sql && (
-                    <SqlPanel sql={result.generated_sql} />
+                  {/* MongoDB Aggregation Pipeline Panel */}
+                  {mongoPipelineCode && (
+                    <SqlPanel sql={mongoPipelineCode} />
                   )}
                 </div>
               </div>
