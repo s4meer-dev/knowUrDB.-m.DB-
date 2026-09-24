@@ -1,8 +1,7 @@
-import json
 import re
 from typing import Any
 
-from app.services.mongo_validator import MongoQuerySafetyError, MongoQueryValidator
+from app.services.mongo_validator import MongoQueryValidator
 from app.services.schema_service import MongoSchemaService
 
 
@@ -107,7 +106,7 @@ class MongoQueryService:
 
         col_name = target_col["name"]
         col_fields = {c["name"]: c["data_type"] for c in target_col.get("columns", [])}
-        top_level_fields = [f for f in col_fields.keys() if "." not in f and "[]" not in f and f != "_id"]
+        top_level_fields = [f for f in col_fields if "." not in f and "[]" not in f and f != "_id"]
 
         # Identify numeric and categorical fields in the chosen collection
         numeric_fields = [
@@ -148,7 +147,7 @@ class MongoQueryService:
         m_by = re.search(r"\b(?:by|per|across|for each)\s+([a-zA-Z_]+)", q_lower)
         if m_by:
             candidate_dim = m_by.group(1).rstrip("s")
-            for f in col_fields.keys():
+            for f in col_fields:
                 if candidate_dim in f.lower():
                     if top_n is not None and f in numeric_fields:
                         metric_field = f

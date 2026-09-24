@@ -51,7 +51,6 @@ class DemoGenerator:
         rng = random.Random(42 if source_id == "demo-source-id" else None)
 
         # 1. Products Collection (with tags array & category)
-        categories = ["Electronics", "Cloud Software", "AI Hardware", "Home Office", "Accessories"]
         product_names = [
             ("Quantum NVMe SSD 2TB", "Electronics", 18500.0),
             ("Neural GPU Workstation", "AI Hardware", 145000.0),

@@ -2,7 +2,6 @@ import shutil
 import traceback
 import uuid
 from pathlib import Path
-from typing import List
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -24,7 +23,7 @@ class BasicResponse(BaseModel):
     message: str
 
 
-@router.get("", response_model=List[SourceMetadata])
+@router.get("", response_model=list[SourceMetadata])
 async def list_sources():
     return source_manager.list_sources()
 
@@ -84,11 +83,14 @@ async def upload_source(file: UploadFile = File(...)):
             detail={"error_code": "INTERNAL_ERROR", "message": f"An error occurred during MongoDB ingestion: {exc}"},
         ) from exc
     finally:
-        if temp_file_path.exists():
-            temp_file_path.unlink(missing_ok=True)
+        try:
+            if temp_file_path.exists():
+                temp_file_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
-@router.post("/upload/batch", response_model=List[SourceMetadata])
+@router.post("/upload/batch", response_model=list[SourceMetadata])
 async def upload_sources_batch(
     files: list[UploadFile] = File(..., json_schema_extra={"items": {"type": "string", "format": "binary"}})
 ):

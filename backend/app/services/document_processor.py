@@ -110,10 +110,26 @@ class DocumentProcessor:
         else:
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-            paragraphs = [p.strip() for p in re.split(r"\n\s*\n", content) if p.strip()]
-            if not paragraphs and content.strip():
-                paragraphs = [content.strip()]
-            for idx, para in enumerate(paragraphs, start=1):
+            raw_paragraphs = [p.strip() for p in re.split(r"\n\s*\n", content) if p.strip()]
+            merged_paragraphs: list[str] = []
+            buffer = ""
+            for p in raw_paragraphs:
+                if p.startswith("#") or len(p) < 80:
+                    buffer = f"{buffer}\n{p}".strip() if buffer else p
+                else:
+                    if buffer:
+                        merged_paragraphs.append(f"{buffer}\n{p}")
+                        buffer = ""
+                    else:
+                        merged_paragraphs.append(p)
+            if buffer:
+                if merged_paragraphs:
+                    merged_paragraphs[-1] = f"{merged_paragraphs[-1]}\n{buffer}"
+                else:
+                    merged_paragraphs.append(buffer)
+            if not merged_paragraphs and content.strip():
+                merged_paragraphs = [content.strip()]
+            for idx, para in enumerate(merged_paragraphs, start=1):
                 pages.append((idx, para))
 
         return pages

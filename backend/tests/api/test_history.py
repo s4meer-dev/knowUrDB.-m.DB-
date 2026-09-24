@@ -24,35 +24,10 @@ def test_query_history_workflow(client):
     assert response.status_code == 200
     assert len(response.json()) == 0
 
-    # 3. Create a query
-    from unittest.mock import patch
-
-    with (
-        patch(
-            "app.api.query.ai_service.get_status",
-            return_value={"configured": True, "status": "ready"},
-        ),
-        patch(
-            "app.api.query.ai_service.generate",
-            return_value={"response": "```sql\nSELECT COUNT(*) FROM students;\n```"},
-        ),
-        patch(
-            "app.services.query_intelligence_service.AIService.generate",
-            return_value={"response": "VALID"},
-        ),
-        patch(
-            "app.api.query.query_router.route_query",
-            return_value={
-                "decision": "SINGLE_SOURCE",
-                "sources": [{"source_ids": ["demo-source-id"], "type": "sqlite3"}],
-                "candidates": [],
-                "confidence": 1.0
-            }
-        ),
-    ):
-        response = client.post(
-            "/api/query", json={"question": "how many students are there?"}
-        )
+    # 3. Execute a real MongoDB query against the demo dataset
+    response = client.post(
+        "/api/query", json={"question": "how many students are there?"}
+    )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
 
@@ -64,7 +39,7 @@ def test_query_history_workflow(client):
 
     item = history[0]
     assert item["question"] == "how many students are there?"
-    assert item["query_source"] in ["ai", "fallback"]
+    assert item["query_source"] in ["ai", "fallback", "deterministic"]
     assert item["status"] == "success"
     assert item["row_count"] is not None
     assert item["execution_time_ms"] is not None

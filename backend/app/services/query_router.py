@@ -1,9 +1,7 @@
-import json
 import logging
 import re
 from typing import Any
 
-from app.core.mongodb import MongoDBManager
 from app.services.gemini_provider import GeminiProvider
 from app.services.mongo_validator import MongoQueryValidator
 from app.services.schema_service import MongoSchemaService

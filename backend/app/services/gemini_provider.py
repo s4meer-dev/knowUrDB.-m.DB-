@@ -90,7 +90,7 @@ class GeminiProvider:
             logger.error(f"DEBUG: Exception type={type(e)}, e={e}")
             error_str = str(e).lower()
             if "quota exceeded" in error_str or "429" in error_str or "resource_exhausted" in error_str:
-                logger.error(f"Gemini API Error: Quota Exceeded")
+                logger.error("Gemini API Error: Quota Exceeded")
                 raise RuntimeError("Quota Exceeded")
             if (
                 "api key" in error_str
@@ -105,8 +105,8 @@ class GeminiProvider:
             if "not_found" in error_str or "invalid model" in error_str:
                 logger.error("Gemini API Error: Invalid Model")
                 raise RuntimeError("Invalid Model")
-            logger.error(f"Gemini API Error: {str(e)}")
-            raise RuntimeError(f"AI provider error: {str(e)}")
+            logger.error(f"Gemini API Error: {e!s}")
+            raise RuntimeError(f"AI provider error: {e!s}")
         except Exception:  # noqa: BLE001
             logger.error("Unexpected error calling Gemini API")
             raise RuntimeError(

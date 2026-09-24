@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+
 from app.models.query import SuggestionsResponse
 from app.services.schema_service import SchemaService
 from app.services.suggestions_service import SuggestionsService

@@ -38,3 +38,7 @@ class SuggestionsService:
             suggestions.append(f"How many documents are in {cname}?")
 
         return suggestions[:6]
+
+    def get_schema_suggestions(self, source_id: str | None = None) -> list[str]:
+        return self.get_suggestions(source_id)
+

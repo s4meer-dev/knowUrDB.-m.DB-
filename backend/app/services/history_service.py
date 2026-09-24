@@ -65,11 +65,17 @@ class HistoryService:
             return None
         return QueryHistoryItem(**{k: v for k, v in doc.items() if k != "_id"})
 
+    def get_history_item(self, query_id: str) -> QueryHistoryItem | None:
+        return self.get_query_by_id(query_id)
+
     def delete_query(self, query_id: str) -> bool:
         res = MongoDBManager.get_db()[MongoDBManager.SYS_QUERY_HISTORY].delete_one(
             {"id": query_id}
         )
         return res.deleted_count > 0
+
+    def delete_history_item(self, query_id: str) -> bool:
+        return self.delete_query(query_id)
 
     def clear_history(self) -> None:
         MongoDBManager.get_db()[MongoDBManager.SYS_QUERY_HISTORY].delete_many({})

@@ -9,7 +9,6 @@ from app.core.mongodb import MongoDBManager
 class MongoQuerySafetyError(ValueError):
     """Raised when a MongoDB query or pipeline violates read-only or security policies."""
 
-    pass
 
 
 # Alias for compatibility with any caller catching SQLSafetyError
@@ -219,8 +218,7 @@ class MongoQueryValidator:
             cleaned = cleaned.split("\n", 1)[-1]
         elif cleaned.startswith("```"):
             cleaned = cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
+        cleaned = cleaned.removesuffix("```")
         cleaned = cleaned.strip()
 
         # 1. Try direct JSON object

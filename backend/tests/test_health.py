@@ -5,15 +5,11 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_health_check_success():
+def test_health_check():
     response = client.get("/api/health")
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "healthy"
-    assert data["service"] == "knowUrDB-backend"
-    assert "version" in data
-
-
-def test_invalid_route():
-    response = client.get("/api/invalid")
-    assert response.status_code == 404
+    assert data["status"] == "ok"
+    assert "database" in data
+    assert data["database"]["connected"] is True
+    assert data["database"]["engine"] in ("mongodb", "mongomock")

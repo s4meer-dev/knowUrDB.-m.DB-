@@ -204,7 +204,23 @@ class FormatConverter:
                 _ingest_dataframe(df, base_stem)
 
             elif format_type == FileFormat.EXCEL:
-                sheets = pd.read_excel(file_path, sheet_name=None)
+                import io
+
+                excel_bytes = Path(file_path).read_bytes()
+                try:
+                    sheets = pd.read_excel(io.BytesIO(excel_bytes), sheet_name=None, engine="openpyxl")
+                except Exception:
+                    import openpyxl
+
+                    wb = openpyxl.load_workbook(io.BytesIO(excel_bytes), data_only=True)
+                    sheets = {}
+                    for sname in wb.sheetnames:
+                        ws = wb[sname]
+                        rows_iter = list(ws.iter_rows(values_only=True))
+                        if rows_iter:
+                            headers = [str(h) if h is not None else f"col_{idx}" for idx, h in enumerate(rows_iter[0])]
+                            sheets[sname] = pd.DataFrame(rows_iter[1:], columns=headers)
+                    wb.close()
                 for sheet_name, df in sheets.items():
                     tname = f"{base_stem}_{sheet_name}" if len(sheets) > 1 else base_stem
                     _ingest_dataframe(df, tname)
@@ -242,7 +258,9 @@ class FormatConverter:
                 FileFormat.POSTGRES_DUMP,
             ):
                 # Isolated migration importer for legacy SQL/SQLite files into MongoDB collections
-                from app.services.ingestion.sql_migration_importer import import_sql_source_to_mongodb
+                from app.services.ingestion.sql_migration_importer import (
+                    import_sql_source_to_mongodb,
+                )
 
                 migrated = import_sql_source_to_mongodb(file_path, format_type, base_stem)
                 for table_name, df in migrated.items():
