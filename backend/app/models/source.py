@@ -1,10 +1,11 @@
-from typing import Any
-from pydantic import BaseModel, Field
-from datetime import datetime
 from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class SourceType(str, Enum):
+    DOCUMENT_COLLECTION = "document_collection"
     RELATIONAL = "relational"
     TABULAR = "tabular"
     DOCUMENT = "document"
@@ -27,14 +28,29 @@ class SourceMetadata(BaseModel):
     original_filename: str = Field(..., description="Original uploaded filename")
     file_type: str = Field(..., description="File extension")
     mime_type: str = Field(..., description="MIME type")
-    detected_format: str = Field(..., description="Detected format (e.g., CSV, SQLite, PDF)")
-    detected_dialect: str | None = Field(None, description="SQL dialect if applicable")
+    detected_format: str = Field(
+        ..., description="Detected format (e.g., mongodb, csv, json, excel, parquet, pdf)"
+    )
+    detected_dialect: str | None = Field(None, description="Engine or dialect")
     size_bytes: int = Field(..., description="Size of file in bytes")
     uploaded_at: str = Field(..., description="ISO datetime of upload")
     status: SourceStatus = Field(..., description="Current status of the source")
-    table_count: int | None = Field(0, description="Number of tables if structured")
-    record_count: int | None = Field(0, description="Number of total records if structured")
-    schema_summary: Any | None = Field(None, description="Summary of schema for routing")
-    storage_location: str = Field(..., description="Path to the storage directory", exclude=True)
+    collections: list[str] = Field(
+        default_factory=list, description="MongoDB collection names created for this source"
+    )
+    table_count: int | None = Field(
+        0, description="Number of MongoDB collections (aliased as table_count for UI compatibility)"
+    )
+    record_count: int | None = Field(
+        0, description="Total MongoDB documents across collections"
+    )
+    index_count: int | None = Field(
+        0, description="Total MongoDB indexes created across collections"
+    )
+    schema_summary: Any | None = Field(
+        None, description="Summary of MongoDB collection schemas for routing"
+    )
+    storage_location: str = Field(
+        default="mongodb://knowurdb", description="Storage URI or file path", exclude=True
+    )
     error_message: str | None = Field(None, description="Error message if failed")
-

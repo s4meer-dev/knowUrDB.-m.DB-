@@ -1,59 +1,40 @@
-from app.services.schema_service import SchemaService
+from app.services.schema_service import MongoSchemaService
 
 
 class SuggestionsService:
-    def __init__(self, schema_service: SchemaService):
-        self.schema_service = schema_service
+    """
+    Generates MongoDB schema-aware natural language query suggestions for the active source.
+    """
 
-    def get_schema_suggestions(self, max_suggestions: int = 5) -> list[str]:
-        """
-        Generates natural language suggestions based on the actual database schema.
-        Handles schemas of various sizes and types.
-        """
-        schema = self.schema_service.get_schema()
-        if not schema.tables:
-            return []
+    def __init__(self, schema_service: MongoSchemaService | None = None):
+        self.schema_service = schema_service or MongoSchemaService()
 
-        suggestions = set()
+    def get_suggestions(self, source_id: str | None = None) -> list[str]:
+        schema = self.schema_service.get_schema(source_id)
+        collections = schema.get("tables", [])
+        if not collections:
+            return [
+                "What collections are in this MongoDB database?",
+                "What are the top 10 products by revenue?",
+                "Which customers have spent more than ₹1 lakh?",
+            ]
 
-        # 1. Simple table counts
-        for table in schema.tables[:3]:
-            suggestions.add(f"How many records are in {table.name}?")
-            suggestions.add(f"Show me all {table.name}")
+        suggestions: list[str] = []
+        col_names = {c["name"].split("_")[-1] for c in collections}
 
-        # 2. Look for numeric columns for aggregations
-        numeric_types = ["INTEGER", "REAL", "NUMERIC", "FLOAT"]
-        for table in schema.tables:
-            for col in table.columns:
-                if (
-                    any(t in col.data_type.upper() for t in numeric_types)
-                    and not col.primary_key
-                    and not col.name.endswith("_id")  # Avoid averaging foreign keys
-                ):
-                    suggestions.add(
-                        f"What is the average of {col.name} in {table.name}?"
-                    )
-                    suggestions.add(f"Which {table.name} has the highest {col.name}?")
-                    break  # One per table is enough
+        if "products" in col_names:
+            suggestions.append("What are the top 10 products by revenue?")
+        if "customers" in col_names:
+            suggestions.append("Which customers have spent more than ₹1 lakh?")
+        if "orders" in col_names:
+            suggestions.append("Compare sales between January and February.")
+        if "employees" in col_names:
+            suggestions.append("Average salary by department")
+        if "students" in col_names:
+            suggestions.append("How many students have GPA above 3.5?")
 
-        # 3. Distinct values or categories
-        for table in schema.tables:
-            for col in table.columns:
-                if (
-                    (
-                        "TEXT" in col.data_type.upper()
-                        or "VARCHAR" in col.data_type.upper()
-                    )
-                    and col.name not in ["id", "uuid"]
-                    and not col.primary_key
-                ):
-                    suggestions.add(
-                        f"What are the distinct values of {col.name} in {table.name}?"
-                    )
-                    break  # One per table
+        for col in collections[:2]:
+            cname = col["name"].split("_")[-1]
+            suggestions.append(f"How many documents are in {cname}?")
 
-        # Limit and convert to list
-        suggestions_list = list(suggestions)
-        # Sort for determinism
-        suggestions_list.sort()
-        return suggestions_list[:max_suggestions]
+        return suggestions[:6]

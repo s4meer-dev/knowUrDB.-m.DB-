@@ -1,184 +1,257 @@
 import json
 import logging
-from typing import Any, Dict, List
+import re
+from typing import Any
 
+from app.core.mongodb import MongoDBManager
 from app.services.gemini_provider import GeminiProvider
+from app.services.mongo_validator import MongoQueryValidator
+from app.services.schema_service import MongoSchemaService
 from app.services.source_manager import SourceManager
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("knowurdb.router")
+
 
 class QueryRouter:
     """
-    Intelligently routes a natural language query to the appropriate source(s).
+    Intelligently routes a natural language question across MongoDB collections and RAG documents:
+      - SINGLE_SOURCE
+      - MULTI_SOURCE
+      - DOCUMENT_RAG
+      - META
+      - CLARIFICATION
+      - UNRELATED
     """
+
     def __init__(self, ai_provider: GeminiProvider, source_manager: SourceManager):
         self.ai = ai_provider
         self.source_manager = source_manager
+        self.schema_service = MongoSchemaService()
 
-    def route_query(self, question: str, explicit_source_ids: List[str] = None) -> Dict[str, Any]:
-        """
-        Determines the intent and the best source(s) to answer the query.
-        Returns a dict with:
-          - decision: SINGLE_SOURCE, MULTI_SOURCE, CLARIFICATION, UNRELATED
-          - sources: list of selected source dictionaries
-          - candidates: list of candidate source dictionaries (if clarification needed)
-          - confidence: float score
-          - reasoning: str
-        """
-        sources = self.source_manager.list_sources()
-        
-        # If user explicitly selected sources, only consider those
+    def route_query(
+        self, question: str, explicit_source_ids: list[str] | None = None
+    ) -> dict[str, Any]:
+        # Validate safety first so malicious injections are caught immediately
+        MongoQueryValidator.validate_question_safety(question)
+
+        all_sources = self.source_manager.list_sources()
+        sources = all_sources
         if explicit_source_ids:
-            sources = [s for s in sources if s.source_id in explicit_source_ids]
-            
-        # Build a context of available sources for the LLM
-        sources_context = []
-        for s in sources:
-            source_info = {
-                "id": s.source_id,
-                "name": s.name,
-                "type": s.detected_format,
-                "records": s.record_count
-            }
-            if s.detected_format == "sqlite" or s.detected_format == "database":
-                # Provide table names if possible for better matching
-                try:
-                    from app.core.database import DatabaseManager
-                    from app.services.schema_service import SchemaService
-                    db_path = self.source_manager.get_internal_db_path(s.source_id)
-                    DatabaseManager.set_active_database(db_path)
-                    schema = SchemaService().get_schema()
-                    source_info["tables"] = [t["name"] for t in schema["tables"]]
-                except Exception:
-                    source_info["tables"] = s.table_count
-            else:
-                source_info["tables"] = s.table_count
-            
-            sources_context.append(source_info)
-            
-        prompt = f"""
-You are an intelligent query router for a multi-source data system.
-You need to decide which source(s) should be used to answer the user's question.
+            sources = [s for s in all_sources if s.source_id in explicit_source_ids]
 
-Available Sources:
-{json.dumps(sources_context, indent=2)}
+        q = question.strip()
+        q_lower = q.lower()
+        q_words = set(re.sub(r"[^\w\s]", " ", q_lower).split())
 
-User Question: "{question}"
-
-Rules:
-1. If the question is a general greeting or unrelated to any data (e.g., "what is the weather", "2+2", "write a poem", "how many dataset are there" when 0 sources are available), decision is UNRELATED.
-2. If the user explicitly asks about the available files/sources (e.g. "what files have I uploaded", "what sources are available"), decision is META.
-3. If the question clearly refers to ONE specific source (by filename, context, or uniqueness of data requested), decision is SINGLE_SOURCE.
-4. If the question explicitly asks to compare, join, or query "all" or multiple specific sources (e.g., "describe all", "show me data from all tables"), decision is MULTI_SOURCE. Return ALL relevant source_ids in the source_ids list.
-5. IF THE QUESTION IS AMBIGUOUS and could apply to multiple sources equally, BUT the user DOES NOT explicitly specify "all" (e.g. asking "what are the sales" when there are both 'sales_q1' and 'sales_q2'), YOU MUST NOT GUESS. The decision must be CLARIFICATION.
-6. Return a confidence score between 0.0 and 1.0.
-
-Return EXACTLY a JSON object with this structure (no markdown, no backticks):
-{{
-  "decision": "SINGLE_SOURCE" | "MULTI_SOURCE" | "CLARIFICATION" | "UNRELATED" | "META",
-  "source_ids": ["id1", "id2"], // Empty if UNRELATED or META. If CLARIFICATION, list the possible candidates here.
-  "confidence": 0.95,
-  "reasoning": "Explain why you made this decision briefly.",
-  "friendly_message": "If UNRELATED, provide a helpful message to the user explaining why their question cannot be answered or fulfilled, directly addressing their question based on the Available Sources context. For example, if they ask how many datasets there are and there are none, say 'There are no datasets in the collection right now, please upload a dataset.' Be polite, conversational, and direct."
-}}
-"""
-        
-        try:
-            # We enforce strict JSON generation
-            response_text = self.ai.generate_text(prompt)
-            # Clean up potential markdown formatting
-            response_text = response_text.strip()
-            if response_text.startswith("```json"):
-                response_text = response_text[7:]
-            elif response_text.startswith("```"):
-                response_text = response_text[3:]
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
-                
-            decision_data = json.loads(response_text.strip())
-            
-            decision = decision_data.get("decision", "UNRELATED")
-            source_ids = decision_data.get("source_ids", [])
-            confidence = decision_data.get("confidence", 0.0)
-            reasoning = decision_data.get("reasoning", "")
-            friendly_message = decision_data.get("friendly_message")
-            
-            selected_sources = []
-            candidates = []
-            
-            for sid in source_ids:
-                s = next((s for s in sources if s.source_id == sid), None)
-                if s:
-                    if decision == "CLARIFICATION":
-                        candidates.append({"source_id": s.source_id, "name": s.name})
-                    else:
-                        selected_sources.append({
-                            "source_id": s.source_id,
-                            "name": s.name,
-                            "type": s.detected_format,
-                            "file_type": s.file_type
-                        })
-            
+        # 1. Check for META questions ("What files have I uploaded?", "What sources are available?")
+        if re.search(
+            r"\b(what|which|list|show)\b.*\b(files|sources|uploaded|datasets in my collection|available sources)\b",
+            q_lower,
+        ):
             return {
-                "decision": decision,
-                "sources": selected_sources,
-                "candidates": candidates,
-                "confidence": confidence,
-                "reasoning": reasoning,
-                "friendly_message": friendly_message
+                "decision": "META",
+                "sources": [],
+                "candidates": [],
+                "confidence": 0.98,
+                "reasoning": "User asked about available uploaded sources/collections.",
             }
-            
-        except Exception as e:
-            logger.error(f"Error in query router: {e}")
-            
-            # Deterministic heuristic fallback to prevent unrelated queries from passing
-            q = question.lower()
-            import re
-            q_clean = re.sub(r'[^\w\s]', '', q)
-            q_clean = re.sub(r'\s+', ' ', q_clean)
-            words = set(q_clean.split())
-            
-            db_keywords = {
-                "database", "table", "tables", "record", "records", "row", "rows", "data", "schema", 
-                "structure", "summary", "count", "number", "total", "average", "maximum", "minimum",
-                "show", "list", "give", "find", "what", "which", "how", "many"
+
+        # 2. Check for explicit off-topic / UNRELATED questions
+        unrelated_patterns = (
+            "weather",
+            "write a poem",
+            "tell me a joke",
+            "capital of france",
+            "who is the president",
+            "recipe for",
+            "2+2",
+            "2 + 2",
+        )
+        if any(p in q_lower for p in unrelated_patterns) or not sources:
+            return {
+                "decision": "UNRELATED",
+                "sources": [],
+                "candidates": [],
+                "confidence": 0.95,
+                "reasoning": "Question is unrelated to any uploaded MongoDB collection or document.",
+                "friendly_message": (
+                    "There are no datasets in the collection right now, please upload a dataset."
+                    if not sources
+                    else "I couldn't find relevant data for your question in the connected MongoDB collections or documents."
+                ),
             }
-            
-            # If no DB keywords or source names are found, consider it UNRELATED
-            is_valid = False
-            if db_keywords.intersection(words):
-                is_valid = True
-            else:
-                for s in sources:
-                    s_name_clean = re.sub(r'[^\w\s]', '', s.name.lower())
-                    if any(w in words for w in s_name_clean.split() if len(w) > 3):
-                        is_valid = True
-                        break
-            
-            if not is_valid:
+
+        # If user explicitly restricted to specific source(s), honor that directly
+        if explicit_source_ids and len(sources) == 1:
+            s = sources[0]
+            decision_type = (
+                "DOCUMENT_RAG"
+                if s.detected_format in ("pdf", "txt", "markdown")
+                else "SINGLE_SOURCE"
+            )
+            return {
+                "decision": decision_type,
+                "sources": [
+                    {
+                        "source_id": s.source_id,
+                        "name": s.name,
+                        "type": s.detected_format,
+                        "file_type": s.file_type,
+                    }
+                ],
+                "candidates": [],
+                "confidence": 1.0,
+                "reasoning": "User explicitly selected source.",
+            }
+
+        # 3. Check for DOCUMENT_RAG intent (PDF / TXT / Markdown sources)
+        doc_sources = [s for s in sources if s.detected_format in ("pdf", "txt", "markdown")]
+        tabular_sources = [s for s in sources if s.detected_format not in ("pdf", "txt", "markdown")]
+
+        if doc_sources:
+            doc_keywords = {"document", "pdf", "policy", "refund", "clause", "article", "page", "paragraph", "handbook", "manual", "terms"}
+            matched_doc_sources = []
+            for ds in doc_sources:
+                stem = re.sub(r"[^\w\s]", " ", ds.name.lower()).split()
+                if any(w in q_lower for w in stem if len(w) > 2) or q_words.intersection(doc_keywords):
+                    matched_doc_sources.append(ds)
+
+            if matched_doc_sources:
+                chosen = matched_doc_sources[0]
                 return {
-                    "decision": "UNRELATED",
-                    "sources": [],
+                    "decision": "DOCUMENT_RAG",
+                    "sources": [
+                        {
+                            "source_id": chosen.source_id,
+                            "name": chosen.name,
+                            "type": chosen.detected_format,
+                            "file_type": chosen.file_type,
+                        }
+                    ],
                     "candidates": [],
-                    "confidence": 0.5,
-                    "reasoning": "Fallback heuristics detected an unrelated question.",
-                    "friendly_message": "There doesn't appear to be any relevant data for that question. If you haven't uploaded a dataset yet, please upload one to get started." if not sources else "I couldn't find data matching your question in the available sources."
+                    "confidence": 0.95,
+                    "reasoning": "Question targets unstructured document / policy content via MongoDB Vector RAG.",
                 }
-            
-            # Safe fallback if AI parsing fails
-            if len(sources) == 1:
+
+        # 4. Check for MULTI_SOURCE comparison ("compare ... across all", "from two uploaded datasets", "between 2024 and 2025")
+        if len(tabular_sources) > 1 and re.search(
+            r"\b(compare\s+.*(?:datasets|sources|collections|2024|2025|q1|q2)|across\s+all|all\s+sources|describe\s+all)\b",
+            q_lower,
+        ):
+            return {
+                "decision": "MULTI_SOURCE",
+                "sources": [
+                    {
+                        "source_id": s.source_id,
+                        "name": s.name,
+                        "type": s.detected_format,
+                        "file_type": s.file_type,
+                    }
+                    for s in tabular_sources
+                ],
+                "candidates": [],
+                "confidence": 0.92,
+                "reasoning": "Question compares or aggregates across multiple MongoDB sources.",
+            }
+
+        # 5. Check for Ambiguity / CLARIFICATION across multiple user-uploaded sources with overlapping domain names
+        # (e.g., 'sales_2024.csv' and 'sales_2025.csv' when asking 'What are the total sales?')
+        non_demo_tabular = [s for s in tabular_sources if s.source_id != "demo-source-id"]
+        candidate_Pool = non_demo_tabular if len(non_demo_tabular) > 1 else tabular_sources
+
+        if len(candidate_Pool) > 1:
+            explicitly_named = []
+            overlapping_domain = []
+            for s in candidate_Pool:
+                s_clean = re.sub(r"\.[a-z0-9]+$", "", s.name.lower())
+                tokens = [t for t in re.split(r"[_\-\s]+", s_clean) if len(t) > 1]
+                # Did the user mention the exact distinguishing token (e.g. '2024' vs '2025' or full filename)?
+                if s_clean in q_lower or all(t in q_lower for t in tokens):
+                    explicitly_named.append(s)
+                elif any(t in q_lower for t in tokens if len(t) > 2):
+                    overlapping_domain.append(s)
+
+            if len(explicitly_named) == 1:
+                chosen = explicitly_named[0]
                 return {
                     "decision": "SINGLE_SOURCE",
-                    "sources": [{"source_id": sources[0].source_id, "name": sources[0].name, "type": sources[0].detected_format, "file_type": sources[0].file_type}],
+                    "sources": [
+                        {
+                            "source_id": chosen.source_id,
+                            "name": chosen.name,
+                            "type": chosen.detected_format,
+                            "file_type": chosen.file_type,
+                        }
+                    ],
                     "candidates": [],
-                    "confidence": 0.5,
-                    "reasoning": "Fallback to only available source."
+                    "confidence": 0.95,
+                    "reasoning": f"Matched specific source '{chosen.name}'.",
                 }
-            else:
+
+            if len(overlapping_domain) > 1 and not explicitly_named:
                 return {
                     "decision": "CLARIFICATION",
                     "sources": [],
-                    "candidates": [{"source_id": s.source_id, "name": s.name} for s in sources],
-                    "confidence": 0.0,
-                    "reasoning": "Fallback required clarification due to multiple sources."
+                    "candidates": [
+                        {"source_id": s.source_id, "name": s.name}
+                        for s in overlapping_domain
+                    ],
+                    "confidence": 0.85,
+                    "reasoning": "Multiple sources match the domain term without disambiguation.",
                 }
+
+        # 6. Match Single Source by collection/field schema relevance
+        best_source = None
+        best_score = -1
+        for s in tabular_sources:
+            score = 0
+            s_clean = s.name.lower()
+            if any(w in s_clean for w in q_words if len(w) > 3):
+                score += 5
+            for col_name in s.collections or []:
+                base_col = col_name.split("_")[-1].lower()
+                if base_col in q_lower or base_col.rstrip("s") in q_lower:
+                    score += 10
+            if s.schema_summary and any(w in str(s.schema_summary).lower() for w in q_words if len(w) > 3):
+                score += 3
+            # Prefer user-uploaded source over default demo if scores tie and user uploaded data
+            if s.source_id != "demo-source-id" and score > 0:
+                score += 2
+            if score > best_score:
+                best_score = score
+                best_source = s
+
+        if best_source is None and tabular_sources:
+            best_source = tabular_sources[0]
+
+        if best_source is None and doc_sources:
+            best_source = doc_sources[0]
+            return {
+                "decision": "DOCUMENT_RAG",
+                "sources": [
+                    {
+                        "source_id": best_source.source_id,
+                        "name": best_source.name,
+                        "type": best_source.detected_format,
+                        "file_type": best_source.file_type,
+                    }
+                ],
+                "candidates": [],
+                "confidence": 0.8,
+                "reasoning": "Routed to document source.",
+            }
+
+        return {
+            "decision": "SINGLE_SOURCE",
+            "sources": [
+                {
+                    "source_id": best_source.source_id,
+                    "name": best_source.name,
+                    "type": best_source.detected_format,
+                    "file_type": best_source.file_type,
+                }
+            ],
+            "candidates": [],
+            "confidence": 0.9,
+            "reasoning": f"Selected optimal MongoDB source '{best_source.name}'.",
+        }

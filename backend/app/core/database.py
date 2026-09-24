@@ -1,80 +1,59 @@
-import sqlite3
-from pathlib import Path
+from app.core.mongodb import MongoDBManager
 
 
 class DatabaseProvider:
     """
-    Provides safe, read-only access to the knowUrDB Demo Database.
-    This is the foundation for Phase 2 backend integration.
-    Future phases will expand this to support user-uploaded databases.
+    MongoDB-native database provider facade.
+    Replaces legacy SQLite connection logic with MongoDB database/collection access.
     """
 
-    def __init__(self, db_path: Path):
-        self.db_path = db_path
+    def __init__(self, source_id: str | None = None):
+        self.source_id = source_id or MongoDBManager.get_active_source_id()
 
-    def get_connection(self) -> sqlite3.Connection:
-        """
-        Returns a read-only SQLite connection.
-        Using URI with mode=ro ensures no accidental modifications.
-        """
-        if not self.db_path.exists():
-            raise FileNotFoundError(f"Database not found at {self.db_path}")
+    def get_db(self):
+        return MongoDBManager.get_db()
 
-        # Open in read-only mode using uri
-        # The path must be absolute and formatted correctly for URI
-        db_uri = f"file:{self.db_path.absolute().as_posix()}?mode=ro"
-
-        conn = sqlite3.connect(db_uri, uri=True)
-        # We can also enforce foreign keys even on read, though not strictly necessary
-        conn.execute("PRAGMA foreign_keys = ON;")
-        return conn
-
-
-# Default provider pointing to the demo DB
-DEFAULT_DEMO_DB_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "database"
-    / "demo"
-    / "knowurdb_demo.db"
-)
-# Still export for backwards compatibility in existing tests or imports
-demo_db_provider = DatabaseProvider(DEFAULT_DEMO_DB_PATH)
 
 class DatabaseManager:
     @staticmethod
     def get_active_provider() -> DatabaseProvider:
-        from app.core.app_database import app_db_provider
-        active_db_path_str = app_db_provider.get_setting("active_database_path")
-        if active_db_path_str:
-            path = Path(active_db_path_str)
-            if path.exists():
-                return DatabaseProvider(path)
-        return DatabaseProvider(DEFAULT_DEMO_DB_PATH)
+        return DatabaseProvider(MongoDBManager.get_active_source_id())
 
     @staticmethod
     def get_active_database_info() -> dict:
-        from app.core.app_database import app_db_provider
-        active_db_path_str = app_db_provider.get_setting("active_database_path")
-        if active_db_path_str:
-            path = Path(active_db_path_str)
-            if path.exists():
-                return {
-                    "is_demo": False,
-                    "name": path.name,
-                    "path": str(path)
-                }
+        source_id = MongoDBManager.get_active_source_id()
+        db = MongoDBManager.get_db()
+        src = db[MongoDBManager.SYS_SOURCES].find_one({"source_id": source_id}) if source_id else None
+        if src:
+            return {
+                "is_demo": bool(src.get("is_demo", False)),
+                "name": src.get("name", "MongoDB Collection"),
+                "source_id": src.get("source_id"),
+                "collections": src.get("collections", []),
+                "engine": "mongodb",
+            }
         return {
             "is_demo": True,
-            "name": "Demo Database",
-            "path": str(DEFAULT_DEMO_DB_PATH)
+            "name": "knowUrDB MongoDB",
+            "source_id": "demo-source-id",
+            "collections": [],
+            "engine": "mongodb",
         }
-        
+
     @staticmethod
-    def set_active_database(path: str):
-        from app.core.app_database import app_db_provider
-        app_db_provider.set_setting("active_database_path", path)
-        
+    def set_active_database(source_or_path: str) -> None:
+        """
+        Sets the active source ID (or resolves a legacy storage identifier to source_id).
+        """
+        db = MongoDBManager.get_db()
+        src = db[MongoDBManager.SYS_SOURCES].find_one(
+            {"$or": [{"source_id": source_or_path}, {"storage_location": source_or_path}]}
+        )
+        if src:
+            MongoDBManager.set_active_source(src["source_id"])
+        else:
+            MongoDBManager.set_active_source(source_or_path)
+
     @staticmethod
-    def reset_to_demo():
-        from app.core.app_database import app_db_provider
-        app_db_provider.set_setting("active_database_path", "")
+    def reset_to_demo() -> None:
+        MongoDBManager.set_active_source("demo-source-id")

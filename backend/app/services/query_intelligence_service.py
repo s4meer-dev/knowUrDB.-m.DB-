@@ -1,262 +1,220 @@
+import json
 import re
+from typing import Any
 
-from app.services.ai_service import AIService
-from app.services.schema_service import SchemaService
+from app.services.schema_service import MongoSchemaService
 
 
 class QueryIntelligenceService:
     """
-    Provides intelligent explanations and follow-up suggestions for executed queries.
-    Gracefully falls back if AI is unavailable.
+    Provides MongoDB-aware intent classification, result summarization, key insights,
+    pipeline repair, and schema-grounded follow-up question suggestions.
     """
 
-    def __init__(self, ai_service: AIService, schema_service: SchemaService):
+    def __init__(self, ai_service: Any, schema_service: MongoSchemaService | None = None):
         self.ai_service = ai_service
-        self.schema_service = schema_service
+        self.schema_service = schema_service or MongoSchemaService()
 
-    def analyze_intent(self, question: str) -> str:
-        """
-        Classifies the user's question into one of three categories:
-        - VALID: The question can likely be answered with a SQL query against this schema.
-        - AMBIGUOUS: The question is related to databases/records, but relies on tables/concepts not in the schema, or is too vague.
-        - UNRELATED: The question has nothing to do with this database or its data.
-        Returns 'VALID', 'AMBIGUOUS', or 'UNRELATED'.
-        """
-        ai_status = self.ai_service.get_status()
-        if not (ai_status.get("configured") and ai_status.get("status") == "ready"):
-            # Deterministic Fallback Heuristic for UNRELATED questions
-            return self._deterministic_intent_fallback(question)
+    def analyze_intent(self, question: str, source_id: str | None = None) -> str:
+        if not question or not question.strip():
+            return "UNRELATED"
 
-        schema_summary = self.schema_service.get_schema_summary().summary
+        q = question.strip().lower()
+        # Reject explicit off-topic chat
+        unrelated_phrases = (
+            "what is the weather",
+            "write a poem",
+            "tell me a joke",
+            "capital of france",
+            "who won the world cup",
+            "recipe for",
+            "2+2",
+            "2 + 2",
+        )
+        if any(p in q for p in unrelated_phrases):
+            return "UNRELATED"
 
-        prompt = f"""Given the following database schema summary, classify the user question into exactly one of these categories:
-- VALID: The question can be answered with a SQL query against this schema.
-- AMBIGUOUS: The question is related to records or databases, but relies on tables or concepts NOT in the schema (e.g. asking for 'records' when no 'records' table exists), or is too vague to write a safe query.
-- UNRELATED: The question has nothing to do with this database or its data (e.g. weather, poetry, generic trivia, identity questions, or requests for general knowledge).
+        schema = self.schema_service.get_schema(source_id)
+        collections = schema.get("tables", [])
+        if not collections:
+            return "UNRELATED"
 
-Schema:
-{schema_summary}
-
-Question: "{question}"
-
-Return ONLY the classification word: VALID, AMBIGUOUS, or UNRELATED.
-"""
-        try:
-            response = self.ai_service.generate(prompt)
-            intent = response["response"].strip().upper()
-            if intent in ["VALID", "AMBIGUOUS", "UNRELATED"]:
-                return intent
-            return self._deterministic_intent_fallback(question)
-        except Exception:  # noqa: BLE001
-            return self._deterministic_intent_fallback(question)
-
-    def _deterministic_intent_fallback(self, question: str) -> str:
-        """
-        If AI is down, we use a basic keyword search to catch obviously unrelated questions
-        (e.g., weather, joke, president). If it has ANY database keywords or table names, we assume VALID.
-        """
-        q = question.lower()
-        import re
-        q = re.sub(r'[^\w\s]', '', q)
-        q = re.sub(r'\s+', ' ', q)
-
-        words = set(q.split())
-        
-        # Check against schema names (handle plurals)
-        tables = self.schema_service.get_table_names()
-        for t in tables:
-            t_lower = t.lower()
-            if t_lower in words or (t_lower.endswith('s') and t_lower[:-1] in words) or (t_lower + 's' in words):
-                return "VALID"
-
-        db_keywords = {
-            "database", "table", "tables", "record", "records", "row", "rows", "data", "schema", 
-            "structure", "summary", "count", "number", "total", "average", "maximum", "minimum"
+        # Collect all collection names and field names
+        domain_terms = {
+            "collection", "collections", "table", "tables", "document", "documents",
+            "record", "records", "row", "rows", "data", "database", "schema",
+            "count", "total", "average", "avg", "sum", "top", "highest", "lowest",
+            "max", "min", "compare", "monthly", "month", "revenue", "sales",
+            "spent", "lakh", "salary", "department", "customer", "product",
+            "order", "employee", "student", "gpa", "show", "list", "find",
+            "which", "what", "how", "many",
         }
+        for col in collections:
+            domain_terms.add(col["name"].lower())
+            domain_terms.add(col["name"].lower().split("_")[-1])
+            domain_terms.add(col["name"].lower().split("_")[-1].rstrip("s"))
+            for c in col.get("columns", []):
+                leaf = c["name"].split(".")[-1].replace("[]", "").lower()
+                domain_terms.add(leaf)
+                domain_terms.update(leaf.split("_"))
 
-        # Check if any exact word matches a strong DB keyword
-        if db_keywords.intersection(words):
-            return "VALID"
-
-        # Also check for exact multi-word strong phrases
-        strong_phrases = [
-            "how many",
-            "total number",
-            "average score",
-            "list all",
-            "show me",
-            "give me"
-        ]
-        if any(phrase in q for phrase in strong_phrases):
-            return "VALID"
+        words = set(re.sub(r"[^\w\s]", " ", q).split())
+        if words.intersection(domain_terms):
+            return "DATABASE_QUERY"
 
         return "UNRELATED"
 
-    def repair_sql(self, question: str, bad_sql: str, error_message: str) -> str | None:
+    def generate_analysis(
+        self,
+        mongo_query: str,
+        question: str,
+        rows: list[dict[str, Any]],
+        columns: list[str],
+    ) -> dict[str, Any]:
         """
-        Attempts to repair an invalid SQL query based on the database execution error.
-        Returns the repaired SQL string, or None if repair fails/AI is unavailable.
+        Generates a structured AnswerModel dict (`headline`, `value`, `unit`, `summary`)
+        and bullet `insights` from the executed MongoDB aggregation result set.
         """
-        ai_status = self.ai_service.get_status()
-        if not (ai_status.get("configured") and ai_status.get("status") == "ready"):
-            return None
+        row_count = len(rows)
+        if row_count == 0:
+            return {
+                "answer": {
+                    "headline": "NO DOCUMENTS MATCHED",
+                    "value": "0",
+                    "unit": "documents",
+                    "summary": "The MongoDB aggregation pipeline executed cleanly, but 0 documents matched the filter criteria.",
+                },
+                "insights": [],
+            }
 
-        schema_summary = self.schema_service.get_schema_summary().summary
+        # Single KPI value (e.g., $count or single $group metric)
+        if row_count == 1 and len(columns) == 1:
+            col_name = columns[0]
+            raw_val = rows[0].get(col_name)
+            formatted_val = f"{raw_val:,}" if isinstance(raw_val, (int, float)) else str(raw_val)
+            headline = col_name.replace("_", " ").upper()
+            return {
+                "answer": {
+                    "headline": headline,
+                    "value": formatted_val,
+                    "unit": "documents" if "count" in col_name.lower() else "",
+                    "summary": f"MongoDB aggregation returned {formatted_val} for {col_name.replace('_', ' ')}.",
+                },
+                "insights": [
+                    f"Computed via MongoDB aggregation pipeline (`{col_name}: {formatted_val}`).",
+                ],
+            }
 
-        prompt = f"""The following SQL query was generated for the question '{question}':
-{bad_sql}
+        # Multi-row or multi-column analytical result
+        first_row = rows[0]
+        primary_label = str(first_row.get(columns[0], ""))
+        numeric_cols = [
+            c for c in columns if isinstance(first_row.get(c), (int, float)) and not c.endswith("_id")
+        ]
 
-But it failed database validation with the following error:
-{error_message}
+        if numeric_cols:
+            top_metric = numeric_cols[0]
+            top_val = first_row.get(top_metric)
+            val_str = f"{top_val:,.2f}" if isinstance(top_val, float) else f"{top_val:,}"
+            headline = f"TOP RESULT BY {top_metric.replace('_', ' ').upper()}"
+            summary = (
+                f"Across {row_count} returned MongoDB documents, '{primary_label}' leads with {top_metric.replace('_', ' ')} of {val_str}."
+            )
+            insights = [
+                f"Returned {row_count} aggregated/projected BSON documents.",
+                f"Highest `{top_metric}` observed: {val_str} ({primary_label}).",
+            ]
+            if row_count > 1:
+                last_row = rows[-1]
+                last_label = str(last_row.get(columns[0], ""))
+                last_val = last_row.get(top_metric)
+                if isinstance(last_val, (int, float)):
+                    insights.append(
+                        f"Range spans from {last_val:,} ({last_label}) to {val_str} ({primary_label})."
+                    )
+            return {
+                "answer": {
+                    "headline": headline,
+                    "value": primary_label if len(primary_label) <= 28 else val_str,
+                    "unit": f"({val_str})" if len(primary_label) <= 28 else top_metric.replace("_", " "),
+                    "summary": summary,
+                },
+                "insights": insights,
+            }
 
-Please correct the SQL query using ONLY the provided schema. Do not invent tables, columns, or relationships.
-
-Schema:
-{schema_summary}
-
-IMPORTANT RULES:
-- Return ONLY the raw SQL query.
-- Do NOT wrap the SQL in markdown formatting or backticks (no ```sql ... ```).
-- Do NOT include any explanations or conversational text.
-- Only generate SELECT statements. No data mutation is allowed.
-- IMPORTANT: When joining tables, you MUST alias all returned columns to be completely unambiguous (e.g. SELECT u.id AS user_id, o.id AS order_id) so the frontend does not receive duplicate column names.
-"""
-        try:
-            response = self.ai_service.generate(prompt)
-            sql = response["response"].strip()
-            # Clean up markdown if AI includes it
-            if sql.startswith("```sql"):
-                sql = sql[6:]
-            elif sql.startswith("```"):
-                sql = sql[3:]
-            sql = sql.removesuffix("```")
-            return sql.strip()
-        except Exception:  # noqa: BLE001
-            return None
-
-    def generate_analysis(self, sql: str, question: str, rows: list[dict], columns: list[str]) -> dict:
-        """
-        Generates a succinct answer and a plain-English explanation for the given SQL query result.
-        Returns dict with 'answer' and 'insights'.
-        """
-        if not sql:
-            return {"answer": None, "insights": []}
-
-        # 1. Deterministic extraction for single-value answers
-        val_str = None
-        if len(rows) == 1 and len(columns) == 1:
-            val = rows[0][columns[0]]
-            if isinstance(val, (int, float)):
-                val_str = f"{val:,}"
-            else:
-                val_str = str(val)
-        elif len(rows) == 0:
-            val_str = "0"
-
-        # 2. Try AI explanation
-        ai_status = self.ai_service.get_status()
-        if ai_status.get("configured") and ai_status.get("status") == "ready":
-            data_snippet = ""
-            if len(rows) > 0:
-                snippet = str(rows[:5])
-                data_snippet = f"First few rows of result:\n{snippet}\nTotal rows: {len(rows)}"
-            else:
-                data_snippet = "Result is empty (0 rows)."
-
-            prompt = f"""Analyze this SQL query and its exact returned result data to answer the user's question.
-
-Question: "{question}"
-SQL: {sql}
-{data_snippet}
-
-Return EXACTLY a JSON object with this exact structure:
-{{
-  "answer": {{
-    "headline": "A short, all-caps title (e.g. 'TOTAL STUDENTS', 'TOP DEPARTMENT', 'AVERAGE REVENUE', 'ANALYSIS COMPLETE')",
-    "value": "The primary exact value (e.g. '540', 'Computer Science'). Do NOT invent numbers. Use the exact rows data.",
-    "unit": "The unit or suffix (e.g. 'registered users', 'orders'). Keep it short.",
-    "summary": "A 1-2 sentence plain-English explanation of the finding, citing the exact numbers if relevant."
-  }},
-  "insights": [
-    "One or two key insights derived STRICTLY from the data provided. Do not hallucinate."
-  ]
-}}
-
-JSON:"""
-            try:
-                import json
-                response = self.ai_service.generate(prompt)
-                resp_text = response["response"].strip()
-                if resp_text.startswith("```json"):
-                    resp_text = resp_text[7:]
-                elif resp_text.startswith("```"):
-                    resp_text = resp_text[3:]
-                resp_text = resp_text.removesuffix("```").strip()
-                
-                parsed = json.loads(resp_text)
-                return parsed
-            except Exception:  # noqa: BLE001
-                pass
-
-        # 3. Deterministic fallback
-        summary = self._generate_deterministic_explanation(sql)
-        ans = {
-            "headline": "QUERY RESULT",
-            "value": val_str if val_str else f"{len(rows)}",
-            "unit": "records" if not val_str else "",
-            "summary": summary
+        return {
+            "answer": {
+                "headline": "MONGODB QUERY RESULTS",
+                "value": f"{row_count:,}",
+                "unit": "documents",
+                "summary": f"Retrieved {row_count} matching documents from MongoDB.",
+            },
+            "insights": [f"Projected {len(columns)} fields across {row_count} documents."],
         }
-        return {"answer": ans, "insights": []}
 
-    def _generate_deterministic_explanation(self, sql: str) -> str | None:
-        """Simple deterministic explanation for common SQL patterns."""
-        sql_upper = sql.upper()
-        if "COUNT(" in sql_upper and "GROUP BY" not in sql_upper:
-            return "This query counts the total number of records matching your criteria."
-        if "SELECT * " in sql_upper and "WHERE" not in sql_upper:
-            return "This query retrieves all the available records."
-        if "ORDER BY" in sql_upper and "DESC" in sql_upper and "LIMIT" in sql_upper:
-            return "This query sorts the results to find the top records matching your criteria."
-
-        return "This query retrieves data from the database based on your question."
-
-    def generate_follow_up_suggestions(self, question: str, sql: str) -> list[str]:
+    def generate_follow_up_suggestions(
+        self, question: str, mongo_query: str = "", source_id: str | None = None
+    ) -> list[str]:
         """
-        Generates follow-up question suggestions based on the current context.
-        Returns empty list if generation fails.
+        Generates 3 schema-grounded follow-up questions tailored to the active MongoDB collections.
+        Never hallucinates fields.
         """
-        if not sql:
+        schema = self.schema_service.get_schema(source_id)
+        collections = schema.get("tables", [])
+        if not collections:
             return []
 
-        ai_status = self.ai_service.get_status()
-        if not (ai_status.get("configured") and ai_status.get("status") == "ready"):
-            return []
+        suggestions: list[str] = []
+        col_names = [c["name"].split("_")[-1] for c in collections]
 
-        schema_summary = self.schema_service.get_schema_summary().summary
+        if "products" in col_names:
+            suggestions.append("What are the top 10 products by revenue?")
+        if "customers" in col_names:
+            suggestions.append("Which customers have spent more than ₹1 lakh?")
+        if "orders" in col_names:
+            suggestions.append("Compare sales between January and February.")
+        if "employees" in col_names:
+            suggestions.append("What is the average salary by department?")
+        if "students" in col_names:
+            suggestions.append("How many students have GPA above 3.5?")
 
-        prompt = f"""Based on the database schema and the user's previous question, suggest exactly 3 brief follow-up questions the user might want to ask next.
+        # Also add dynamic suggestions based on actual schema columns of the first collection
+        first_col = collections[0]
+        cname = first_col["name"].split("_")[-1]
+        cols = [c["name"] for c in first_col.get("columns", []) if "." not in c["name"]]
+        if cols:
+            suggestions.append(f"How many total documents are in {cname}?")
+            num_cols = [
+                c["name"]
+                for c in first_col.get("columns", [])
+                if c["data_type"] in ("Double", "Int64") and "." not in c["name"]
+            ]
+            cat_cols = [
+                c["name"]
+                for c in first_col.get("columns", [])
+                if c["data_type"] == "String" and "." not in c["name"] and not c["name"].endswith("_id")
+            ]
+            if num_cols and cat_cols:
+                suggestions.append(f"Show average {num_cols[0]} by {cat_cols[0]} in {cname}.")
 
-Schema:
-{schema_summary}
+        # Filter out the exact question the user just asked
+        q_norm = question.strip().lower()
+        filtered = [s for s in suggestions if s.lower() != q_norm]
+        # Deduplicate preserving order
+        seen = set()
+        unique_list = []
+        for s in filtered:
+            if s not in seen:
+                seen.add(s)
+                unique_list.append(s)
+        return unique_list[:3]
 
-Previous Question: "{question}"
-Previous SQL: {sql}
-
-Provide the suggestions as a simple bulleted list. Do not repeat the previous question. Do not hallucinate tables or columns not in the schema. Do not include introductory text.
-
-Follow-ups:"""
+    def repair_mongo_query(
+        self, question: str, broken_query: str, error_msg: str, source_id: str | None = None
+    ) -> dict[str, Any] | None:
+        from app.services.text_to_sql_service import MongoQueryService
 
         try:
-            response = self.ai_service.generate(prompt)
-            lines = response["response"].split("\n")
-
-            suggestions = []
-            for line in lines:
-                cleaned = re.sub(r"^[-*•0-9.]+\s*", "", line.strip())
-                if cleaned and cleaned.lower() != question.lower():
-                    suggestions.append(cleaned)
-
-            # Return max 3
-            return suggestions[:3]
-        except Exception:  # noqa: BLE001
-            return []
+            return MongoQueryService(self.schema_service).generate_structured_query(question, source_id)
+        except Exception:
+            return None

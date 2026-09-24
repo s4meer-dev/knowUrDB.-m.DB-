@@ -1,151 +1,241 @@
-import json
-import logging
+import datetime
+import hashlib
+import math
+import os
+import re
 import uuid
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any
 
-from app.services.gemini_provider import GeminiProvider
-import numpy as np
 import PyPDF2
 
-logger = logging.getLogger(__name__)
+from app.core.mongodb import MongoDBManager
+
+
+def _compute_vector_embedding(text: str, dim: int = 128) -> list[float]:
+    """
+    Computes a normalized L2 dense vector embedding (dim=128) using token + trigram
+    feature hashing so MongoDB cosine vector search works deterministically with zero latency.
+    """
+    vec = [0.0] * dim
+    clean = re.sub(r"[^\w\s]", " ", text.lower())
+    tokens = [t for t in clean.split() if len(t) > 1]
+    if not tokens:
+        return vec
+
+    features: list[tuple[str, float]] = []
+    for tok in tokens:
+        features.append((tok, 2.0))
+        if len(tok) >= 4:
+            for i in range(len(tok) - 2):
+                features.append((tok[i : i + 3], 0.75))
+
+    for feat, weight in features:
+        h = int(hashlib.md5(feat.encode("utf-8")).hexdigest()[:8], 16)
+        idx = h % dim
+        sign = 1.0 if (h & 1) == 0 else -1.0
+        vec[idx] += sign * weight
+
+    norm = math.sqrt(sum(x * x for x in vec))
+    if norm > 0:
+        vec = [round(x / norm, 6) for x in vec]
+    return vec
+
+
+def _cosine_similarity(v1: list[float], v2: list[float]) -> float:
+    if not v1 or not v2 or len(v1) != len(v2):
+        return 0.0
+    return sum(a * b for a, b in zip(v1, v2))
+
 
 class DocumentProcessor:
     """
-    Handles unstructured document text extraction, chunking, and lightweight vector indexing using numpy.
+    MongoDB-native Document & RAG Pipeline:
+    UPLOAD -> TEXT EXTRACTION -> CLEANING -> CHUNKING -> VECTOR EMBEDDING ->
+    MONGODB STORAGE (_sys_document_chunks) -> HYBRID VECTOR RETRIEVAL -> LLM SYNTHESIS
     """
-    def __init__(self, ai_provider: GeminiProvider):
+
+    def __init__(self, ai_provider: Any = None):
         self.ai = ai_provider
 
-    def process_document(self, file_path: str, source_id: str, original_filename: str) -> None:
-        """
-        Extracts text, chunks it, generates embeddings, and saves to numpy arrays for simple vector search.
-        """
-        ext = Path(file_path).suffix.lower()
-        chunks = []
-        
+    def ingest_document(
+        self, source_id: str, file_path: str, filename: str
+    ) -> dict[str, Any]:
+        db = MongoDBManager.get_db()
+        db[MongoDBManager.SYS_DOCUMENT_CHUNKS].delete_many({"source_id": source_id})
+
+        pages = self._extract_pages(file_path, filename)
+        chunk_docs: list[dict[str, Any]] = []
+        now_iso = datetime.datetime.now(datetime.UTC).isoformat()
+
+        for page_num, page_text in pages:
+            chunks = self._chunk_text(page_text, chunk_size=550, overlap=80)
+            for idx, chunk_str in enumerate(chunks):
+                embedding = _compute_vector_embedding(chunk_str)
+                chunk_docs.append(
+                    {
+                        "chunk_id": f"{source_id}_p{page_num}_c{idx}_{uuid.uuid4().hex[:6]}",
+                        "source_id": source_id,
+                        "filename": filename,
+                        "page_number": page_num,
+                        "text": chunk_str,
+                        "embedding": embedding,
+                        "created_at": now_iso,
+                    }
+                )
+
+        if chunk_docs:
+            db[MongoDBManager.SYS_DOCUMENT_CHUNKS].insert_many(chunk_docs)
+
+        return {
+            "chunk_count": len(chunk_docs),
+            "page_count": len(pages),
+        }
+
+    def _extract_pages(self, file_path: str, filename: str) -> list[tuple[int, str]]:
+        ext = os.path.splitext(filename)[1].lower()
+        pages: list[tuple[int, str]] = []
+        path_obj = Path(file_path)
+        if not path_obj.exists():
+            return pages
+
         if ext == ".pdf":
-            chunks = self._extract_pdf(file_path, source_id, original_filename)
-        elif ext in [".txt", ".md", ".markdown"]:
-            chunks = self._extract_text(file_path, source_id, original_filename)
-        else:
-            raise ValueError(f"Unsupported document type: {ext}")
-            
-        if not chunks:
-            logger.warning(f"No text extracted from document: {original_filename}")
-            return
-            
-        # Generate embeddings in batches of 100 to avoid API limits
-        batch_size = 100
-        embeddings_list = []
-        
-        for i in range(0, len(chunks), batch_size):
-            batch_chunks = chunks[i:i+batch_size]
-            texts = [c["text"] for c in batch_chunks]
-            try:
-                emb = self.ai.generate_embeddings(texts)
-                embeddings_list.extend(emb)
-            except Exception as e:
-                logger.error(f"Failed to generate embeddings for batch: {e}")
-                raise
-                
-        # Save embeddings and metadata
-        source_dir = Path(file_path).parent
-        
-        embeddings_array = np.array(embeddings_list, dtype=np.float32)
-        np.save(source_dir / "embeddings.npy", embeddings_array)
-        
-        with open(source_dir / "metadata.json", "w", encoding="utf-8") as f:
-            json.dump(chunks, f, ensure_ascii=False)
-
-    def search(self, query: str, source_dir: str, top_k: int = 5) -> List[Dict[str, Any]]:
-        """
-        Searches the vector index in the given source directory for the query.
-        """
-        source_path = Path(source_dir)
-        embeddings_path = source_path / "embeddings.npy"
-        metadata_path = source_path / "metadata.json"
-        
-        if not embeddings_path.exists() or not metadata_path.exists():
-            return []
-            
-        try:
-            embeddings_array = np.load(embeddings_path)
-            with open(metadata_path, "r", encoding="utf-8") as f:
-                metadata = json.load(f)
-                
-            query_emb = self.ai.generate_embeddings([query])[0]
-            query_vector = np.array(query_emb, dtype=np.float32)
-            
-            # Cosine similarity
-            dot_product = np.dot(embeddings_array, query_vector)
-            norms_db = np.linalg.norm(embeddings_array, axis=1)
-            norm_q = np.linalg.norm(query_vector)
-            
-            # Avoid division by zero
-            norms_db[norms_db == 0] = 1e-10
-            if norm_q == 0:
-                norm_q = 1e-10
-                
-            similarities = dot_product / (norms_db * norm_q)
-            
-            # Get top_k indices
-            top_indices = np.argsort(similarities)[-top_k:][::-1]
-            
-            results = []
-            for idx in top_indices:
-                if similarities[idx] > 0.5: # Relevance threshold
-                    result = metadata[idx].copy()
-                    result["score"] = float(similarities[idx])
-                    results.append(result)
-            return results
-        except Exception as e:
-            logger.error(f"Error searching vectors: {e}")
-            return []
-
-    def _extract_pdf(self, file_path: str, source_id: str, original_filename: str) -> List[Dict[str, Any]]:
-        chunks = []
-        try:
             with open(file_path, "rb") as f:
                 reader = PyPDF2.PdfReader(f)
-                for page_num in range(len(reader.pages)):
-                    page = reader.pages[page_num]
-                    text = page.extract_text()
-                    if text and text.strip():
-                        # Semantic chunking by paragraphs (simplified as double newline)
-                        paragraphs = text.split("\n\n")
-                        for p_idx, p in enumerate(paragraphs):
-                            p = p.strip()
-                            if len(p) > 20: # Minimum character length
-                                chunks.append({
-                                    "chunk_id": f"{source_id}_p{page_num+1}_{p_idx}",
-                                    "source_id": source_id,
-                                    "document_name": original_filename,
-                                    "page_number": page_num + 1,
-                                    "text": p
-                                })
-        except Exception as e:
-            logger.error(f"Failed to extract PDF text: {e}")
-            raise
-        return chunks
-
-    def _extract_text(self, file_path: str, source_id: str, original_filename: str) -> List[Dict[str, Any]]:
-        chunks = []
-        try:
+                for idx, page in enumerate(reader.pages, start=1):
+                    txt = page.extract_text() or ""
+                    txt = re.sub(r"\s+", " ", txt).strip()
+                    if txt:
+                        pages.append((idx, txt))
+        else:
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-                paragraphs = content.split("\n\n")
-                for p_idx, p in enumerate(paragraphs):
-                    p = p.strip()
-                    if len(p) > 20:
-                        chunks.append({
-                            "chunk_id": f"{source_id}_p{p_idx}",
-                            "source_id": source_id,
-                            "document_name": original_filename,
-                            "page_number": None,
-                            "text": p
-                        })
-        except Exception as e:
-            logger.error(f"Failed to extract text: {e}")
-            raise
+            paragraphs = [p.strip() for p in re.split(r"\n\s*\n", content) if p.strip()]
+            if not paragraphs and content.strip():
+                paragraphs = [content.strip()]
+            for idx, para in enumerate(paragraphs, start=1):
+                pages.append((idx, para))
+
+        return pages
+
+    def _chunk_text(
+        self, text: str, chunk_size: int = 550, overlap: int = 80
+    ) -> list[str]:
+        text = text.strip()
+        if not text:
+            return []
+        if len(text) <= chunk_size:
+            return [text]
+        chunks: list[str] = []
+        start = 0
+        while start < len(text):
+            end = min(start + chunk_size, len(text))
+            chunks.append(text[start:end].strip())
+            if end >= len(text):
+                break
+            start = max(end - overlap, start + 1)
         return chunks
+
+    def search(
+        self, query: str, source_or_path: str, top_k: int = 4
+    ) -> list[dict[str, Any]]:
+        """
+        Retrieves the most relevant document chunks from MongoDB using hybrid
+        Vector Similarity + Lexical Relevance scoring.
+        """
+        db = MongoDBManager.get_db()
+
+        # Resolve source_id
+        chunks = list(
+            db[MongoDBManager.SYS_DOCUMENT_CHUNKS].find({"source_id": source_or_path})
+        )
+        if not chunks:
+            # Check if source_or_path is a storage_location or file path
+            src = db[MongoDBManager.SYS_SOURCES].find_one(
+                {
+                    "$or": [
+                        {"source_id": source_or_path},
+                        {"storage_location": source_or_path},
+                    ]
+                }
+            )
+            if src:
+                chunks = list(
+                    db[MongoDBManager.SYS_DOCUMENT_CHUNKS].find(
+                        {"source_id": src["source_id"]}
+                    )
+                )
+            if not chunks and Path(source_or_path).exists():
+                self.ingest_document(
+                    source_id=source_or_path,
+                    file_path=source_or_path,
+                    filename=Path(source_or_path).name,
+                )
+                chunks = list(
+                    db[MongoDBManager.SYS_DOCUMENT_CHUNKS].find(
+                        {"source_id": source_or_path}
+                    )
+                )
+
+        if not chunks:
+            return []
+
+        q_vec = _compute_vector_embedding(query)
+        q_words = {
+            w
+            for w in re.sub(r"[^\w\s]", " ", query.lower()).split()
+            if len(w) > 2
+            and w
+            not in {
+                "what",
+                "does",
+                "the",
+                "say",
+                "about",
+                "from",
+                "document",
+                "file",
+                "which",
+                "where",
+                "how",
+            }
+        }
+
+        scored: list[dict[str, Any]] = []
+        for ch in chunks:
+            c_vec = ch.get("embedding") or _compute_vector_embedding(ch.get("text", ""))
+            vec_score = _cosine_similarity(q_vec, c_vec)
+
+            text_lower = ch.get("text", "").lower()
+            lexical_hits = sum(1 for w in q_words if w in text_lower)
+            lexical_score = (lexical_hits / max(len(q_words), 1)) if q_words else 0.0
+
+            combined_score = (0.55 * vec_score) + (0.45 * lexical_score)
+            if combined_score > 0.08 or lexical_hits > 0:
+                scored.append(
+                    {
+                        "chunk_id": ch.get("chunk_id"),
+                        "text": ch.get("text", ""),
+                        "page_number": ch.get("page_number", 1),
+                        "score": round(combined_score, 4),
+                    }
+                )
+
+        if not scored and chunks:
+            # If the user asks a broad question like "Summarize this document", return first top_k chunks
+            if any(
+                k in query.lower()
+                for k in ("summarize", "summary", "overview", "what is", "describe", "about", "content")
+            ):
+                return [
+                    {
+                        "chunk_id": ch.get("chunk_id"),
+                        "text": ch.get("text", ""),
+                        "page_number": ch.get("page_number", 1),
+                        "score": 0.5,
+                    }
+                    for ch in chunks[:top_k]
+                ]
+
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        return scored[:top_k]

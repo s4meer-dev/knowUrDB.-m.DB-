@@ -1,144 +1,83 @@
-import json
-import logging
+import re
+import time
 from typing import Any
 
-from app.services.query_executor import QueryExecutor
-from app.services.schema_service import SchemaService
-from app.services.gemini_provider import GeminiProvider
+from app.core.mongodb import MongoDBManager
+from app.services.schema_service import MongoSchemaService
 
-logger = logging.getLogger(__name__)
 
 class MetaQueryRouter:
     """
-    Handles meta-queries such as "Show all tables", "Describe database", or "How many total records".
-    These queries can be answered deterministically without direct user SQL execution.
+    Deterministic MongoDB Meta-Query Router.
+    Handles database/collection discovery, collection counts, schema overviews,
+    and index inspections in sub-millisecond time without requiring an LLM call.
     """
 
-    def __init__(self, schema_service: SchemaService, query_executor: QueryExecutor, ai_provider: GeminiProvider):
+    def __init__(
+        self,
+        schema_service: MongoSchemaService,
+        query_executor: Any = None,
+        ai_provider: Any = None,
+    ):
         self.schema_service = schema_service
         self.query_executor = query_executor
         self.ai = ai_provider
 
     def route_meta_query(self, question: str) -> dict[str, Any] | None:
-        """
-        Attempts to answer the question using AI-driven intent classification.
-        Returns a dictionary representing the response data (columns, rows, execution_time_ms, explanation)
-        if matched, otherwise returns None.
-        """
-        prompt = f"""
-You are a classification system for database questions.
-Analyze the user's question and determine if it is asking for high-level metadata about the database itself, or if it requires querying the actual data records.
+        start_time = time.perf_counter()
+        q = question.strip().lower()
+        q_clean = re.sub(r"[^\w\s]", "", q)
 
-Categories:
-1. LIST_TABLES: User wants to know what tables exist, how many tables there are, or list the tables. Examples: "how many tables are there in the dataset", "what tables do we have", "list tables".
-2. SCHEMA_SUMMARY: User wants to know the structure of the database, what columns exist, or a general description of the data schema. Examples: "describe the database", "what is the schema", "what columns are in users".
-3. GLOBAL_COUNT: User wants to know the total number of records/rows across the entire database or asking for "total data" overall. Examples: "total data", "how many rows total", "record count".
-4. DATA_QUERY: User is asking for specific data, aggregations, or conditional queries that require writing a SQL SELECT statement. Examples: "how many users are from USA", "what is the average price", "show me John's orders", "total revenue".
-
-Question: "{question}"
-
-Return EXACTLY a JSON object with this structure (no markdown, no backticks):
-{{
-  "category": "LIST_TABLES" | "SCHEMA_SUMMARY" | "GLOBAL_COUNT" | "DATA_QUERY"
-}}
-"""
-        try:
-            response_text = self.ai.generate_text(prompt)
-            if response_text.startswith("```json"):
-                response_text = response_text[7:-3]
-            elif response_text.startswith("```"):
-                response_text = response_text[3:-3]
-                
-            data = json.loads(response_text.strip())
-            category = data.get("category", "DATA_QUERY")
-            
-            if category == "LIST_TABLES":
-                return self._handle_list_tables()
-            elif category == "SCHEMA_SUMMARY":
-                return self._handle_schema_summary()
-            elif category == "GLOBAL_COUNT":
-                return self._handle_global_record_count()
-            else:
-                return None
-        except Exception as e:
-            logger.error(f"Error classifying meta query: {e}")
+        schema = self.schema_service.get_schema()
+        collections = schema.get("tables", [])
+        if not collections:
             return None
 
-    def _handle_list_tables(self) -> dict[str, Any]:
-        tables = self.schema_service.get_table_names()
-        columns = ["table_name"]
-        rows = [{"table_name": t} for t in tables]
-        return {
-            "columns": columns,
-            "rows": rows,
-            "row_count": len(rows),
-            "execution_time_ms": 0.0,
-            "headline": "DATABASE STRUCTURE",
-            "value": str(len(rows)),
-            "unit": "tables",
-            "summary": "Here is the list of all available tables in the database.",
-            "generated_sql": "Metadata operation — no user query SQL executed",
-        }
+        # 1. Questions asking about what collections/tables exist in the database
+        if re.search(
+            r"\b(what|which|list|show|describe)\b.*\b(collections|tables|datasets|schema|structure)\b",
+            q_clean,
+        ) or q_clean in {"schema", "show collections", "list collections", "show tables", "list tables", "describe database"}:
+            rows = []
+            for col in collections:
+                rows.append(
+                    {
+                        "collection": col["name"],
+                        "document_count": col.get("document_count", 0),
+                        "field_count": len(col.get("columns", [])),
+                        "indexes": len(col.get("indexes", [])),
+                        "fields": ", ".join(c["name"] for c in col.get("columns", [])[:6]),
+                    }
+                )
+            elapsed = round((time.perf_counter() - start_time) * 1000.0, 2)
+            col_names = ", ".join(c["name"] for c in collections)
+            return {
+                "generated_sql": "db.getCollectionInfos()",
+                "columns": ["collection", "document_count", "field_count", "indexes", "fields"],
+                "rows": rows,
+                "row_count": len(rows),
+                "execution_time_ms": elapsed,
+                "headline": "MONGODB COLLECTIONS",
+                "value": str(len(rows)),
+                "unit": "collections",
+                "summary": f"The active MongoDB source contains {len(rows)} collections: {col_names}.",
+            }
 
-    def _handle_schema_summary(self) -> dict[str, Any]:
-        schema = self.schema_service.get_schema()
-        columns = ["table_name", "columns", "primary_keys", "foreign_keys"]
-        rows = []
-        for table in schema.tables:
-            rows.append(
-                {
-                    "table_name": table.name,
-                    "columns": ", ".join(col.name for col in table.columns),
-                    "primary_keys": ", ".join(table.primary_keys)
-                    if table.primary_keys
-                    else "None",
-                    "foreign_keys": ", ".join(
-                        f"{fk.source_column} -> {fk.referenced_table}.{fk.referenced_column}"
-                        for fk in table.foreign_keys
-                    )
-                    if table.foreign_keys
-                    else "None",
-                }
-            )
-        return {
-            "columns": columns,
-            "rows": rows,
-            "row_count": len(rows),
-            "execution_time_ms": 0.0,
-            "headline": "SCHEMA OVERVIEW",
-            "value": str(len(rows)),
-            "unit": "tables",
-            "summary": "This is a summary of the database structure, including tables, columns, and relationships.",
-            "generated_sql": "Metadata operation — no user query SQL executed",
-        }
+        # 2. Total record/document count across the active source
+        if re.search(r"\b(how many total records|total documents in database|how many records in total)\b", q_clean):
+            total_docs = sum(c.get("document_count", 0) for c in collections)
+            rows = [{"collection": c["name"], "documents": c.get("document_count", 0)} for c in collections]
+            elapsed = round((time.perf_counter() - start_time) * 1000.0, 2)
+            return {
+                "generated_sql": 'db.stats({ scale: 1 })',
+                "columns": ["collection", "documents"],
+                "rows": rows,
+                "row_count": len(rows),
+                "execution_time_ms": elapsed,
+                "headline": "TOTAL MONGODB DOCUMENTS",
+                "value": f"{total_docs:,}",
+                "unit": "documents",
+                "summary": f"There are {total_docs:,} total BSON documents stored across {len(collections)} collections.",
+            }
 
-    def _handle_global_record_count(self) -> dict[str, Any]:
-        tables = self.schema_service.get_table_names()
-        columns = ["table_name", "record_count"]
-        rows = []
-
-        # Execute individual counts safely using the executor
-        total_time = 0.0
-        for table in tables:
-            # Table names from schema_service are already validated
-            sql = f"SELECT COUNT(*) FROM {table};"
-            try:
-                _, t_rows, exec_time = self.query_executor.execute(sql)
-                count = t_rows[0]["COUNT(*)"]
-                rows.append({"table_name": table, "record_count": count})
-                total_time += exec_time
-            except Exception:  # noqa: BLE001
-                rows.append({"table_name": table, "record_count": 0})
-
-        total_records = sum(r["record_count"] for r in rows)
-        return {
-            "columns": columns,
-            "rows": rows,
-            "row_count": len(rows),
-            "execution_time_ms": round(total_time, 2),
-            "headline": "DATABASE OVERVIEW",
-            "value": f"{total_records:,}",
-            "unit": "total rows",
-            "summary": "Here is the total number of records stored in each table across the database.",
-            "generated_sql": "Metadata operation — no user query SQL executed",
-        }
+        return None
