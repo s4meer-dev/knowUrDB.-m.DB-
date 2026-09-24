@@ -19,10 +19,11 @@
    - Multi-layer security gateway allowing **only** `find`, `aggregate`, `count`, and `distinct`.
    - Explicitly blocks all write/DDL commands (`insert*`, `update*`, `delete*`, `drop*`, `bulkWrite`, `renameCollection`), server-side JavaScript (`$where`, `$function`, `$accumulator`, `eval`, `mapReduce`), pipeline write stages (`$out`, `$merge`), and internal system collections (`_sys_*`, `system.*`).
 
-4. **Multi-Source Routing, Ambiguity Detection & Cross-Source Comparison**
-   - **QueryRouter**: Automatically routes questions to `META`, `SINGLE_SOURCE`, `CLARIFICATION_REQUIRED`, `COMPARISON`, or `DOCUMENT_RAG`.
-   - **Interactive Clarification**: When multiple uploaded MongoDB sources match a user's question with similar confidence, presents an interactive source disambiguation card.
-   - **Cross-Source Comparison**: Runs parallel aggregation pipelines across multiple MongoDB collections (e.g. Q1 vs Q2 sales) and synthesizes side-by-side deltas.
+4. **Dataset-First Intelligence, Multi-Signal Collection Resolution & Cross-Collection `$lookup`**
+   - **`DatasetIntelligenceService` & `CollectionResolver`**: Inspects the entire dataset (`knowurdb`) first (`DATASET ≠ COLLECTION`). Generic or ambiguous queries (`"how many records are there?"`, `"show me the records"`) never blindly guess a default collection—instead they return `NEED A LITTLE MORE CONTEXT` with rich interactive **Collection Choice Cards** showing collection name, document count, field count, description, and field previews.
+   - **Non-Existent Collection Guard**: Questions targeting collections not in the dataset (`"show teachers"`) detect the missing collection and guide the user to available collections.
+   - **Cross-Collection `$lookup` Reasoning**: Automatically joins related collections (`orders ↔ customers`, `orders ↔ products`) with native MongoDB `$lookup` pipelines (`DATA SOURCES: orders ↔ customers`).
+   - **Session Navigation & Collection Switching**: Full `[ ← Back ]` history navigation and `Using: <collection> [ Change ]` live collection switching without retyping.
 
 5. **MongoDB Vector RAG for Unstructured Documents**
    - Uploads of `.pdf`, `.md`, and `.txt` files are extracted, merged by semantic sections, chunked with overlap, embedded into **128-dimensional L2-normalized dense vectors**, and stored in `_sys_document_chunks`.
@@ -41,17 +42,18 @@ flowchart TD
         FastAPI --> Detector["FileDetector (CSV, TSV, JSON, JSONL, XLSX, Parquet, PDF, MD, TXT, SQL)"]
         Detector -->|Structured Data| Converter["FormatConverter (Nested BSON Modeling + Auto-Indexing)"]
         Detector -->|Unstructured Docs| DocProc["DocumentProcessor (Chunking + 128-dim Vector Embeddings)"]
-        Converter --> MongoUserCols[("MongoDB User Collections (products, customers, orders, src_*)")]
+        Converter --> MongoUserCols[("MongoDB User Collections (knowurdb.demo_database, src_*)")]
         DocProc --> MongoChunks[("MongoDB _sys_document_chunks (Vector + Text Store)")]
     end
 
-    subgraph QueryEngine["Intelligent Query Routing & Execution"]
-        FastAPI --> Router["QueryRouter (META | SINGLE_SOURCE | CLARIFICATION | COMPARISON | DOCUMENT_RAG)"]
-        Router -->|Structured Query| Compiler["MongoQueryService (Gemini LLM + Deterministic Aggregation Compiler)"]
-        Compiler --> Validator["MongoQueryValidator (Read-Only Sandbox & Stage Guard)"]
-        Validator --> Executor["MongoQueryExecutor (PyMongo Cursor + maxTimeMS)"]
+    subgraph QueryEngine["Dataset-First Intelligence & Execution"]
+        FastAPI --> DatasetIntel["DatasetIntelligenceService + CollectionResolver (Multi-Signal Scoring)"]
+        DatasetIntel -->|Ambiguous / Not Found| Clarification["Interactive Collection Choice Cards (Clarification Flow)"]
+        DatasetIntel -->|Resolved / Multi-Collection| IntentPlanner["IntentClassifier + PresentationPlanner ($lookup, $group, $match)"]
+        IntentPlanner --> Validator["MongoQueryValidator (Read-Only Sandbox & Stage Guard)"]
+        Validator --> Executor["MongoQueryExecutor (PyMongo Cursor + Grouped $lookup Rewriter)"]
         Executor --> MongoUserCols
-        Router -->|RAG Query| VectorSearch["Hybrid Cosine Vector + Lexical Search"]
+        DatasetIntel -->|RAG Query| VectorSearch["Hybrid Cosine Vector + Lexical Search"]
         VectorSearch --> MongoChunks
     end
 ```
@@ -75,7 +77,7 @@ flowchart TD
 - **Database**: MongoDB 8.x (`pymongo 4.18+`, `mongomock 4.3+` fallback for isolated environments)
 - **Backend**: Python 3.12, FastAPI, Pydantic v2, Pandas, PyArrow, OpenPyXL, PyPDF2, Google GenAI SDK (`google-genai`)
 - **Frontend**: React 19, TypeScript 5.9, Vite 8, Tailwind CSS v4, Recharts, Lucide Icons, Framer Motion
-- **Testing & Quality**: Pytest (`51/51` backend tests), Vitest (`6/6` frontend tests), Ruff (`All checks passed`), Oxlint (`0 errors`)
+- **Testing & Quality**: Pytest (`67/67` backend tests), Vitest (`6/6` frontend tests), Ruff (`All checks passed`), Oxlint (`0 errors`)
 
 ---
 
@@ -88,15 +90,18 @@ knowUrDB.(m.DB)/
 │   │   ├── api/                 # FastAPI routers (health, query, schema, sources, history, suggestions, ai, settings)
 │   │   ├── core/                # MongoDBManager (mongodb.py), config.py, exception handlers
 │   │   ├── models/              # Pydantic v2 models (QueryResponse, SourceMetadata, SchemaResponse)
-│   │   └── services/            # Core MongoDB services:
-│   │       ├── demo_generator.py          # Rich MongoDB demo dataset (products, customers, orders, employees, students)
+│   │   └── services/            # Core MongoDB & Intelligence services:
+│   │       ├── dataset_intelligence.py    # DatasetIntelligenceService, CollectionIntelligenceService & CollectionResolver
+│   │       ├── intent_classifier.py       # Semantic Intent & Multi-Collection ($lookup) Query Planner
+│   │       ├── presentation_planner.py    # Deterministic Grounded Answer & Presentation Contract Planner
+│   │       ├── demo_generator.py          # Grouped MongoDB demo dataset (products, customers, orders, employees, students)
 │   │       ├── document_processor.py      # PDF/MD/TXT chunking + 128-dim L2 vector embeddings + cosine search
 │   │       ├── mongo_validator.py         # Read-only MongoDB security validator
-│   │       ├── query_executor.py          # PyMongo aggregation & find executor with maxTimeMS
+│   │       ├── query_executor.py          # PyMongo aggregation & cross-collection $lookup executor with maxTimeMS
 │   │       ├── schema_service.py          # BSON type, nested path, index & $lookup relationship introspector
 │   │       ├── text_to_sql_service.py     # MongoQueryService (NL -> MongoDB Aggregation Pipeline)
 │   │       └── ingestion/                 # FileDetector, FormatConverter, IngestionPipeline, SQL migration importer
-│   ├── tests/                   # Comprehensive 51-test Pytest suite (unit, API, E2E, security)
+│   ├── tests/                   # Comprehensive 67-test Pytest suite (unit, API, E2E, intelligence pipeline, security)
 │   ├── pyproject.toml           # Python & Ruff configuration
 │   └── requirements.txt         # Backend dependencies
 ├── frontend/
