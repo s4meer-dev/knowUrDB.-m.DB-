@@ -1,68 +1,19 @@
-# Architecture
+# knowUrDB (m.DB) — System Architecture
 
-## Conceptual Architecture
+## 1. High-Level Overview
 
-```text
-User
-  ↓
-React Frontend
-  ↓
-FastAPI Backend
-  ↓
-Application Services
-  ├── Database Service
-  ├── Schema Service
-  ├── AI Service
-  ├── SQL Validation Service
-  ├── Query Execution Service
-  └── Result/Visualization Service
-```
+`knowUrDB (m.DB)` is architected from the ground up around **MongoDB** as its unified persistence, analytics, metadata, and vector retrieval engine.
 
-## AI Service and Model Configuration
-The AI provider and model must be configurable through environment/configuration rather than hard-coded throughout the application.
-Conceptual configuration:
-```text
-AI_PROVIDER=gemini
-AI_MODEL=<configured model>
-```
-
-The architecture should conceptually be:
-```text
-Configuration
-    ↓
-AI Provider Selection
-    ↓
-AIProvider
-    ↓
-GeminiProvider
-    ↓
-Gemini API
-```
-The architecture must explicitly prevent the frontend from directly accessing Gemini. The Gemini API key must remain server-side. Future providers can be added without rewriting application services.
-
-## Database Service
-```text
-Database Provider abstraction
-  ↓
-SQLite Provider
-```
-
-## AI Provider Architecture
-The future backend will be designed around an AI provider abstraction:
-- Avoid vendor lock-in.
-- Support model configurability.
-- Provide structured output.
-- Enable prompt versioning.
-- Handle retries, timeouts, and API errors.
-- Ensure rate limit, token/cost awareness, and observability.
-The application must not scatter Gemini-specific code throughout the backend.
-
-## Database Provider Architecture
-The database provider abstraction will handle:
-- Connection lifecycle
-- Schema introspection
-- Read-only execution
-- Query timeout strategy
-- Row limits and result size limits
-- Database isolation
-- Uploaded database handling
+### Core Layers
+1. **Presentation Layer (`frontend/`)**:
+   - Built with React 19, TypeScript, Tailwind CSS v4, and Recharts.
+   - Displays interactive MongoDB Aggregation Pipelines (`MongoQueryPanel` with stage badges `$match`, `$group`, `$lookup`, `$unwind`, `$sort`, `$limit`), BSON field paths (`contact.email`, `items[].price`), collection indexes, and sample JSON documents.
+2. **Orchestration & Routing Layer (`backend/app/api/`, `backend/app/services/query_router.py`)**:
+   - Classifies every natural-language request into one of five execution paths:
+     - `META`: Workspace-level catalog introspection (`_sys_sources`, `_sys_collections_metadata`).
+     - `SINGLE_SOURCE`: Targets a specific MongoDB dataset and executes an aggregation or find pipeline.
+     - `CLARIFICATION_REQUIRED`: Triggered when multiple MongoDB sources score within the ambiguity threshold.
+     - `COMPARISON`: Executes parallel MongoDB pipelines across multiple datasets and synthesizes deltas.
+     - `DOCUMENT_RAG`: Performs hybrid vector + lexical search over `_sys_document_chunks`.
+3. **MongoDB Data & Storage Layer (`backend/app/core/mongodb.py`)**:
+   - Managed by `MongoDBManager` with connection pooling (`maxPoolSize=50`), automatic health checks (`ping`), and seamless fallback to `mongomock` when running in isolated CI containers without a local daemon.

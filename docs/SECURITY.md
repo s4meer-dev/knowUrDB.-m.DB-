@@ -1,35 +1,11 @@
-# Security Strategy
+# Security Model & Read-Only Query Sandbox
 
-## AI Security
-- **Never trust AI-generated SQL**.
+## 1. `MongoQueryValidator` (`backend/app/services/mongo_validator.py`)
 
-## SQL Safety
-The future pipeline must be:
-Natural language → LLM → SQL parser → SQL validation → read-only validation → schema validation → resource validation → execution.
+Every natural-language prompt and every generated MongoDB query specification is validated before execution:
 
-Dangerous statements such as `DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, `CREATE`, and `TRUNCATE` must not be allowed in the read-only query system unless explicitly designed features require them in the future.
-
-## API Keys
-- Never place Gemini API keys in frontend code.
-- Never commit `.env`.
-- Use environment variables.
-
-## Upload Security
-Future upload functionality must consider:
-- File size limits
-- Allowed extensions
-- Malformed SQLite databases
-- Database integrity
-- Temporary storage
-- Isolation and cleanup
-
-## Query Safety
-Future execution must consider:
-- Maximum execution time
-- Maximum rows
-- Maximum result size
-- Resource exhaustion
-- Expensive queries
-
-## Information Disclosure
-- Do not expose internal stack traces or secrets to end users.
+1. **Allowed Operations**: Strictly restricted to `{"find", "aggregate", "count", "distinct"}`.
+2. **Blocked Write & Admin Operations**: Rejects `insert`, `insertOne`, `insertMany`, `update`, `updateOne`, `updateMany`, `replaceOne`, `delete`, `deleteOne`, `deleteMany`, `remove`, `drop`, `dropDatabase`, `dropIndexes`, `createIndex`, `renameCollection`, `bulkWrite`, `findOneAndDelete`, `findOneAndUpdate`, and `findOneAndReplace`.
+3. **Blocked Pipeline Stages & Server-Side JS**: Recursively scans all nested dicts and lists to block `$out`, `$merge`, `$where`, `$function`, `$accumulator`, `$currentOp`, `$collStats`, `eval`, and `mapReduce`.
+4. **System Collection Isolation**: Blocks any query or `$lookup` stage targeting `_sys_*`, `system.*`, `admin`, `local`, or `config`.
+5. **Execution Guardrails**: `MongoQueryExecutor` enforces `maxTimeMS` cursor timeouts and automatic `$limit` caps (`MAX_RESULT_LIMIT = 500`).
