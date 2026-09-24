@@ -59,6 +59,10 @@ class ClarificationCandidate(BaseModel):
     source_id: str
     name: str
     collection: str | None = None
+    document_count: int | None = None
+    field_count: int | None = None
+    fields_preview: list[str] = Field(default_factory=list)
+    description: str | None = None
 
 
 class AnswerModel(BaseModel):
@@ -133,6 +137,10 @@ class NaturalLanguageQueryResponse(BaseModel):
     )
     sources: list[QuerySourceCitation] = Field(
         default_factory=list, description="Citations for the sources used."
+    )
+    sources_used: list[str] = Field(
+        default_factory=list,
+        description="Collection names used in single or multi-collection queries.",
     )
     candidates: list[ClarificationCandidate] = Field(
         default_factory=list, description="Candidates when clarification is required."

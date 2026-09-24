@@ -483,7 +483,7 @@ async def query_database(request: NaturalLanguageQueryRequest):
             if "." not in c["name"] and "[]" not in c["name"] and c["name"] != "_id"
         ][:8]
 
-    # 5D. CLARIFICATION (Ambiguous collection)
+    # 5D. CLARIFICATION (Ambiguous collection or non-existent collection)
     if plan.intent == "CLARIFICATION":
         return NaturalLanguageQueryResponse(
             question=request.question,
@@ -491,17 +491,21 @@ async def query_database(request: NaturalLanguageQueryRequest):
             query_plan=asdict(plan),
             presentation={
                 "type": "clarification",
-                "title": "Which collection would you like to inspect?",
+                "title": "NEED A LITTLE MORE CONTEXT",
                 "summary": plan.clarification_message,
-                "options": plan.clarification_options,
+                "candidate_collections": plan.clarification_options,
             },
             status="clarification_required",
             error=plan.clarification_message,
             candidates=[
                 ClarificationCandidate(
-                    source_id=source_metadata.source_id,
-                    name=opt["label"],
-                    collection=opt["collection"],
+                    source_id=opt.get("source_id") or source_metadata.source_id,
+                    name=opt.get("name") or opt.get("collection", ""),
+                    collection=opt.get("collection"),
+                    document_count=opt.get("document_count"),
+                    field_count=opt.get("field_count"),
+                    fields_preview=opt.get("fields_preview", []),
+                    description=opt.get("description"),
                 )
                 for opt in plan.clarification_options
             ],

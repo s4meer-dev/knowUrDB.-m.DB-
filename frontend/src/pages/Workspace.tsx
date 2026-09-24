@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { QueryInput } from '../components/workspace/QueryInput';
 import { QueryResult } from '../components/workspace/QueryResult';
@@ -8,21 +8,44 @@ import { motion, AnimatePresence } from 'motion/react';
 import { queryDatabase, getSources } from '../services/api';
 import type { QueryResponse, SourceMetadata } from '../types';
 
+type QueryMachineState =
+  | 'IDLE'
+  | 'PROCESSING'
+  | 'CLARIFICATION_REQUIRED'
+  | 'RESULT_READY'
+  | 'EMPTY_RESULT'
+  | 'ERROR';
+
+interface SessionSnapshot {
+  question: string;
+  result: QueryResponse | null;
+  conversationContext: Record<string, any>;
+  machineState: QueryMachineState;
+}
+
 export const Workspace: React.FC = () => {
   const location = useLocation();
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<QueryResponse | null>(null);
+  const [machineState, setMachineState] = useState<QueryMachineState>('IDLE');
 
   const [sources, setSources] = useState<SourceMetadata[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string>('all');
-  const [activeCollection, setActiveCollection] = useState<string>('');
   const [conversationContext, setConversationContext] = useState<Record<string, any>>({});
+  const [sessionStack, setSessionStack] = useState<SessionSnapshot[]>([]);
   const [loadingSources, setLoadingSources] = useState(true);
   const [textIndex, setTextIndex] = useState(0);
 
+  // Race condition protection: monotonic request ID + AbortController
+  const requestIdRef = useRef<number>(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
     fetchSources();
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, []);
 
   const fetchSources = async () => {
@@ -37,21 +60,15 @@ export const Workspace: React.FC = () => {
     }
   };
 
-  // Available collections for the active source
-  const availableCollections = useMemo(() => {
-    const activeSrc =
-      selectedSourceId === 'all'
-        ? sources[0]
-        : sources.find((s) => s.source_id === selectedSourceId) || sources[0];
-    return activeSrc?.collections || [];
-  }, [sources, selectedSourceId]);
-
   useEffect(() => {
     const state = location.state as { initialQuestion?: string; sourceId?: string };
     if (state?.initialQuestion && !loading && !result) {
       if (state.sourceId) {
         setSelectedSourceId(state.sourceId);
-        handleQuery(state.initialQuestion, state.sourceId === 'all' ? undefined : [state.sourceId]);
+        handleQuery(
+          state.initialQuestion,
+          state.sourceId === 'all' ? undefined : [state.sourceId]
+        );
       } else {
         handleQuery(state.initialQuestion);
       }
@@ -59,55 +76,180 @@ export const Workspace: React.FC = () => {
     }
   }, [location.state]);
 
+  const pushCurrentToStack = () => {
+    setSessionStack((prev) => [
+      ...prev,
+      {
+        question,
+        result,
+        conversationContext,
+        machineState,
+      },
+    ]);
+  };
+
+  const handleBack = () => {
+    abortControllerRef.current?.abort();
+    setLoading(false);
+
+    if (sessionStack.length > 0) {
+      const prevSnap = sessionStack[sessionStack.length - 1];
+      setSessionStack((s) => s.slice(0, -1));
+      setQuestion(prevSnap.question);
+      setResult(prevSnap.result);
+      setConversationContext(prevSnap.conversationContext);
+      setMachineState(prevSnap.machineState);
+    } else {
+      // Return to clean IDLE state while preserving the user's typed question
+      setResult(null);
+      setMachineState('IDLE');
+    }
+  };
+
+  const handleChangeCollection = () => {
+    if (!result) return;
+    pushCurrentToStack();
+
+    const candidates =
+      result.candidates && result.candidates.length > 0
+        ? result.candidates
+        : result.presentation?.candidate_collections || [];
+
+    const clarificationResult: QueryResponse = {
+      ...result,
+      status: 'clarification_required',
+      intent: 'CLARIFICATION',
+      error: `Which collection would you like to use for "${result.question}"?`,
+      candidates,
+      presentation: {
+        type: 'clarification',
+        title: 'NEED A LITTLE MORE CONTEXT',
+        summary: `Select the collection you would like to use for "${result.question}":`,
+        candidate_collections: candidates,
+      },
+    };
+    setResult(clarificationResult);
+    setMachineState('CLARIFICATION_REQUIRED');
+  };
+
+  const handleSelectCollection = (collectionName: string, sourceId?: string) => {
+    const baseQuestion =
+      conversationContext.pending_question || result?.question || question;
+    const srcIds = sourceId
+      ? [sourceId]
+      : selectedSourceId === 'all'
+      ? undefined
+      : [selectedSourceId];
+    handleQuery(baseQuestion, srcIds, collectionName);
+  };
+
+  const handleSourceSwitch = (newSourceId: string) => {
+    // Cancel any in-flight query and reset incompatible collection context (Section 65)
+    abortControllerRef.current?.abort();
+    requestIdRef.current += 1;
+    setLoading(false);
+    setSelectedSourceId(newSourceId);
+    setConversationContext({});
+    setSessionStack([]);
+    setResult(null);
+    setMachineState('IDLE');
+  };
+
   const handleQuery = async (
     q: string = question,
     sourceIds?: string[],
     overrideCollection?: string
   ) => {
-    if (!q.trim()) return;
+    const trimmed = q.trim();
+    if (!trimmed) return;
 
-    setQuestion(q);
+    // Push previous non-empty state onto navigation stack so Back works seamlessly
+    if (result) {
+      pushCurrentToStack();
+    }
+
+    // Cancel any previous in-flight request (Section 43 & 44)
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const currentReqId = ++requestIdRef.current;
+
+    setQuestion(trimmed);
     setLoading(true);
+    setMachineState('PROCESSING');
 
     const finalSourceIds =
       sourceIds || (selectedSourceId === 'all' ? undefined : [selectedSourceId]);
-    const targetCol =
-      overrideCollection !== undefined
-        ? overrideCollection
-        : activeCollection || undefined;
 
     try {
-      const res = await queryDatabase(q, finalSourceIds, targetCol, conversationContext);
+      const res = await queryDatabase(
+        trimmed,
+        finalSourceIds,
+        overrideCollection,
+        conversationContext,
+        controller.signal
+      );
+
+      // Discard stale response if a newer query was launched
+      if (currentReqId !== requestIdRef.current) return;
+
       setResult(res);
-      if (res.collection) {
-        setConversationContext({
-          collection: res.collection,
-          filters: res.query_plan?.filters || {},
-          intent: res.intent,
-        });
+
+      if (res.status === 'clarification_required') {
+        setMachineState('CLARIFICATION_REQUIRED');
+        setConversationContext((prev) => ({
+          ...prev,
+          pending_question: trimmed,
+          intent: res.query_plan?.intent || prev.intent,
+        }));
+      } else if (res.status === 'error') {
+        setMachineState('ERROR');
+      } else if (res.presentation?.type === 'empty') {
+        setMachineState('EMPTY_RESULT');
+        if (res.collection) {
+          setConversationContext({
+            collection: res.collection,
+            last_question: trimmed,
+            filters: res.query_plan?.filters || {},
+            intent: res.intent,
+          });
+        }
+      } else {
+        setMachineState('RESULT_READY');
+        if (res.collection) {
+          setConversationContext({
+            collection: res.collection,
+            last_question: trimmed,
+            filters: res.query_plan?.filters || {},
+            intent: res.intent,
+          });
+        }
       }
     } catch (e: any) {
+      if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') {
+        return;
+      }
+      if (currentReqId !== requestIdRef.current) return;
+
+      setMachineState('ERROR');
       setResult({
-        question: q,
+        question: trimmed,
         columns: [],
         rows: [],
         row_count: 0,
         execution_time_ms: 0,
         status: 'error',
-        error: e?.response?.data?.detail || e.message || 'An unexpected error occurred.',
+        error:
+          e?.response?.data?.detail ||
+          e.message ||
+          "I couldn't complete that request.",
       });
     } finally {
-      setLoading(false);
+      if (currentReqId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
-
-  const quickExamples = [
-    'Give me info about dataset',
-    'Show me data related to product',
-    'What is the most expensive product?',
-    'Show customers from Bangalore',
-    'Compare products by price and units sold',
-  ];
 
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto pt-8 pb-12 animate-fade-in">
@@ -162,9 +304,10 @@ export const Workspace: React.FC = () => {
         </div>
       )}
 
+      {/* Main Minimal Query Interface: Dataset Selector + Question Box ONLY (No collection chips, no automatic suggestions) */}
       <div
-        className={`relative z-20 transition-all duration-500 ease-in-out max-w-3xl mx-auto w-full ${
-          result || loading ? 'mb-4' : 'mb-8 transform translate-y-2'
+        className={`relative z-20 transition-all duration-300 ease-out max-w-3xl mx-auto w-full ${
+          result || loading ? 'mb-2' : 'mb-8 transform translate-y-2'
         }`}
       >
         <QueryInput
@@ -175,60 +318,9 @@ export const Workspace: React.FC = () => {
           disabled={false}
           sources={sources}
           selectedSourceId={selectedSourceId}
-          onSourceChange={(id) => {
-            setSelectedSourceId(id);
-            setActiveCollection('');
-          }}
+          onSourceChange={handleSourceSwitch}
           loadingSources={loadingSources}
         />
-
-        {/* Active Collection Context Selector Pills */}
-        {availableCollections.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5 px-1">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 mr-1">
-              Collection:
-            </span>
-            <button
-              type="button"
-              onClick={() => setActiveCollection('')}
-              className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border transition-all ${
-                activeCollection === ''
-                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
-                  : 'bg-zinc-900/50 text-zinc-400 border-zinc-800 hover:text-zinc-200'
-              }`}
-            >
-              Auto-detect
-            </button>
-            {availableCollections.map((col) => (
-              <button
-                key={col}
-                type="button"
-                onClick={() => setActiveCollection(col === activeCollection ? '' : col)}
-                className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border transition-all ${
-                  activeCollection === col
-                    ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
-                    : 'bg-zinc-900/50 text-zinc-400 border-zinc-800 hover:text-zinc-200'
-                }`}
-              >
-                {col}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {!result && !loading && (
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            {quickExamples.map((ex) => (
-              <button
-                key={ex}
-                onClick={() => handleQuery(ex)}
-                className="text-xs text-zinc-400 hover:text-cyan-300 bg-zinc-900/60 hover:bg-cyan-500/10 border border-zinc-800 hover:border-cyan-500/30 px-3.5 py-2 rounded-xl transition-all duration-200"
-              >
-                {ex}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="flex-1">
@@ -237,6 +329,10 @@ export const Workspace: React.FC = () => {
             <QueryResult
               result={result}
               isLoading={loading}
+              canGoBack={true}
+              onBack={handleBack}
+              onChangeCollection={handleChangeCollection}
+              onSelectCollection={handleSelectCollection}
               onFollowUp={(q, sourceIds, overrideCol) =>
                 handleQuery(q, sourceIds, overrideCol)
               }

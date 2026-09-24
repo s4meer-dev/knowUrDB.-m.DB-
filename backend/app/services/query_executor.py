@@ -106,7 +106,41 @@ class MongoQueryExecutor:
                     raw_docs = list(cursor)
 
             elif operation == "aggregate":
-                pipeline = list(unwrap_prefix) + list(structured.get("pipeline") or [])
+                rewritten_stages: list[dict[str, Any]] = []
+                for stage in structured.get("pipeline") or []:
+                    if isinstance(stage, dict) and "$lookup" in stage:
+                        lk = stage["$lookup"]
+                        from_tbl = lk.get("from", "")
+                        local_f = lk.get("localField")
+                        foreign_f = lk.get("foreignField")
+                        as_f = lk.get("as", "joined")
+                        target_cont, target_grouped = MongoDBManager.resolve_container_for_table(from_tbl)
+                        if target_grouped and local_f and foreign_f:
+                            rewritten_stages.append(
+                                {
+                                    "$lookup": {
+                                        "from": target_cont,
+                                        "let": {"join_val": f"${local_f}"},
+                                        "pipeline": [
+                                            {"$match": {"_id": from_tbl}},
+                                            {"$unwind": "$records"},
+                                            {"$replaceRoot": {"newRoot": "$records"}},
+                                            {
+                                                "$match": {
+                                                    "$expr": {
+                                                        "$eq": [f"${foreign_f}", "$$join_val"]
+                                                    }
+                                                }
+                                            },
+                                        ],
+                                        "as": as_f,
+                                    }
+                                }
+                            )
+                            continue
+                    rewritten_stages.append(stage)
+
+                pipeline = list(unwrap_prefix) + rewritten_stages
                 has_terminal_limit_or_count = any(
                     "$limit" in stage or "$count" in stage for stage in pipeline if isinstance(stage, dict)
                 )

@@ -36,14 +36,19 @@ export const queryDatabase = async (
   question: string,
   sourceIds?: string[],
   activeCollection?: string,
-  conversationContext?: Record<string, any>
+  conversationContext?: Record<string, any>,
+  signal?: AbortSignal
 ): Promise<QueryResponse> => {
-  const response = await apiClient.post<QueryResponse>('/api/query', {
-    question,
-    source_ids: sourceIds,
-    active_collection: activeCollection,
-    conversation_context: conversationContext,
-  } as QueryRequest);
+  const response = await apiClient.post<QueryResponse>(
+    '/api/query',
+    {
+      question,
+      source_ids: sourceIds,
+      active_collection: activeCollection,
+      conversation_context: conversationContext,
+    } as QueryRequest,
+    { signal }
+  );
   return response.data;
 };
 

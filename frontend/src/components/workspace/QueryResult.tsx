@@ -1,26 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import type { QueryResponse } from '../../types';
+import type { ClarificationCandidate, QueryResponse } from '../../types';
 import { ResultsTable } from './ResultsTable';
 import { SqlPanel } from './SqlPanel';
-import { FollowUpSuggestions } from './FollowUpSuggestions';
 import { ErrorState } from '../common/ErrorState';
 import { VisualizationEngine } from './VisualizationEngine';
 
 interface QueryResultProps {
   result: QueryResponse | null;
   isLoading: boolean;
+  canGoBack?: boolean;
+  onBack?: () => void;
+  onChangeCollection?: () => void;
+  onSelectCollection: (collectionName: string, sourceId?: string) => void;
   onFollowUp: (question: string, sourceIds?: string[], activeCollection?: string) => void;
 }
 
 const LOADING_STEPS = [
   'Understanding question...',
-  'Checking collection schema...',
+  'Checking dataset catalog...',
+  'Identifying collection...',
   'Building MongoDB pipeline...',
-  'Running MongoDB query...',
-  'Preparing result...',
+  'Preparing answer...',
 ];
 
-export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onFollowUp }) => {
+export const QueryResult: React.FC<QueryResultProps> = ({
+  result,
+  isLoading,
+  canGoBack = false,
+  onBack,
+  onChangeCollection,
+  onSelectCollection,
+  onFollowUp,
+}) => {
   const [showTechDetails, setShowTechDetails] = useState<boolean>(false);
   const [loadingStep, setLoadingStep] = useState<number>(0);
 
@@ -31,7 +42,7 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
     }
     const timer = setInterval(() => {
       setLoadingStep((prev) => (prev < LOADING_STEPS.length - 1 ? prev + 1 : prev));
-    }, 280);
+    }, 240);
     return () => clearInterval(timer);
   }, [isLoading]);
 
@@ -42,7 +53,7 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
   // Contextual Loading Experience
   if (isLoading && !result) {
     return (
-      <div className="bg-[#09090b]/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.8)] border border-zinc-800/80 p-8 mt-6 animate-in fade-in duration-300 relative overflow-hidden">
+      <div className="bg-[#09090b]/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.8)] border border-zinc-800/80 p-8 mt-6 animate-in fade-in duration-200 relative overflow-hidden">
         <div className="max-w-md mx-auto flex flex-col items-center text-center">
           <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center mb-4">
             <svg
@@ -66,7 +77,7 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
             {LOADING_STEPS.map((_, idx) => (
               <span
                 key={idx}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
+                className={`h-1.5 rounded-full transition-all duration-200 ${
                   idx <= loadingStep ? 'w-6 bg-cyan-400' : 'w-2 bg-zinc-800'
                 }`}
               />
@@ -81,32 +92,63 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
 
   const mongoPipelineCode = result.generated_mongo_query || result.generated_sql;
   const pres = result.presentation;
-  const uiType = pres?.type || (result.row_count === 1 && result.columns.length === 1 ? 'kpi' : 'table');
-  const headerTitle = pres?.title || result.answer?.headline || 'Results';
-  const headerSubtitle = pres?.subtitle || (result.collection ? `Collection: ${result.collection}` : '');
+  const uiType =
+    pres?.type || (result.row_count === 1 && result.columns.length === 1 ? 'kpi' : 'table');
+  const isClarification = result.status === 'clarification_required' || uiType === 'clarification';
+  const headerTitle = isClarification
+    ? 'NEED A LITTLE MORE CONTEXT'
+    : pres?.title || result.answer?.headline || 'Results';
   const summaryText = pres?.summary || result.answer?.summary || '';
+  const candidateCollections: ClarificationCandidate[] =
+    result.candidates && result.candidates.length > 0
+      ? result.candidates
+      : pres?.candidate_collections || [];
 
   return (
-    <div className="bg-[#09090b]/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.8)] border border-zinc-800/80 flex flex-col mt-6 animate-in slide-in-from-bottom-3 fade-in duration-300 ease-out relative overflow-hidden ring-1 ring-white/5">
+    <div className="bg-[#09090b]/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.8)] border border-zinc-800/80 flex flex-col mt-6 animate-in slide-in-from-bottom-2 fade-in duration-250 ease-out relative overflow-hidden ring-1 ring-white/5">
       <div className="absolute inset-0 bg-gradient-to-b from-cyan-900/5 to-transparent pointer-events-none" />
 
-      {/* 1. Clean Natural Result Header (No confusing technical jargon in primary bar) */}
-      <div className="bg-zinc-900/40 border-b border-zinc-800/60 px-6 py-4 flex flex-wrap items-center justify-between gap-4 relative z-10">
+      {/* 1. Result / Clarification Header Bar with Back & Using <Collection> [Change] */}
+      <div className="bg-zinc-900/40 border-b border-zinc-800/60 px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 relative z-10">
         <div className="flex items-center gap-3">
+          {canGoBack && onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Go back"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-300 hover:text-cyan-300 bg-zinc-800/70 hover:bg-cyan-500/15 border border-zinc-700/60 hover:border-cyan-500/30 px-2.5 py-1 rounded-lg transition-all"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back
+            </button>
+          )}
           <div className="relative flex h-2 w-2">
             <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
           </div>
-          <h2 className="font-semibold text-zinc-100 tracking-tight text-[15px]">
+          <h2 className="font-semibold text-zinc-100 tracking-tight text-[14px] uppercase">
             {isLoading ? LOADING_STEPS[loadingStep] : headerTitle}
           </h2>
-          {result.collection && (
-            <span className="text-xs font-mono px-2.5 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+        </div>
+
+        {/* Active Collection Context Indicator + [Change] Button */}
+        {!isClarification && result.collection && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-400">Using:</span>
+            <span className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-500/25">
               {result.collection}
             </span>
-          )}
-        </div>
-        {headerSubtitle && !isLoading && (
-          <span className="text-xs text-zinc-400 font-medium">{headerSubtitle}</span>
+            {candidateCollections.length > 1 && onChangeCollection && (
+              <button
+                type="button"
+                onClick={onChangeCollection}
+                className="text-xs text-zinc-400 hover:text-cyan-300 underline underline-offset-4 decoration-zinc-700 hover:decoration-cyan-400 px-1.5 py-0.5 transition-colors"
+              >
+                Change
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -115,38 +157,90 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
           isLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'
         }`}
       >
-        {/* Clarification State */}
-        {result.status === 'clarification_required' || uiType === 'clarification' ? (
-          <div className="flex flex-col items-center justify-center text-center py-6">
-            <div className="w-12 h-12 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-              </svg>
+        {/* ==============================================================
+            CLARIFICATION VIEW (NEED A LITTLE MORE CONTEXT)
+           ============================================================== */}
+        {isClarification ? (
+          <div className="py-2 animate-in fade-in duration-200">
+            <p className="text-zinc-200 text-[15px] leading-relaxed mb-6">
+              {result.error || summaryText || 'I found multiple collections in this dataset. Which collection would you like me to use?'}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {candidateCollections.map((c, idx) => {
+                const colKey = c.collection || c.name.toLowerCase();
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => onSelectCollection(colKey, c.source_id)}
+                    className="text-left bg-zinc-900/70 hover:bg-cyan-500/[0.08] border border-zinc-800/90 hover:border-cyan-500/40 rounded-xl p-4 transition-all duration-200 flex flex-col justify-between group focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="font-semibold text-zinc-100 group-hover:text-cyan-300 text-base tracking-tight capitalize transition-colors">
+                          {c.collection || c.name}
+                        </span>
+                        {c.document_count !== undefined && c.document_count !== null && (
+                          <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 shrink-0">
+                            {c.document_count.toLocaleString('en-IN')} docs
+                          </span>
+                        )}
+                      </div>
+                      {c.description && (
+                        <p className="text-xs text-zinc-400 line-clamp-2 mb-3 leading-relaxed">
+                          {c.description}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      {c.fields_preview && c.fields_preview.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {c.fields_preview.slice(0, 5).map((f) => (
+                            <span
+                              key={f}
+                              className="text-[10px] font-mono bg-black/40 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400"
+                            >
+                              {f}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60 text-xs font-medium text-cyan-400/80 group-hover:text-cyan-300">
+                        <span>Select collection</span>
+                        <svg
+                          className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-            <h3 className="text-lg font-semibold text-zinc-100 mb-2">
-              {pres?.title || 'Which collection would you like to use?'}
-            </h3>
-            <p className="text-zinc-400 text-sm mb-6 max-w-md">{result.error || summaryText}</p>
-            <div className="flex flex-wrap justify-center gap-3 max-w-xl">
-              {result.candidates?.map((c, idx) => (
+
+            {onBack && (
+              <div className="mt-6 pt-4 border-t border-zinc-800/60 flex items-center justify-between">
                 <button
-                  key={idx}
-                  onClick={() =>
-                    onFollowUp(
-                      result.question,
-                      c.source_id ? [c.source_id] : undefined,
-                      c.collection || undefined
-                    )
-                  }
-                  className="bg-zinc-900/80 hover:bg-cyan-500/15 border border-zinc-700/70 hover:border-cyan-500/40 px-4 py-2.5 rounded-xl text-sm font-medium text-zinc-200 hover:text-cyan-300 transition-all flex items-center gap-2"
+                  type="button"
+                  onClick={onBack}
+                  className="inline-flex items-center gap-2 text-xs font-medium text-zinc-400 hover:text-zinc-200 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 px-3.5 py-2 rounded-lg transition-colors"
                 >
-                  <span>{c.name}</span>
-                  <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
                   </svg>
+                  Back
                 </button>
-              ))}
-            </div>
+                <span className="text-[11px] text-zinc-500">
+                  Tip: You can also type the collection name directly above (e.g., &ldquo;customers&rdquo;).
+                </span>
+              </div>
+            )}
           </div>
         ) : result.status === 'error' ? (
           result.error_code === 'UNRELATED_QUERY' ? (
@@ -164,33 +258,71 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
               <h3 className="text-lg font-semibold text-zinc-200 mb-1.5">Outside Active Dataset Scope</h3>
               <p className="text-zinc-400 text-sm max-w-md leading-relaxed mb-5">{result.error}</p>
               <div className="flex flex-wrap justify-center gap-2">
+                {onBack && (
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="text-xs bg-zinc-800/70 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/60 px-3.5 py-2 rounded-lg transition-colors"
+                  >
+                    ← Back
+                  </button>
+                )}
                 <button
+                  type="button"
                   onClick={() => onFollowUp('Give me info about dataset')}
                   className="text-xs bg-zinc-800/70 hover:bg-cyan-500/15 text-zinc-300 hover:text-cyan-300 border border-zinc-700/60 px-3.5 py-2 rounded-lg transition-colors"
                 >
                   View dataset overview
                 </button>
-                <button
-                  onClick={() => onFollowUp('Show me products')}
-                  className="text-xs bg-zinc-800/70 hover:bg-cyan-500/15 text-zinc-300 hover:text-cyan-300 border border-zinc-700/60 px-3.5 py-2 rounded-lg transition-colors"
-                >
-                  Show products
-                </button>
               </div>
             </div>
           ) : (
-            <ErrorState
-              title={
-                result.error_code === 'UNSAFE_SQL' || result.error_code === 'UNSAFE_QUERY'
-                  ? 'Read-Only Safety Guard'
-                  : 'Could Not Complete Query'
-              }
-              message={result.error || 'Please try rephrasing your question or checking the available fields.'}
-              type="error"
-            />
+            <div className="space-y-4">
+              <ErrorState
+                title={
+                  result.error_code === 'UNSAFE_SQL' || result.error_code === 'UNSAFE_QUERY'
+                    ? 'Read-Only Safety Guard'
+                    : 'Could Not Complete Request'
+                }
+                message={
+                  result.error || 'Please try rephrasing your question or checking the available fields.'
+                }
+                type="error"
+              />
+              {onBack && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="text-xs bg-zinc-800/70 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/60 px-3.5 py-2 rounded-lg transition-colors"
+                  >
+                    ← Back
+                  </button>
+                </div>
+              )}
+            </div>
           )
         ) : (
           <>
+            {/* Multi-Collection Data Sources Banner (when query joins multiple collections) */}
+            {pres?.multi_collection_sources && pres.multi_collection_sources.length >= 2 && (
+              <div className="mb-4 bg-zinc-900/60 border border-cyan-500/20 rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">
+                  Data Sources:
+                </span>
+                {pres.multi_collection_sources.map((srcName, idx) => (
+                  <React.Fragment key={srcName}>
+                    <span className="font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                      {srcName}
+                    </span>
+                    {idx < pres.multi_collection_sources!.length - 1 && (
+                      <span className="text-zinc-500 font-mono">↔</span>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+
             {/* ==============================================================
                 MODE 1: KPI RESULT (COUNT, SINGLE AVERAGE, SINGLE SUM)
                ============================================================== */}
@@ -222,7 +354,9 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                ============================================================== */}
             {(uiType === 'dataset_overview' || uiType === 'collection_overview') && (
               <div className="space-y-6">
-                {summaryText && <p className="text-zinc-200 text-[15px] leading-relaxed">{summaryText}</p>}
+                {summaryText && (
+                  <p className="text-zinc-200 text-[15px] leading-relaxed">{summaryText}</p>
+                )}
 
                 {pres?.collections_summary && pres.collections_summary.length > 0 ? (
                   <div>
@@ -233,7 +367,10 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                       {pres.collections_summary.map((col) => (
                         <button
                           key={col.collection}
-                          onClick={() => onFollowUp(`Show me ${col.collection}`, undefined, col.collection)}
+                          type="button"
+                          onClick={() =>
+                            onFollowUp(`Show me ${col.collection}`, undefined, col.collection)
+                          }
                           className="text-left bg-zinc-900/60 hover:bg-cyan-500/10 border border-zinc-800 hover:border-cyan-500/30 rounded-xl p-4 transition-all group"
                         >
                           <div className="flex items-center justify-between mb-1.5">
@@ -245,7 +382,9 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                             </span>
                           </div>
                           <div className="text-xs text-zinc-400 mb-2">{col.fields} schema fields</div>
-                          <div className="text-[11px] text-zinc-500 truncate font-mono">{col.key_fields}</div>
+                          <div className="text-[11px] text-zinc-500 truncate font-mono">
+                            {col.key_fields}
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -273,12 +412,17 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                       {pres?.primary_unit || result.answer?.unit}
                     </span>
                   </div>
-                  {summaryText && <p className="text-zinc-300 text-sm leading-relaxed">{summaryText}</p>}
+                  {summaryText && (
+                    <p className="text-zinc-300 text-sm leading-relaxed">{summaryText}</p>
+                  )}
 
                   {pres?.highlight_record && (
                     <div className="mt-5 pt-4 border-t border-zinc-800/80 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                       {Object.entries(pres.highlight_record).map(([k, v]) => (
-                        <div key={k} className="bg-black/40 border border-zinc-800/70 rounded-lg px-3 py-2">
+                        <div
+                          key={k}
+                          className="bg-black/40 border border-zinc-800/70 rounded-lg px-3 py-2"
+                        >
                           <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">
                             {k.replace(/_/g, ' ')}
                           </span>
@@ -346,7 +490,12 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                ============================================================== */}
             {uiType === 'empty' && (
               <div className="flex flex-col items-center justify-center text-center py-10 px-4 bg-zinc-900/30 border border-zinc-800/60 rounded-xl">
-                <svg className="w-10 h-10 text-zinc-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-10 h-10 text-zinc-500 mb-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -358,29 +507,35 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                 <p className="text-sm text-zinc-400 max-w-md mb-4">
                   {summaryText || "I couldn't find any documents matching that filter."}
                 </p>
-                {result.collection && (
-                  <button
-                    onClick={() => onFollowUp(`Show me ${result.collection}`, undefined, result.collection)}
-                    className="text-xs bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 px-4 py-2 rounded-lg transition-colors"
-                  >
-                    Show all {result.collection}
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {result.collection && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onFollowUp(`Show me ${result.collection}`, undefined, result.collection)
+                      }
+                      className="text-xs bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Remove filter
+                    </button>
+                  )}
+                  {onChangeCollection && (
+                    <button
+                      type="button"
+                      onClick={onChangeCollection}
+                      className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Change collection
+                    </button>
+                  )}
+                </div>
               </div>
             )}
-
-            {/* Follow-up Question Suggestions */}
-            <div className="mt-6">
-              <FollowUpSuggestions
-                suggestions={result.follow_up_suggestions}
-                onSelect={(q) => onFollowUp(q)}
-                disabled={isLoading}
-              />
-            </div>
 
             {/* Secondary Technical Drawer (Collapsed by default) */}
             <div className="mt-6 border-t border-white/5 pt-4">
               <button
+                type="button"
                 onClick={() => setShowTechDetails(!showTechDetails)}
                 className="flex items-center text-xs font-semibold text-zinc-500 hover:text-cyan-400 uppercase tracking-widest transition-colors focus:outline-none"
               >
@@ -394,7 +549,7 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                 </svg>
-                MongoDB Query & Telemetry
+                Technical Details
               </button>
 
               {showTechDetails && (
@@ -402,7 +557,9 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                   <div className="flex flex-wrap gap-3">
                     {result.intent && (
                       <div className="bg-black/40 border border-white/5 rounded-lg px-3.5 py-2.5 flex flex-col">
-                        <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Intent</span>
+                        <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
+                          Intent
+                        </span>
                         <span className="text-cyan-300 font-mono text-xs mt-0.5">{result.intent}</span>
                       </div>
                     )}
@@ -410,7 +567,9 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
                         Execution Time
                       </span>
-                      <span className="text-zinc-300 font-mono text-xs mt-0.5">{result.execution_time_ms} ms</span>
+                      <span className="text-zinc-300 font-mono text-xs mt-0.5">
+                        {result.execution_time_ms} ms
+                      </span>
                     </div>
                     <div className="bg-black/40 border border-white/5 rounded-lg px-3.5 py-2.5 flex flex-col">
                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
@@ -420,8 +579,12 @@ export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onF
                     </div>
                     {result.collection && (
                       <div className="bg-black/40 border border-white/5 rounded-lg px-3.5 py-2.5 flex flex-col">
-                        <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Collection</span>
-                        <span className="text-emerald-300 font-mono text-xs mt-0.5">{result.collection}</span>
+                        <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
+                          Collection
+                        </span>
+                        <span className="text-emerald-300 font-mono text-xs mt-0.5">
+                          {result.collection}
+                        </span>
                       </div>
                     )}
                   </div>

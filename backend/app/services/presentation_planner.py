@@ -205,6 +205,43 @@ class PresentationPlanner:
                 ],
             }
 
+        # 0A. MULTI_COLLECTION ($lookup across collections, e.g. customers + orders)
+        if plan.intent == "MULTI_COLLECTION":
+            sec_col = plan.secondary_collection or "customers"
+            ranked_rows = [{"rank": idx, **r} for idx, r in enumerate(rows, start=1)]
+            ranked_cols = ["rank"] + [c for c in columns if c != "rank"]
+            top_row = rows[0] if rows else {}
+            leader = top_row.get("customer_name") or top_row.get("customer_id") or "#1"
+            orders_cnt = top_row.get("orders_placed", 0)
+            summary = (
+                f"Joined `{sec_col}` and `{col_display}` on `customer_id`: "
+                f"{leader} placed the most orders ({orders_cnt} orders)."
+            )
+            return {
+                "columns": ranked_cols,
+                "rows": ranked_rows,
+                "presentation": {
+                    "type": "ranked_table",
+                    "title": f"{sec_col.title()} + {col_display.title()} Analysis",
+                    "subtitle": f"Data Sources: {sec_col} ↔ {col_display} (customer_id)",
+                    "summary": summary,
+                    "primary_value": str(leader),
+                    "primary_unit": f"{orders_cnt} orders placed",
+                    "chart_type": "bar",
+                    "candidate_collections": plan.candidate_collections,
+                    "multi_collection_sources": [sec_col, col_display],
+                    "show_technical_by_default": False,
+                },
+                "answer": {
+                    "headline": f"{sec_col.upper()} + {col_display.upper()}",
+                    "value": str(leader),
+                    "unit": f"({orders_cnt} orders)",
+                    "summary": summary,
+                },
+                "insights": [],
+                "follow_ups": [],
+            }
+
         # 1. COUNT Intent -> KPI Card
         if plan.intent == "COUNT":
             count_val = 0
@@ -212,7 +249,7 @@ class PresentationPlanner:
                 raw_v = rows[0].get(columns[0], 0)
                 count_val = int(raw_v) if isinstance(raw_v, (int, float)) else 0
             filter_suffix = f" matching ({', '.join(plan.filter_descriptions)})" if plan.filter_descriptions else ""
-            summary = f"Your active `{col_display}` collection contains {count_val:,} documents{filter_suffix}."
+            summary = f"The `{col_display}` collection contains {count_val:,} documents{filter_suffix}."
             return {
                 "presentation": {
                     "type": "kpi",
@@ -221,6 +258,7 @@ class PresentationPlanner:
                     "summary": summary,
                     "primary_value": f"{count_val:,}",
                     "primary_unit": "documents",
+                    "candidate_collections": plan.candidate_collections,
                     "show_technical_by_default": False,
                 },
                 "answer": {
@@ -253,6 +291,7 @@ class PresentationPlanner:
                     "summary": summary,
                     "primary_value": f"{row_count:,}",
                     "primary_unit": f"matching {col_display}",
+                    "candidate_collections": plan.candidate_collections,
                     "show_technical_by_default": False,
                 },
                 "answer": {
@@ -298,6 +337,7 @@ class PresentationPlanner:
                     "primary_value": val_formatted,
                     "primary_unit": entity_label,
                     "highlight_record": top_row,
+                    "candidate_collections": plan.candidate_collections,
                     "show_technical_by_default": False,
                 },
                 "answer": {
@@ -341,6 +381,7 @@ class PresentationPlanner:
                     "primary_value": f"{top_name}",
                     "primary_unit": f"#1 • {val_fmt}",
                     "chart_type": "bar",
+                    "candidate_collections": plan.candidate_collections,
                     "show_technical_by_default": False,
                 },
                 "answer": {
@@ -381,6 +422,7 @@ class PresentationPlanner:
                     "summary": summary,
                     "primary_value": val_fmt,
                     "primary_unit": f"across {doc_cnt} {col_display}",
+                    "candidate_collections": plan.candidate_collections,
                     "show_technical_by_default": False,
                 },
                 "answer": {
@@ -413,6 +455,7 @@ class PresentationPlanner:
                     "primary_value": f"{row_count} compared",
                     "primary_unit": col_display,
                     "chart_type": "comparison_bar",
+                    "candidate_collections": plan.candidate_collections,
                     "show_technical_by_default": False,
                 },
                 "answer": {

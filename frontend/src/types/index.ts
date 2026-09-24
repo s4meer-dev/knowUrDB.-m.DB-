@@ -36,6 +36,10 @@ export interface ClarificationCandidate {
   source_id: string;
   name: string;
   collection?: string;
+  document_count?: number;
+  field_count?: number;
+  fields_preview?: string[];
+  description?: string;
 }
 
 export interface PresentationContract {
@@ -60,6 +64,8 @@ export interface PresentationContract {
   primary_unit?: string;
   chart_type?: string;
   highlight_record?: Record<string, any>;
+  candidate_collections?: ClarificationCandidate[];
+  multi_collection_sources?: string[];
   collections_summary?: Array<{
     collection: string;
     documents: number;

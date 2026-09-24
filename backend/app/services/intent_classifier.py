@@ -2,6 +2,12 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.services.dataset_intelligence import (
+    CollectionIntelligenceService,
+    CollectionResolver,
+    DatasetIntelligenceService,
+)
+
 CANONICAL_INTENTS = {
     "DATASET_OVERVIEW",
     "COLLECTION_OVERVIEW",
@@ -25,6 +31,7 @@ CANONICAL_INTENTS = {
     "RECORD_DETAILS",
     "SCHEMA_QUERY",
     "METADATA_QUERY",
+    "MULTI_COLLECTION",
     "DOCUMENT_RAG",
     "MULTI_SOURCE",
     "CLARIFICATION",
@@ -110,6 +117,9 @@ class QueryPlan:
     source_id: str | None = None
     source_name: str | None = None
     collection: str | None = None
+    secondary_collection: str | None = None
+    collection_status: str = "resolved"
+    candidate_collections: list[dict[str, Any]] = field(default_factory=list)
     target_fields: list[str] = field(default_factory=list)
     metric_field: str | None = None
     secondary_metric_field: str | None = None
@@ -122,7 +132,7 @@ class QueryPlan:
     aggregation_op: str | None = None
     presentation_type: str = "table"
     clarification_message: str | None = None
-    clarification_options: list[dict[str, str]] = field(default_factory=list)
+    clarification_options: list[dict[str, Any]] = field(default_factory=list)
 
 
 class QuestionNormalizer:
@@ -133,7 +143,6 @@ class QuestionNormalizer:
         if not question:
             return ""
         text = question.strip()
-        # Normalize tokens while preserving case for proper nouns in original question
         tokens = re.split(r"(\W+)", text)
         normalized_tokens = []
         for tok in tokens:
@@ -143,7 +152,6 @@ class QuestionNormalizer:
             else:
                 normalized_tokens.append(tok)
         joined = "".join(normalized_tokens)
-        # Canonicalize colloquial phrases without altering intent
         joined = re.sub(r"\bhow many data\b", "how many documents", joined, flags=re.IGNORECASE)
         joined = re.sub(r"\bhow much data\b", "how many documents", joined, flags=re.IGNORECASE)
         joined = re.sub(r"\bhow many record\b", "how many records", joined, flags=re.IGNORECASE)
@@ -153,123 +161,20 @@ class QuestionNormalizer:
 
 class QueryPlannerEngine:
     """
-    Deterministic-first Schema-Aware Intent Classifier, Collection Resolver,
+    Dataset-First Schema-Aware Intent Classifier, Collection Resolver,
     Field Resolver, and Structured Query Planner.
-    Never invents rankings or aggregations the user did not ask for.
+    Separates:
+      1. Dataset Intelligence & Collection Resolution (`CollectionResolver`)
+      2. Collection Schema Inspection (`CollectionIntelligenceService`)
+      3. Intent & Query Plan Construction
+    Never silently guesses a collection when multiple collections exist and the question is ambiguous.
     """
 
     def __init__(self, schema_service: Any):
         self.schema_service = schema_service
-
-    def resolve_collection(
-        self,
-        q_lower: str,
-        collections: list[dict[str, Any]],
-        active_collection: str | None = None,
-        conversation_context: dict[str, Any] | None = None,
-    ) -> tuple[dict[str, Any] | None, str]:
-        """
-        Returns (matched_collection_dict, resolution_reason).
-        Priority:
-          1. Explicit collection name or singular/plural/alias in question
-          2. Unique value or field name match in question (e.g. 'Bangalore', 'GPA', 'salary')
-          3. Explicit `active_collection` from UI / request
-          4. `conversation_context` last collection
-          5. Single collection in dataset or primary active collection for generic collection queries
-        """
-        if not collections:
-            return None, "no_collections"
-
-        col_by_name = {c["name"].lower(): c for c in collections}
-
-        # 1. Explicit collection name / singular / plural / stem match
-        for col in collections:
-            cname = col["name"].lower()
-            base_name = cname.split("_")[-1]
-            singular = base_name[:-1] if base_name.endswith("s") else base_name
-            plural = f"{singular}s"
-            patterns = {cname, base_name, singular, plural}
-            if base_name == "customers":
-                patterns.update({"client", "clients", "buyer", "buyers"})
-            elif base_name == "employees":
-                patterns.update({"staff", "worker", "workers", "personnel"})
-            elif base_name == "orders":
-                patterns.update({"purchase", "purchases", "transaction", "transactions"})
-            elif base_name == "products":
-                patterns.update({"item", "items", "catalog", "merchandise"})
-            elif base_name == "students":
-                patterns.update({"learner", "learners", "pupil", "pupils"})
-
-            for pat in patterns:
-                if pat and re.search(rf"\b{re.escape(pat)}\b", q_lower):
-                    return col, f"explicit_mention:{pat}"
-
-        # 2. Match sample values or distinctive field names (e.g. "Bangalore", "Engineering", "gpa", "salary")
-        best_col = None
-        best_score = 0
-        for col in collections:
-            score = 0
-            for cinfo in col.get("columns", []):
-                cname_full = cinfo["name"].lower()
-                c_leaf = cname_full.split(".")[-1].replace("[]", "")
-                if len(c_leaf) > 2 and re.search(rf"\b{re.escape(c_leaf)}\b", q_lower):
-                    # Give higher weight to distinctive fields (e.g. gpa, salary, stock, loyalty_tier)
-                    if c_leaf not in {"name", "status", "id"}:
-                        score += 5
-                    else:
-                        score += 2
-                for sv in cinfo.get("sample_values", []) or []:
-                    sv_str = str(sv).strip().lower()
-                    if len(sv_str) > 2 and re.search(rf"\b{re.escape(sv_str)}\b", q_lower):
-                        score += 8
-            if score > best_score:
-                best_score = score
-                best_col = col
-
-        if best_col and best_score >= 4:
-            return best_col, "schema_field_or_value_match"
-
-        # Domain keyword fallback
-        domain_map = [
-            (["price", "stock", "units_sold", "expensive", "cheapest", "product"], "products"),
-            (["bangalore", "mumbai", "delhi", "chennai", "hyderabad", "pune", "kolkata", "total_spent", "lakh", "loyalty_tier", "customer"], "customers"),
-            (["order_date", "january", "february", "march", "april", "may", "june", "total_amount", "order"], "orders"),
-            (["salary", "department", "performance_score", "role", "employee"], "employees"),
-            (["gpa", "major", "attendance", "credits_completed", "student"], "students"),
-        ]
-        for keywords, target_base in domain_map:
-            if any(re.search(rf"\b{re.escape(k)}\b", q_lower) for k in keywords):
-                for col in collections:
-                    if col["name"].lower().endswith(target_base) or col["name"].lower() == target_base:
-                        return col, f"domain_keyword:{target_base}"
-
-        # 3. Active collection passed from UI
-        if active_collection:
-            ac_low = active_collection.lower()
-            if ac_low in col_by_name:
-                return col_by_name[ac_low], "active_collection"
-            for col in collections:
-                if col["name"].lower().endswith(ac_low):
-                    return col, "active_collection"
-
-        # 4. Conversation context
-        if conversation_context and conversation_context.get("collection"):
-            ctx_col = str(conversation_context["collection"]).lower()
-            if ctx_col in col_by_name:
-                return col_by_name[ctx_col], "conversation_context"
-
-        # 5. Generic collection reference ("in the collection", "this collection", "how many data are there")
-        if len(collections) == 1:
-            return collections[0], "single_collection_in_source"
-
-        if re.search(
-            r"\b(in the collection|in this collection|in collection|the collection|this collection|how many documents|how many records|how many data|show me data|show all data|what is inside)\b",
-            q_lower,
-        ):
-            # Default to first collection (`products` in demo_database) as active collection
-            return collections[0], "default_active_collection"
-
-        return None, "unresolved"
+        self.dataset_service = DatasetIntelligenceService(schema_service)
+        self.collection_service = CollectionIntelligenceService(self.dataset_service)
+        self.resolver = CollectionResolver(self.dataset_service)
 
     def build_plan(
         self,
@@ -282,10 +187,6 @@ class QueryPlannerEngine:
         normalized = QuestionNormalizer.normalize(question)
         q_lower = normalized.lower()
         q_clean = re.sub(r"[^\w\s]", " ", q_lower)
-        q_words = set(q_clean.split())
-
-        schema = self.schema_service.get_schema(source_id)
-        collections: list[dict[str, Any]] = schema.get("tables", [])
 
         # 1. Explicit Off-Topic / Unrelated Check
         unrelated_phrases = (
@@ -306,79 +207,174 @@ class QueryPlannerEngine:
                 original_question=question,
                 normalized_question=normalized,
                 intent="UNRELATED",
+                collection_status="unrelated",
                 confidence=0.98,
                 source_id=source_id,
                 source_name=source_name,
                 presentation_type="error",
             )
 
-        if not collections:
+        # 2. Run Dataset-First Collection Resolution
+        res = self.resolver.resolve(
+            question=normalized,
+            source_id=source_id,
+            explicit_collection=active_collection,
+            conversation_context=conversation_context,
+        )
+
+        # 2A. Dataset-Level Question ("give me info about dataset", "what collections are available?", "how many collections are there?")
+        if res.status == "dataset_level":
+            intent_type = (
+                "COLLECTION_OVERVIEW"
+                if "collection" in q_lower or "table" in q_lower
+                else "DATASET_OVERVIEW"
+            )
+            return QueryPlan(
+                original_question=question,
+                normalized_question=normalized,
+                intent=intent_type,
+                collection_status="dataset_level",
+                candidate_collections=res.candidates,
+                confidence=res.confidence,
+                source_id=source_id,
+                source_name=source_name,
+                presentation_type="dataset_overview",
+            )
+
+        # 2B. Non-Existent Collection Mentioned ("show teachers", "how many flights")
+        if res.status == "not_found":
+            missing = res.missing_entity or "requested"
+            return QueryPlan(
+                original_question=question,
+                normalized_question=normalized,
+                intent="CLARIFICATION",
+                collection_status="not_found",
+                candidate_collections=res.candidates,
+                confidence=res.confidence,
+                source_id=source_id,
+                source_name=source_name,
+                clarification_message=f"I couldn't find a `{missing}` collection in this dataset. Which of the {len(res.candidates)} available collections would you like to explore?",
+                clarification_options=res.candidates,
+                presentation_type="clarification",
+            )
+
+        # 2C. Ambiguous Collection ("how many data are there?", "show me the records", "give me information")
+        if res.status == "ambiguous":
+            is_count_intent = bool(
+                re.search(r"\b(how many|count|number of|total)\b", q_lower)
+            )
+            action_verb = "count" if is_count_intent else "use"
+            msg = (
+                f"I found {len(res.candidates)} collections in this dataset. "
+                f"Which collection would you like me to {action_verb}?"
+            )
+            return QueryPlan(
+                original_question=question,
+                normalized_question=normalized,
+                intent="CLARIFICATION",
+                collection_status="ambiguous",
+                candidate_collections=res.candidates,
+                confidence=res.confidence,
+                source_id=source_id,
+                source_name=source_name,
+                clarification_message=msg,
+                clarification_options=res.candidates,
+                presentation_type="clarification",
+            )
+
+        # 2D. Unrelated
+        if res.status == "unrelated":
             return QueryPlan(
                 original_question=question,
                 normalized_question=normalized,
                 intent="UNRELATED",
+                collection_status="unrelated",
+                candidate_collections=res.candidates,
+                confidence=res.confidence,
+                source_id=source_id,
+                source_name=source_name,
+                presentation_type="error",
+            )
+
+        # 2E. Multi-Collection Query ("which customers placed the most orders?", "how many customers have orders?")
+        if res.status == "multi_collection":
+            return QueryPlan(
+                original_question=question,
+                normalized_question=normalized,
+                intent="MULTI_COLLECTION",
+                collection=res.selected_collection or "orders",
+                secondary_collection=res.secondary_collection or "customers",
+                collection_status="multi_collection",
+                candidate_collections=res.candidates,
+                confidence=res.confidence,
+                source_id=source_id,
+                source_name=source_name,
+                limit=15,
+                operation="aggregate",
+                presentation_type="table",
+            )
+
+        # 3. Single Resolved Collection -> Deep Collection Schema Inspection
+        col_name = res.selected_collection
+        if not col_name:
+            return QueryPlan(
+                original_question=question,
+                normalized_question=normalized,
+                intent="CLARIFICATION",
+                collection_status="ambiguous",
+                candidate_collections=res.candidates,
+                confidence=0.85,
+                source_id=source_id,
+                source_name=source_name,
+                clarification_message=f"I found {len(res.candidates)} collections in this dataset. Which collection would you like me to use?",
+                clarification_options=res.candidates,
+                presentation_type="clarification",
+            )
+
+        # If the user typed a conversational collection switch ("actually customers", "I meant customers", "customers")
+        # inherit the intent/question from conversation_context if the input only named the collection!
+        effective_q_lower = q_lower
+        if res.is_collection_switch and conversation_context:
+            prev_question = conversation_context.get("pending_question") or conversation_context.get("last_question")
+            prev_intent = conversation_context.get("intent")
+            if prev_question:
+                effective_q_lower = QuestionNormalizer.normalize(str(prev_question)).lower()
+            elif prev_intent == "COUNT":
+                effective_q_lower = f"how many {col_name} are there"
+            else:
+                effective_q_lower = f"show me {col_name}"
+
+        target_col = self.collection_service.get_collection_schema(col_name, source_id)
+        if not target_col:
+            return QueryPlan(
+                original_question=question,
+                normalized_question=normalized,
+                intent="UNRELATED",
+                collection_status="unrelated",
                 confidence=0.95,
                 source_id=source_id,
                 source_name=source_name,
                 presentation_type="error",
             )
 
-        # 2. DATASET_OVERVIEW vs COLLECTION_OVERVIEW vs SCHEMA_QUERY
-        # Check if a specific collection was named
-        explicit_col = None
-        for col in collections:
-            cname = col["name"].lower()
-            base_name = cname.split("_")[-1]
-            singular = base_name[:-1] if base_name.endswith("s") else base_name
-            if re.search(rf"\b({re.escape(cname)}|{re.escape(base_name)}|{re.escape(singular)})\b", q_lower):
-                explicit_col = col
-                break
+        col_columns = target_col.get("columns", [])
+        col_fields = {c["name"]: c.get("data_type", "String") for c in col_columns}
+        top_level_fields = [f for f in col_fields if "." not in f and "[]" not in f and f != "_id"]
+        numeric_fields = [
+            f
+            for f, t in col_fields.items()
+            if t in ("Double", "Int64", "Number", "Integer") and "." not in f and not f.endswith("_id")
+        ]
+        categorical_fields = [
+            f
+            for f, t in col_fields.items()
+            if t == "String" and not f.endswith("_id") and "[]" not in f
+        ]
 
-        # DATASET_OVERVIEW: "give me info about dataset", "tell me about this database", "what data do I have", "dataset overview"
-        if not explicit_col and (
-            re.search(
-                r"\b(info|information|overview|summary|about|describe|what is in|what data|tell me about)\b.*\b(dataset|database|db|source|workspace|data)\b",
-                q_lower,
-            )
-            or re.search(
-                r"\b(dataset|database)\s+(info|information|overview|summary|details)\b",
-                q_lower,
-            )
-            or q_clean.strip() in {"dataset", "database", "info about dataset", "give me info about dataset", "about dataset", "what data do i have"}
+        # Check SCHEMA_QUERY on the resolved collection ("what fields are in products?", "show schema of customers")
+        if re.search(r"\b(fields|columns|schema|structure|attributes|data types|bson types)\b", effective_q_lower) and not re.search(
+            r"\b(sort|filter|where|above|below)\b", effective_q_lower
         ):
-            return QueryPlan(
-                original_question=question,
-                normalized_question=normalized,
-                intent="DATASET_OVERVIEW",
-                confidence=0.98,
-                source_id=source_id,
-                source_name=source_name,
-                presentation_type="dataset_overview",
-            )
-
-        # COLLECTION_OVERVIEW (All collections): "what collections are available?", "list collections", "show tables"
-        if not explicit_col and (
-            re.search(
-                r"\b(what|which|list|show|available|all)\b.*\b(collections|tables)\b",
-                q_lower,
-            )
-            or q_clean.strip() in {"collections", "show collections", "list collections", "show tables", "list tables", "what collections are available"}
-        ):
-            return QueryPlan(
-                original_question=question,
-                normalized_question=normalized,
-                intent="COLLECTION_OVERVIEW",
-                confidence=0.98,
-                source_id=source_id,
-                source_name=source_name,
-                presentation_type="dataset_overview",
-            )
-
-        # SCHEMA_QUERY: "what fields are available?", "show schema of products", "what columns are in customers"
-        if re.search(r"\b(fields|columns|schema|structure|attributes|data types|bson types)\b", q_lower) and not re.search(r"\b(sort|filter|where|above|below)\b", q_lower):
-            target_col = explicit_col or (
-                self.resolve_collection(q_lower, collections, active_collection, conversation_context)[0]
-            )
             return QueryPlan(
                 original_question=question,
                 normalized_question=normalized,
@@ -386,126 +382,69 @@ class QueryPlannerEngine:
                 confidence=0.96,
                 source_id=source_id,
                 source_name=source_name,
-                collection=target_col["name"] if target_col else None,
+                collection=col_name,
+                candidate_collections=res.candidates,
                 presentation_type="schema",
             )
-
-        # COLLECTION_OVERVIEW for a specific collection: "tell me about the products collection", "overview of customers collection"
-        if explicit_col and re.search(
-            r"\b(tell me about|overview of|summary of|describe|info about|information about)\b.*\bcollection\b",
-            q_lower,
-        ):
-            return QueryPlan(
-                original_question=question,
-                normalized_question=normalized,
-                intent="COLLECTION_OVERVIEW",
-                confidence=0.96,
-                source_id=source_id,
-                source_name=source_name,
-                collection=explicit_col["name"],
-                presentation_type="collection_overview",
-            )
-
-        # 3. Resolve Target Collection
-        target_col, col_reason = self.resolve_collection(
-            q_lower, collections, active_collection, conversation_context
-        )
-
-        # Check if user asked a total count across the entire database ("how many total documents in database")
-        if not explicit_col and re.search(
-            r"\b(total documents in database|how many total records in database|how many records across all collections)\b",
-            q_lower,
-        ):
-            return QueryPlan(
-                original_question=question,
-                normalized_question=normalized,
-                intent="DATASET_OVERVIEW",
-                confidence=0.95,
-                source_id=source_id,
-                source_name=source_name,
-                presentation_type="dataset_overview",
-            )
-
-        if not target_col:
-            # Check if the question has general data/analytical words; if so, ask clarification rather than UNRELATED
-            data_intent_words = {
-                "show", "list", "display", "get", "find", "count", "how", "many", "average",
-                "avg", "sum", "total", "top", "highest", "lowest", "max", "min", "compare",
-                "filter", "search", "data", "records", "documents", "entries", "rows", "info",
-                "information", "details", "only", "above", "below", "under", "over", "more", "less",
-                "sort", "order", "by",
-            }
-            if q_words.intersection(data_intent_words):
-                return QueryPlan(
-                    original_question=question,
-                    normalized_question=normalized,
-                    intent="CLARIFICATION",
-                    confidence=0.85,
-                    source_id=source_id,
-                    source_name=source_name,
-                    clarification_message=f"I found {len(collections)} collections in this dataset. Which collection would you like me to query?",
-                    clarification_options=[
-                        {"collection": c["name"], "label": f"{c['name']} ({c.get('document_count', 0)} docs)"}
-                        for c in collections
-                    ],
-                    presentation_type="clarification",
-                )
-
-            return QueryPlan(
-                original_question=question,
-                normalized_question=normalized,
-                intent="UNRELATED",
-                confidence=0.95,
-                source_id=source_id,
-                source_name=source_name,
-                presentation_type="error",
-            )
-
-        col_name = target_col["name"]
-        col_columns = target_col.get("columns", [])
-        col_fields = {c["name"]: c.get("data_type", "String") for c in col_columns}
-        top_level_fields = [f for f in col_fields if "." not in f and "[]" not in f and f != "_id"]
-        numeric_fields = [
-            f for f, t in col_fields.items() if t in ("Double", "Int64", "Number", "Integer") and "." not in f and not f.endswith("_id")
-        ]
-        categorical_fields = [
-            f for f, t in col_fields.items() if t == "String" and not f.endswith("_id") and "[]" not in f
-        ]
 
         # 4. Resolve Mentioned Fields & Semantic Field Synonyms
         matched_numeric: list[str] = []
         for nf in numeric_fields:
             nf_clean = nf.lower().replace("_", " ")
-            if re.search(rf"\b({re.escape(nf.lower())}|{re.escape(nf_clean)})\b", q_lower):
+            if re.search(rf"\b({re.escape(nf.lower())}|{re.escape(nf_clean)})\b", effective_q_lower):
                 matched_numeric.append(nf)
 
         if not matched_numeric:
             for word, candidates in SEMANTIC_FIELD_SYNONYMS.items():
-                if re.search(rf"\b{re.escape(word)}\b", q_lower):
+                if re.search(rf"\b{re.escape(word)}\b", effective_q_lower):
                     for cand in candidates:
                         if cand in numeric_fields and cand not in matched_numeric:
                             matched_numeric.append(cand)
 
-        primary_metric = matched_numeric[0] if matched_numeric else (numeric_fields[0] if numeric_fields else None)
-        secondary_metric = matched_numeric[1] if len(matched_numeric) > 1 else (
-            next((nf for nf in numeric_fields if nf != primary_metric), None)
+        primary_metric = (
+            matched_numeric[0]
+            if matched_numeric
+            else (numeric_fields[0] if numeric_fields else None)
+        )
+        secondary_metric = (
+            matched_numeric[1]
+            if len(matched_numeric) > 1
+            else next((nf for nf in numeric_fields if nf != primary_metric), None)
         )
 
         # Resolve Group / Dimension Field ("by category", "by department", "by month", "per city")
         group_field = None
-        m_by = re.search(r"\b(?:by|per|across|for each|grouped by)\s+([a-zA-Z0-9_.\s]+?)(?:\s+and\s+|\s+in\s+|$)", q_lower)
+        m_by = re.search(
+            r"\b(?:by|per|across|for each|grouped by)\s+([a-zA-Z0-9_.\s]+?)(?:\s+and\s+|\s+in\s+|$)",
+            effective_q_lower,
+        )
         if m_by:
             cand_phrase = m_by.group(1).strip()
             for f in col_fields:
                 f_leaf = f.split(".")[-1].replace("[]", "").lower()
                 f_words = f_leaf.replace("_", " ")
                 singular_cand = cand_phrase.rstrip("s")
-                if f_leaf == cand_phrase or f_leaf == singular_cand or f_words in cand_phrase or singular_cand in f_leaf:
-                    if f not in numeric_fields or "group" in q_lower or "average" in q_lower or "count" in q_lower or "total" in q_lower:
+                if (
+                    f_leaf == cand_phrase
+                    or f_leaf == singular_cand
+                    or f_words in cand_phrase
+                    or singular_cand in f_leaf
+                ):
+                    if (
+                        f not in numeric_fields
+                        or "group" in effective_q_lower
+                        or "average" in effective_q_lower
+                        or "count" in effective_q_lower
+                        or "total" in effective_q_lower
+                    ):
                         group_field = f.replace("[].", ".")
                         break
 
-        if not group_field and ("monthly" in q_lower or "by month" in q_lower or ("january" in q_lower and "february" in q_lower)):
+        if not group_field and (
+            "monthly" in effective_q_lower
+            or "by month" in effective_q_lower
+            or ("january" in effective_q_lower and "february" in effective_q_lower)
+        ):
             if "month" in col_fields:
                 group_field = "month"
 
@@ -513,15 +452,20 @@ class QueryPlannerEngine:
         filters: dict[str, Any] = {}
         filter_descriptions: list[str] = []
 
-        # Inherit filters from conversation context if user says "only ...", "sort them ...", "out of those, how many..."
-        if conversation_context and conversation_context.get("collection") == col_name:
-            if re.search(r"^(?:only|just|and|also|sort them|order them|how many are there|which of them)\b", q_lower):
+        if (
+            not res.is_collection_switch
+            and conversation_context
+            and conversation_context.get("collection") == col_name
+        ):
+            if re.search(
+                r"^(?:only|just|and|also|sort them|order them|how many are there|how many|which of them)\b",
+                q_clean,
+            ):
                 prev_filters = conversation_context.get("filters") or {}
                 if isinstance(prev_filters, dict) and prev_filters:
                     filters.update(prev_filters)
 
-        # Numeric threshold filters ("above 50000", "more than 1 lakh", "under 20000", "gpa above 3.5", "low stock")
-        q_no_top = re.sub(r"\b(?:top|bottom|first|last|limit)\s+\d+", "", q_lower)
+        q_no_top = re.sub(r"\b(?:top|bottom|first|last|limit)\s+\d+", "", effective_q_lower)
         q_no_top_clean = q_no_top.replace(",", "").replace("₹", "").replace("$", "")
 
         m_lakh = re.search(r"(\d+(?:\.\d+)?)\s*lakh", q_no_top_clean)
@@ -541,9 +485,15 @@ class QueryPlannerEngine:
                     threshold_val = float(m_num.group(1))
 
         if threshold_val is not None and primary_metric:
-            # Format display number cleanly
-            disp_val = f"{int(threshold_val):,}" if threshold_val.is_integer() else f"{threshold_val:,.2f}"
-            if any(w in q_no_top for w in ("above", "over", "more than", "greater than", "exceeding", ">")):
+            disp_val = (
+                f"{int(threshold_val):,}"
+                if threshold_val.is_integer()
+                else f"{threshold_val:,.2f}"
+            )
+            if any(
+                w in q_no_top
+                for w in ("above", "over", "more than", "greater than", "exceeding", ">")
+            ):
                 filters[primary_metric] = {"$gt": threshold_val}
                 filter_descriptions.append(f"{primary_metric} > {disp_val}")
             elif any(w in q_no_top for w in ("below", "under", "less than", "fewer than", "<")):
@@ -555,11 +505,10 @@ class QueryPlannerEngine:
             else:
                 filters[primary_metric] = threshold_val
                 filter_descriptions.append(f"{primary_metric} = {disp_val}")
-        elif "low stock" in q_lower and "stock" in col_fields:
+        elif "low stock" in effective_q_lower and "stock" in col_fields:
             filters["stock"] = {"$lt": 25}
             filter_descriptions.append("stock < 25")
 
-        # Categorical / String value filters (e.g., "from Bangalore", "in Electronics", "status Delivered")
         city_synonyms = {
             "bangalore": ["Bangalore", "Bengaluru"],
             "bengaluru": ["Bangalore", "Bengaluru"],
@@ -569,7 +518,7 @@ class QueryPlannerEngine:
             "kolkata": ["Kolkata", "Calcutta"],
         }
         for city_key, city_vals in city_synonyms.items():
-            if re.search(rf"\b{re.escape(city_key)}\b", q_lower):
+            if re.search(rf"\b{re.escape(city_key)}\b", effective_q_lower):
                 if "city" in col_fields:
                     filters["city"] = {"$in": city_vals}
                     filter_descriptions.append(f"city = '{city_vals[0]}'")
@@ -580,42 +529,83 @@ class QueryPlannerEngine:
 
         for col_info in col_columns:
             fname = col_info["name"]
-            if fname in numeric_fields or fname == "_id" or fname in ("city", "address.city") and ("city" in filters or "address.city" in filters):
+            if (
+                fname in numeric_fields
+                or fname == "_id"
+                or (
+                    fname in ("city", "address.city")
+                    and ("city" in filters or "address.city" in filters)
+                )
+            ):
                 continue
             for sv in col_info.get("sample_values", []) or []:
                 sv_str = str(sv).strip()
-                if len(sv_str) >= 3 and re.search(rf"\b{re.escape(sv_str.lower())}\b", q_lower):
+                if len(sv_str) >= 3 and re.search(rf"\b{re.escape(sv_str.lower())}\b", effective_q_lower):
                     clean_path = fname.replace("[].", ".")
                     filters[clean_path] = sv_str
                     filter_descriptions.append(f"{clean_path.split('.')[-1]} = '{sv_str}'")
                     break
 
-        # Also check explicit city/category patterns like "from <City>"
-        if ("city" in col_fields or "address.city" in col_fields) and "city" not in filters and "address.city" not in filters:
-            m_city = re.search(r"\b(?:from|in)\s+([a-zA-Z]+)\b", q_lower)
+        if (
+            ("city" in col_fields or "address.city" in col_fields)
+            and "city" not in filters
+            and "address.city" not in filters
+        ):
+            m_city = re.search(r"\b(?:from|in)\s+([a-zA-Z]+)\b", effective_q_lower)
             if m_city:
                 city_cand = m_city.group(1).capitalize()
-                if city_cand.lower() not in {"the", "this", "collection", "database", "dataset", "january", "february", "march", "orders", "products", "customers"}:
+                if city_cand.lower() not in {
+                    "the",
+                    "this",
+                    "collection",
+                    "database",
+                    "dataset",
+                    "january",
+                    "february",
+                    "march",
+                    "orders",
+                    "products",
+                    "customers",
+                }:
                     target_city_field = "city" if "city" in col_fields else "address.city"
-                    filters[target_city_field] = {"$regex": f"^{re.escape(city_cand)}$", "$options": "i"}
+                    filters[target_city_field] = {
+                        "$regex": f"^{re.escape(city_cand)}$",
+                        "$options": "i",
+                    }
                     filter_descriptions.append(f"city = '{city_cand}'")
 
-        # Month filter
         months_mentioned = [
             m.capitalize()
-            for m in ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
-            if re.search(rf"\b{m}\b", q_lower)
+            for m in (
+                "january",
+                "february",
+                "march",
+                "april",
+                "may",
+                "june",
+                "july",
+                "august",
+                "september",
+                "october",
+                "november",
+                "december",
+            )
+            if re.search(rf"\b{m}\b", effective_q_lower)
         ]
         if months_mentioned and "month" in col_fields:
-            filters["month"] = {"$in": months_mentioned} if len(months_mentioned) > 1 else months_mentioned[0]
+            filters["month"] = (
+                {"$in": months_mentioned} if len(months_mentioned) > 1 else months_mentioned[0]
+            )
             filter_descriptions.append(f"month in {months_mentioned}")
 
-        # 6. Determine Exact Intent & Build MongoDB Pipeline
-        # 6A. COUNT ("how many products?", "how many data are there in the collection", "count orders", "number of students")
-        if re.search(
-            r"\b(how many|count|total number of|number of|total records|total documents|total products|total customers|total orders|total employees|total students)\b",
-            q_lower,
-        ) and not group_field:
+        # 6. Determine Exact Intent
+        if (
+            re.search(
+                r"\b(how many|count|total number of|number of|total records|total documents|total products|total customers|total orders|total employees|total students)\b",
+                effective_q_lower,
+            )
+            and not group_field
+        ):
             return QueryPlan(
                 original_question=question,
                 normalized_question=normalized,
@@ -624,6 +614,7 @@ class QueryPlannerEngine:
                 source_id=source_id,
                 source_name=source_name,
                 collection=col_name,
+                candidate_collections=res.candidates,
                 filters=filters,
                 filter_descriptions=filter_descriptions,
                 limit=10,
@@ -632,9 +623,8 @@ class QueryPlannerEngine:
                 presentation_type="kpi",
             )
 
-        # 6B. TOP_N / BOTTOM_N ("top 5 products by price", "bottom 3 products by stock", "5 most expensive products")
-        m_top = re.search(r"\b(?:top|first|highest)\s+(\d+)\b", q_lower)
-        m_bottom = re.search(r"\b(?:bottom|lowest|cheapest|least)\s+(\d+)\b", q_lower)
+        m_top = re.search(r"\b(?:top|first|highest)\s+(\d+)\b", effective_q_lower)
+        m_bottom = re.search(r"\b(?:bottom|lowest|cheapest|least)\s+(\d+)\b", effective_q_lower)
         if m_top or m_bottom:
             n_val = int(m_top.group(1)) if m_top else int(m_bottom.group(1))
             is_bottom = bool(m_bottom)
@@ -647,6 +637,7 @@ class QueryPlannerEngine:
                 source_id=source_id,
                 source_name=source_name,
                 collection=col_name,
+                candidate_collections=res.candidates,
                 target_fields=top_level_fields[:8],
                 metric_field=sort_f,
                 filters=filters,
@@ -657,24 +648,25 @@ class QueryPlannerEngine:
                 presentation_type="ranked_table",
             )
 
-        # 6C. MAXIMUM / MINIMUM (Single superlative question: "what is the most expensive product?", "which product has the highest price?", "cheapest product")
         is_superlative_max = bool(
             re.search(
                 r"\b(most expensive|highest|maximum|max|best selling|top earner|richest|largest|biggest)\b",
-                q_lower,
+                effective_q_lower,
             )
-            and not re.search(r"\b(top\s+\d+|by\s+department|by\s+category|by\s+month)\b", q_lower)
+            and not re.search(
+                r"\b(top\s+\d+|by\s+department|by\s+category|by\s+month)\b", effective_q_lower
+            )
         )
         is_superlative_min = bool(
             re.search(
                 r"\b(least expensive|cheapest|lowest|minimum|min|smallest)\b",
-                q_lower,
+                effective_q_lower,
             )
-            and not re.search(r"\b(bottom\s+\d+|by\s+department|by\s+category|by\s+month)\b", q_lower)
+            and not re.search(
+                r"\b(bottom\s+\d+|by\s+department|by\s+category|by\s+month)\b", effective_q_lower
+            )
         )
         if (is_superlative_max or is_superlative_min) and primary_metric:
-            # If user asked "show expensive products" (plural without "most"/"what is the"/"which is the"), treat as FILTER/SORT table;
-            # If user asked "what is the most expensive product?" or "what is the highest product price?", return MAXIMUM/MINIMUM (limit=1)
             sort_dir = -1 if is_superlative_max else 1
             return QueryPlan(
                 original_question=question,
@@ -684,6 +676,7 @@ class QueryPlannerEngine:
                 source_id=source_id,
                 source_name=source_name,
                 collection=col_name,
+                candidate_collections=res.candidates,
                 target_fields=top_level_fields[:8],
                 metric_field=primary_metric,
                 filters=filters,
@@ -695,8 +688,7 @@ class QueryPlannerEngine:
                 presentation_type="detail",
             )
 
-        # 6D. COMPARISON ("compare products by price and units sold", "compare sales between January and February")
-        if re.search(r"\b(compare|comparison|versus|vs\.?|against)\b", q_lower):
+        if re.search(r"\b(compare|comparison|versus|vs\.?|against)\b", effective_q_lower):
             return QueryPlan(
                 original_question=question,
                 normalized_question=normalized,
@@ -705,6 +697,7 @@ class QueryPlannerEngine:
                 source_id=source_id,
                 source_name=source_name,
                 collection=col_name,
+                candidate_collections=res.candidates,
                 target_fields=top_level_fields[:8],
                 metric_field=primary_metric,
                 secondary_metric_field=secondary_metric,
@@ -716,10 +709,14 @@ class QueryPlannerEngine:
                 presentation_type="comparison",
             )
 
-        # 6E. AVERAGE / SUM / GROUP_BY / TREND
-        is_avg = bool(re.search(r"\b(average|avg|mean)\b", q_lower))
-        is_sum = bool(re.search(r"\b(sum|total\s+(?:revenue|sales|amount|spent|salary|stock|units))\b", q_lower))
-        is_trend = bool(re.search(r"\b(trend|monthly|by month|over time)\b", q_lower))
+        is_avg = bool(re.search(r"\b(average|avg|mean)\b", effective_q_lower))
+        is_sum = bool(
+            re.search(
+                r"\b(sum|total\s+(?:revenue|sales|amount|spent|salary|stock|units))\b",
+                effective_q_lower,
+            )
+        )
+        is_trend = bool(re.search(r"\b(trend|monthly|by month|over time)\b", effective_q_lower))
 
         if is_avg or is_sum or is_trend or group_field:
             intent_name = (
@@ -736,9 +733,11 @@ class QueryPlannerEngine:
                 source_id=source_id,
                 source_name=source_name,
                 collection=col_name,
+                candidate_collections=res.candidates,
                 target_fields=top_level_fields[:8],
                 metric_field=primary_metric,
-                group_field=group_field or ("month" if is_trend and "month" in col_fields else None),
+                group_field=group_field
+                or ("month" if is_trend and "month" in col_fields else None),
                 filters=filters,
                 filter_descriptions=filter_descriptions,
                 limit=50,
@@ -747,9 +746,10 @@ class QueryPlannerEngine:
                 presentation_type="chart" if (group_field or is_trend) else "kpi",
             )
 
-        # 6F. DISTINCT_VALUES ("unique categories", "distinct cities")
-        if re.search(r"\b(distinct|unique|different)\b", q_lower):
-            dist_field = group_field or (categorical_fields[0] if categorical_fields else top_level_fields[0])
+        if re.search(r"\b(distinct|unique|different)\b", effective_q_lower):
+            dist_field = group_field or (
+                categorical_fields[0] if categorical_fields else top_level_fields[0]
+            )
             return QueryPlan(
                 original_question=question,
                 normalized_question=normalized,
@@ -758,6 +758,7 @@ class QueryPlannerEngine:
                 source_id=source_id,
                 source_name=source_name,
                 collection=col_name,
+                candidate_collections=res.candidates,
                 target_fields=[dist_field],
                 group_field=dist_field,
                 filters=filters,
@@ -767,15 +768,17 @@ class QueryPlannerEngine:
                 presentation_type="table",
             )
 
-        # 6G. EXPLICIT SORT ("show products sorted by stock", "order customers by total_spent")
-        if re.search(r"\b(sort|sorted|order|ordered)\b", q_lower) or ("expensive" in q_lower and not is_superlative_max):
+        if re.search(r"\b(sort|sorted|order|ordered)\b", effective_q_lower) or (
+            "expensive" in effective_q_lower and not is_superlative_max
+        ):
             sort_f = primary_metric or (top_level_fields[0] if top_level_fields else "_id")
-            is_asc = bool(re.search(r"\b(asc|ascending|lowest to highest|low to high|smallest)\b", q_lower))
-            # If user asked "show products sorted by stock", default ascending or descending naturally
-            if "stock" in sort_f.lower() and not re.search(r"\b(desc|descending|highest)\b", q_lower):
-                sort_dir = 1 if is_asc else -1
-            else:
-                sort_dir = 1 if is_asc else -1
+            is_asc = bool(
+                re.search(
+                    r"\b(asc|ascending|lowest to highest|low to high|smallest)\b",
+                    effective_q_lower,
+                )
+            )
+            sort_dir = 1 if is_asc else -1
             return QueryPlan(
                 original_question=question,
                 normalized_question=normalized,
@@ -784,6 +787,7 @@ class QueryPlannerEngine:
                 source_id=source_id,
                 source_name=source_name,
                 collection=col_name,
+                candidate_collections=res.candidates,
                 target_fields=top_level_fields[:8],
                 metric_field=sort_f,
                 filters=filters,
@@ -794,7 +798,6 @@ class QueryPlannerEngine:
                 presentation_type="table",
             )
 
-        # 6H. FILTER ("show me products above 50000", "show customers from Bangalore")
         if filters:
             return QueryPlan(
                 original_question=question,
@@ -804,18 +807,17 @@ class QueryPlannerEngine:
                 source_id=source_id,
                 source_name=source_name,
                 collection=col_name,
+                candidate_collections=res.candidates,
                 target_fields=top_level_fields[:8],
                 metric_field=primary_metric,
                 filters=filters,
                 filter_descriptions=filter_descriptions,
-                sort=None,  # DO NOT arbitrarily sort/rank unless asked
+                sort=None,
                 limit=50,
                 operation="aggregate",
                 presentation_type="table",
             )
 
-        # 6I. LIST_RECORDS / SEARCH ("show me data related to product", "show me products", "tell me about the customers")
-        # CRITICAL RULE: NEVER add an unrequested price sort or Top Result ranking!
         return QueryPlan(
             original_question=question,
             normalized_question=normalized,
@@ -824,6 +826,7 @@ class QueryPlannerEngine:
             source_id=source_id,
             source_name=source_name,
             collection=col_name,
+            candidate_collections=res.candidates,
             target_fields=top_level_fields[:8],
             metric_field=None,
             filters={},
@@ -839,7 +842,48 @@ class QueryPlannerEngine:
         if not plan.collection:
             raise ValueError("QueryPlan has no target collection.")
 
-        pipeline: list[dict[str, Any]] = []
+        # Multi-Collection $lookup query (e.g. "which customers placed the most orders?")
+        if plan.intent == "MULTI_COLLECTION":
+            sec_col = plan.secondary_collection or "customers"
+            pipeline = [
+                {
+                    "$group": {
+                        "_id": "$customer_id",
+                        "orders_placed": {"$sum": 1},
+                        "total_order_value": {"$sum": "$amount"},
+                    }
+                },
+                {
+                    "$lookup": {
+                        "from": sec_col,
+                        "localField": "_id",
+                        "foreignField": "customer_id",
+                        "as": "customer_info",
+                    }
+                },
+                {"$unwind": {"path": "$customer_info", "preserveNullAndEmptyArrays": True}},
+                {
+                    "$project": {
+                        "_id": 0,
+                        "customer_id": "$_id",
+                        "customer_name": "$customer_info.name",
+                        "city": "$customer_info.city",
+                        "tier": "$customer_info.tier",
+                        "orders_placed": 1,
+                        "total_order_value": {"$round": ["$total_order_value", 2]},
+                    }
+                },
+                {"$sort": {"orders_placed": -1, "total_order_value": -1}},
+                {"$limit": plan.limit or 15},
+            ]
+            return {
+                "collection": plan.collection,
+                "operation": "aggregate",
+                "pipeline": pipeline,
+                "limit": plan.limit or 15,
+            }
+
+        pipeline = []
         if plan.filters:
             pipeline.append({"$match": plan.filters})
 
@@ -881,7 +925,9 @@ class QueryPlannerEngine:
                 "limit": 10,
             }
 
-        if plan.intent in ("GROUP_BY", "TREND", "DISTRIBUTION") or (plan.intent in ("AVERAGE", "SUM") and plan.group_field):
+        if plan.intent in ("GROUP_BY", "TREND", "DISTRIBUTION") or (
+            plan.intent in ("AVERAGE", "SUM") and plan.group_field
+        ):
             dim = plan.group_field or "_id"
             dim_label = dim.split(".")[-1]
             if plan.metric_field:
@@ -956,9 +1002,7 @@ class QueryPlannerEngine:
                     "pipeline": pipeline,
                     "limit": plan.limit,
                 }
-            # Entity-level comparison across two metrics (e.g. "compare products by price and units sold")
             proj: dict[str, Any] = {"_id": 0}
-            # Include identifier/name columns + compared metrics
             for f in plan.target_fields:
                 if f.endswith("_id") or f in ("name", "title", "category", "department"):
                     proj[f] = 1
@@ -997,7 +1041,6 @@ class QueryPlannerEngine:
                 "limit": plan.limit,
             }
 
-        # Standard projection for LIST_RECORDS, FILTER, SORT, TOP_N, BOTTOM_N, MAXIMUM, MINIMUM
         if plan.sort:
             pipeline.append({"$sort": plan.sort})
         pipeline.append({"$limit": plan.limit})
