@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { QueryInput } from '../components/workspace/QueryInput';
 import { QueryResult } from '../components/workspace/QueryResult';
@@ -13,9 +13,11 @@ export const Workspace: React.FC = () => {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<QueryResponse | null>(null);
-  
+
   const [sources, setSources] = useState<SourceMetadata[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string>('all');
+  const [activeCollection, setActiveCollection] = useState<string>('');
+  const [conversationContext, setConversationContext] = useState<Record<string, any>>({});
   const [loadingSources, setLoadingSources] = useState(true);
   const [textIndex, setTextIndex] = useState(0);
 
@@ -29,14 +31,23 @@ export const Workspace: React.FC = () => {
       const data = await getSources();
       setSources(data);
     } catch (e) {
-      console.error("Failed to fetch sources", e);
+      console.error('Failed to fetch sources', e);
     } finally {
       setLoadingSources(false);
     }
   };
 
+  // Available collections for the active source
+  const availableCollections = useMemo(() => {
+    const activeSrc =
+      selectedSourceId === 'all'
+        ? sources[0]
+        : sources.find((s) => s.source_id === selectedSourceId) || sources[0];
+    return activeSrc?.collections || [];
+  }, [sources, selectedSourceId]);
+
   useEffect(() => {
-    const state = location.state as { initialQuestion?: string, sourceId?: string };
+    const state = location.state as { initialQuestion?: string; sourceId?: string };
     if (state?.initialQuestion && !loading && !result) {
       if (state.sourceId) {
         setSelectedSourceId(state.sourceId);
@@ -48,17 +59,33 @@ export const Workspace: React.FC = () => {
     }
   }, [location.state]);
 
-  const handleQuery = async (q: string = question, sourceIds?: string[]) => {
+  const handleQuery = async (
+    q: string = question,
+    sourceIds?: string[],
+    overrideCollection?: string
+  ) => {
     if (!q.trim()) return;
-    
+
     setQuestion(q);
     setLoading(true);
-    
-    const finalSourceIds = sourceIds || (selectedSourceId === 'all' ? undefined : [selectedSourceId]);
-    
+
+    const finalSourceIds =
+      sourceIds || (selectedSourceId === 'all' ? undefined : [selectedSourceId]);
+    const targetCol =
+      overrideCollection !== undefined
+        ? overrideCollection
+        : activeCollection || undefined;
+
     try {
-      const res = await queryDatabase(q, finalSourceIds);
+      const res = await queryDatabase(q, finalSourceIds, targetCol, conversationContext);
       setResult(res);
+      if (res.collection) {
+        setConversationContext({
+          collection: res.collection,
+          filters: res.query_plan?.filters || {},
+          intent: res.intent,
+        });
+      }
     } catch (e: any) {
       setResult({
         question: q,
@@ -67,7 +94,7 @@ export const Workspace: React.FC = () => {
         row_count: 0,
         execution_time_ms: 0,
         status: 'error',
-        error: e?.response?.data?.detail || e.message || 'An unexpected error occurred.'
+        error: e?.response?.data?.detail || e.message || 'An unexpected error occurred.',
       });
     } finally {
       setLoading(false);
@@ -75,10 +102,11 @@ export const Workspace: React.FC = () => {
   };
 
   const quickExamples = [
-    "What are the top 10 products by revenue?",
-    "Which customers have spent more than ₹1 lakh?",
-    "Compare sales between January and February.",
-    "Average salary by department"
+    'Give me info about dataset',
+    'Show me data related to product',
+    'What is the most expensive product?',
+    'Show customers from Bangalore',
+    'Compare products by price and units sold',
   ];
 
   return (
@@ -87,28 +115,36 @@ export const Workspace: React.FC = () => {
         <div className="mb-10 text-center animate-slide-up flex flex-col items-center">
           <div className="relative mb-7 mt-2 group">
             <div className="w-16 h-16 bg-[#121214]/80 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/[0.05] shadow-[0_8px_30px_rgb(0,0,0,0.12)] relative transition-all duration-700 ease-out group-hover:shadow-[0_8px_30px_rgba(34,211,238,0.15)] group-hover:border-cyan-500/20 group-hover:bg-[#121214]/90">
-               <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/5 to-transparent rounded-2xl opacity-50 group-hover:opacity-100 transition-opacity duration-700"></div>
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/5 to-transparent rounded-2xl opacity-50 group-hover:opacity-100 transition-opacity duration-700"></div>
 
-               <AnimatePresence mode="wait">
-                 <motion.svg
-                   key={textIndex}
-                   initial={{ opacity: 0, scale: 0.9, y: 5 }}
-                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                   exit={{ opacity: 0, scale: 0.9, y: -5 }}
-                   transition={{ duration: 0.4, ease: "easeOut" }}
-                   className="w-7 h-7 text-cyan-400/90 relative z-10 transition-transform duration-700 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                 >
-                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                 </motion.svg>
-               </AnimatePresence>
+              <AnimatePresence mode="wait">
+                <motion.svg
+                  key={textIndex}
+                  initial={{ opacity: 0, scale: 0.9, y: 5 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: -5 }}
+                  transition={{ duration: 0.4, ease: 'easeOut' }}
+                  className="w-7 h-7 text-cyan-400/90 relative z-10 transition-transform duration-700 group-hover:scale-110"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                  />
+                </motion.svg>
+              </AnimatePresence>
             </div>
           </div>
           <h2 className="text-4xl font-bold text-zinc-100 tracking-tight mb-3 min-h-[44px]">
             <TextType
               text={[
-                "Ask your MongoDB collections anything.",
-                "Natural language to Aggregation Pipelines.",
-                "Multi-source intelligence & Vector RAG."
+                'Ask your MongoDB collections anything.',
+                'Natural language to Aggregation Pipelines.',
+                'Multi-source intelligence & Vector RAG.',
               ]}
               onIndexChange={setTextIndex}
               typingSpeed={45}
@@ -126,18 +162,59 @@ export const Workspace: React.FC = () => {
         </div>
       )}
 
-      <div className={`relative z-20 transition-all duration-500 ease-in-out max-w-3xl mx-auto w-full ${result || loading ? 'mb-6' : 'mb-8 transform translate-y-2'}`}>
-        <QueryInput 
-          value={question} 
-          onChange={setQuestion} 
-          onSubmit={() => handleQuery(question)} 
-          isLoading={loading} 
-          disabled={false} 
+      <div
+        className={`relative z-20 transition-all duration-500 ease-in-out max-w-3xl mx-auto w-full ${
+          result || loading ? 'mb-4' : 'mb-8 transform translate-y-2'
+        }`}
+      >
+        <QueryInput
+          value={question}
+          onChange={setQuestion}
+          onSubmit={() => handleQuery(question)}
+          isLoading={loading}
+          disabled={false}
           sources={sources}
           selectedSourceId={selectedSourceId}
-          onSourceChange={setSelectedSourceId}
+          onSourceChange={(id) => {
+            setSelectedSourceId(id);
+            setActiveCollection('');
+          }}
           loadingSources={loadingSources}
         />
+
+        {/* Active Collection Context Selector Pills */}
+        {availableCollections.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 px-1">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 mr-1">
+              Collection:
+            </span>
+            <button
+              type="button"
+              onClick={() => setActiveCollection('')}
+              className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border transition-all ${
+                activeCollection === ''
+                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                  : 'bg-zinc-900/50 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+              }`}
+            >
+              Auto-detect
+            </button>
+            {availableCollections.map((col) => (
+              <button
+                key={col}
+                type="button"
+                onClick={() => setActiveCollection(col === activeCollection ? '' : col)}
+                className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border transition-all ${
+                  activeCollection === col
+                    ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                    : 'bg-zinc-900/50 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                }`}
+              >
+                {col}
+              </button>
+            ))}
+          </div>
+        )}
 
         {!result && !loading && (
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
@@ -157,10 +234,12 @@ export const Workspace: React.FC = () => {
       <div className="flex-1">
         {(result || loading) && (
           <div className="animate-fade-in">
-            <QueryResult 
-              result={result} 
-              isLoading={loading} 
-              onFollowUp={(q, sourceIds) => handleQuery(q, sourceIds)} 
+            <QueryResult
+              result={result}
+              isLoading={loading}
+              onFollowUp={(q, sourceIds, overrideCol) =>
+                handleQuery(q, sourceIds, overrideCol)
+              }
             />
           </div>
         )}
@@ -168,7 +247,8 @@ export const Workspace: React.FC = () => {
 
       <div className="fixed bottom-5 right-6 z-50 pointer-events-none group">
         <div className="pointer-events-auto cursor-default flex flex-col items-end">
-          <span className="text-zinc-600/40 text-[10px] font-mono tracking-[0.2em] uppercase transition-all duration-500 ease-out 
+          <span
+            className="text-zinc-600/40 text-[10px] font-mono tracking-[0.2em] uppercase transition-all duration-500 ease-out 
             group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-cyan-400 group-hover:to-emerald-400 
             group-hover:tracking-[0.4em] group-hover:drop-shadow-[0_0_8px_rgba(34,211,238,0.8)] relative"
           >

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { QueryResponse } from '../../types';
 import { ResultsTable } from './ResultsTable';
 import { SqlPanel } from './SqlPanel';
@@ -6,226 +6,429 @@ import { FollowUpSuggestions } from './FollowUpSuggestions';
 import { ErrorState } from '../common/ErrorState';
 import { VisualizationEngine } from './VisualizationEngine';
 
-
 interface QueryResultProps {
   result: QueryResponse | null;
   isLoading: boolean;
-  onFollowUp: (question: string, sourceIds?: string[]) => void;
+  onFollowUp: (question: string, sourceIds?: string[], activeCollection?: string) => void;
 }
 
+const LOADING_STEPS = [
+  'Understanding question...',
+  'Checking collection schema...',
+  'Building MongoDB pipeline...',
+  'Running MongoDB query...',
+  'Preparing result...',
+];
+
 export const QueryResult: React.FC<QueryResultProps> = ({ result, isLoading, onFollowUp }) => {
-  const [showTechDetails, setShowTechDetails] = useState<boolean>(true);
+  const [showTechDetails, setShowTechDetails] = useState<boolean>(false);
+  const [loadingStep, setLoadingStep] = useState<number>(0);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingStep(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setLoadingStep((prev) => (prev < LOADING_STEPS.length - 1 ? prev + 1 : prev));
+    }, 280);
+    return () => clearInterval(timer);
+  }, [isLoading]);
 
   if (!result && !isLoading) {
     return null;
   }
 
+  // Contextual Loading Experience
   if (isLoading && !result) {
-    return null;
+    return (
+      <div className="bg-[#09090b]/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.8)] border border-zinc-800/80 p-8 mt-6 animate-in fade-in duration-300 relative overflow-hidden">
+        <div className="max-w-md mx-auto flex flex-col items-center text-center">
+          <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center mb-4">
+            <svg
+              className="animate-spin h-5 w-5 text-cyan-400"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+          </div>
+          <p className="text-sm font-medium text-zinc-200 tracking-wide mb-4">
+            {LOADING_STEPS[loadingStep]}
+          </p>
+          <div className="flex items-center gap-2">
+            {LOADING_STEPS.map((_, idx) => (
+              <span
+                key={idx}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  idx <= loadingStep ? 'w-6 bg-cyan-400' : 'w-2 bg-zinc-800'
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!result) return null;
 
   const mongoPipelineCode = result.generated_mongo_query || result.generated_sql;
+  const pres = result.presentation;
+  const uiType = pres?.type || (result.row_count === 1 && result.columns.length === 1 ? 'kpi' : 'table');
+  const headerTitle = pres?.title || result.answer?.headline || 'Results';
+  const headerSubtitle = pres?.subtitle || (result.collection ? `Collection: ${result.collection}` : '');
+  const summaryText = pres?.summary || result.answer?.summary || '';
 
   return (
-    <div className="bg-[#09090b]/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.8)] border border-zinc-800/80 flex flex-col mt-6 animate-in slide-in-from-bottom-4 fade-in duration-700 ease-out relative overflow-hidden ring-1 ring-white/5">
-      <div className="absolute inset-0 bg-gradient-to-b from-cyan-900/5 to-transparent pointer-events-none"></div>
-      
-      {/* 1. Result Header */}
+    <div className="bg-[#09090b]/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.8)] border border-zinc-800/80 flex flex-col mt-6 animate-in slide-in-from-bottom-3 fade-in duration-300 ease-out relative overflow-hidden ring-1 ring-white/5">
+      <div className="absolute inset-0 bg-gradient-to-b from-cyan-900/5 to-transparent pointer-events-none" />
+
+      {/* 1. Clean Natural Result Header (No confusing technical jargon in primary bar) */}
       <div className="bg-zinc-900/40 border-b border-zinc-800/60 px-6 py-4 flex flex-wrap items-center justify-between gap-4 relative z-10">
         <div className="flex items-center gap-3">
-          <h2 className="font-semibold text-zinc-100 flex items-center tracking-tight text-[15px]">
-            {isLoading ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Executing MongoDB Pipeline...
-              </>
-            ) : (
-              <>
-                <div className="relative flex h-2 w-2 mr-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span>
-                </div>
-                Analysis Complete
-              </>
-            )}
+          <div className="relative flex h-2 w-2">
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
+          </div>
+          <h2 className="font-semibold text-zinc-100 tracking-tight text-[15px]">
+            {isLoading ? LOADING_STEPS[loadingStep] : headerTitle}
           </h2>
-          {result.query_source && (
-            <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-              {result.query_source === 'rag' ? 'MongoDB Vector RAG' : `MongoDB • ${result.query_source}`}
+          {result.collection && (
+            <span className="text-xs font-mono px-2.5 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+              {result.collection}
             </span>
           )}
         </div>
+        {headerSubtitle && !isLoading && (
+          <span className="text-xs text-zinc-400 font-medium">{headerSubtitle}</span>
+        )}
       </div>
 
-      <div className={`transition-opacity duration-300 flex flex-col p-6 overflow-hidden relative z-10 ${isLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-        
-        {/* Error / Clarification State */}
-        {result.status === 'clarification_required' ? (
-          <div className="flex flex-col items-center justify-center text-center py-8">
-            <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+      <div
+        className={`transition-opacity duration-200 flex flex-col p-6 overflow-hidden relative z-10 ${
+          isLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'
+        }`}
+      >
+        {/* Clarification State */}
+        {result.status === 'clarification_required' || uiType === 'clarification' ? (
+          <div className="flex flex-col items-center justify-center text-center py-6">
+            <div className="w-12 h-12 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+              </svg>
             </div>
-            <h3 className="text-xl font-bold text-zinc-100 mb-2">Clarification Required</h3>
-            <p className="text-zinc-400 mb-6">{result.error}</p>
-            <div className="flex flex-col w-full max-w-md gap-3">
-              {result.candidates?.map(c => (
-                <button 
-                  key={c.source_id}
-                  onClick={() => onFollowUp(result.question, [c.source_id])}
-                  className="bg-zinc-800/50 hover:bg-zinc-700/50 border border-zinc-700/50 p-4 rounded-xl text-left transition-colors flex items-center justify-between group"
+            <h3 className="text-lg font-semibold text-zinc-100 mb-2">
+              {pres?.title || 'Which collection would you like to use?'}
+            </h3>
+            <p className="text-zinc-400 text-sm mb-6 max-w-md">{result.error || summaryText}</p>
+            <div className="flex flex-wrap justify-center gap-3 max-w-xl">
+              {result.candidates?.map((c, idx) => (
+                <button
+                  key={idx}
+                  onClick={() =>
+                    onFollowUp(
+                      result.question,
+                      c.source_id ? [c.source_id] : undefined,
+                      c.collection || undefined
+                    )
+                  }
+                  className="bg-zinc-900/80 hover:bg-cyan-500/15 border border-zinc-700/70 hover:border-cyan-500/40 px-4 py-2.5 rounded-xl text-sm font-medium text-zinc-200 hover:text-cyan-300 transition-all flex items-center gap-2"
                 >
-                  <span className="font-medium text-zinc-200">{c.name}</span>
-                  <svg className="w-4 h-4 text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                  <span>{c.name}</span>
+                  <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                  </svg>
                 </button>
               ))}
             </div>
           </div>
         ) : result.status === 'error' ? (
           result.error_code === 'UNRELATED_QUERY' ? (
-            <div className="flex flex-col items-center justify-center text-center py-10 px-4">
-              <div className="w-16 h-16 rounded-2xl bg-zinc-800/50 border border-zinc-700/50 flex items-center justify-center mb-6 shadow-inner">
-                <svg className="w-8 h-8 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <div className="flex flex-col items-center justify-center text-center py-8 px-4">
+              <div className="w-14 h-14 rounded-2xl bg-zinc-800/50 border border-zinc-700/50 flex items-center justify-center mb-4">
+                <svg className="w-7 h-7 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                    d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
               </div>
-              <h3 className="text-xl font-bold text-zinc-200 mb-2 tracking-tight">Unrelated Question</h3>
-              <p className="text-zinc-400 max-w-md leading-relaxed">{result.error}</p>
-            </div>
-          ) : result.error_code === 'SOURCE_NOT_FOUND' ? (
-             <div className="flex flex-col items-center justify-center text-center py-10 px-4">
-              <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-6 shadow-inner">
-                <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+              <h3 className="text-lg font-semibold text-zinc-200 mb-1.5">Outside Active Dataset Scope</h3>
+              <p className="text-zinc-400 text-sm max-w-md leading-relaxed mb-5">{result.error}</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  onClick={() => onFollowUp('Give me info about dataset')}
+                  className="text-xs bg-zinc-800/70 hover:bg-cyan-500/15 text-zinc-300 hover:text-cyan-300 border border-zinc-700/60 px-3.5 py-2 rounded-lg transition-colors"
+                >
+                  View dataset overview
+                </button>
+                <button
+                  onClick={() => onFollowUp('Show me products')}
+                  className="text-xs bg-zinc-800/70 hover:bg-cyan-500/15 text-zinc-300 hover:text-cyan-300 border border-zinc-700/60 px-3.5 py-2 rounded-lg transition-colors"
+                >
+                  Show products
+                </button>
               </div>
-              <h3 className="text-xl font-bold text-zinc-200 mb-2 tracking-tight">Source Not Found</h3>
-              <p className="text-zinc-400 max-w-md leading-relaxed">{result.error}</p>
             </div>
           ) : (
-            <ErrorState 
-              title={result.error_code === 'UNSAFE_SQL' || result.error_code === 'UNSAFE_QUERY' ? "MongoDB Safety Violation" : result.error_code === 'AI_GENERATION_FAILED' ? "AI Analysis Error" : "Query Error"} 
-              message={result.error || 'Please try rephrasing your question or checking the collection schema.'}
+            <ErrorState
+              title={
+                result.error_code === 'UNSAFE_SQL' || result.error_code === 'UNSAFE_QUERY'
+                  ? 'Read-Only Safety Guard'
+                  : 'Could Not Complete Query'
+              }
+              message={result.error || 'Please try rephrasing your question or checking the available fields.'}
               type="error"
             />
           )
         ) : (
           <>
-            {/* 2. Primary Answer */}
-            {result.answer && (
-              <div className="mb-8 relative">
-                {result.answer.headline && (
-                  <div className="text-[11px] font-bold text-cyan-400 uppercase tracking-widest mb-3 flex items-center drop-shadow-[0_0_8px_rgba(34,211,238,0.4)]">
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                    {result.answer.headline}
+            {/* ==============================================================
+                MODE 1: KPI RESULT (COUNT, SINGLE AVERAGE, SINGLE SUM)
+               ============================================================== */}
+            {uiType === 'kpi' && (
+              <div className="py-2">
+                <div className="bg-gradient-to-br from-zinc-900/90 to-[#0c0c10] border border-cyan-500/20 rounded-2xl p-6 sm:p-8 shadow-inner max-w-lg">
+                  <div className="text-[11px] font-bold text-cyan-400 uppercase tracking-widest mb-2">
+                    {headerTitle}
                   </div>
-                )}
-                <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1 min-w-0">
-                  {result.answer.value && (
-                    <h3 className="text-4xl sm:text-5xl font-light text-white tracking-tight drop-shadow-[0_0_15px_rgba(34,211,238,0.2)] break-words break-all">
-                      {result.answer.value}
-                    </h3>
-                  )}
-                  {result.answer.unit && (
-                    <span className="text-xl sm:text-2xl text-zinc-400 font-light tracking-wide shrink-0">
-                      {result.answer.unit}
+                  <div className="flex items-baseline gap-3 flex-wrap">
+                    <span className="text-4xl sm:text-5xl font-semibold text-white tracking-tight font-mono drop-shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+                      {pres?.primary_value || result.answer?.value}
                     </span>
+                    <span className="text-base sm:text-lg text-zinc-400 font-normal">
+                      {pres?.primary_unit || result.answer?.unit}
+                    </span>
+                  </div>
+                  {summaryText && (
+                    <p className="text-zinc-300 text-sm mt-4 leading-relaxed border-t border-zinc-800/80 pt-3">
+                      {summaryText}
+                    </p>
                   )}
                 </div>
               </div>
             )}
 
-            {/* 3. Key Insights / Summary */}
-            {(result.answer?.summary || (result.insights && result.insights.length > 0)) && (
-              <div className="mb-8 bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-5 shadow-inner">
-                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center">
-                  <svg className="w-4 h-4 mr-2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
-                  Key Insight
-                </h4>
-                {result.answer?.summary && (
-                  <p className="text-zinc-200 text-[15px] leading-relaxed">
-                    {result.answer.summary}
-                  </p>
-                )}
-                {result.insights && result.insights.length > 0 && (
-                  <ul className="space-y-2 mt-3 text-[14px] text-zinc-400">
-                    {result.insights.map((insight, i) => (
-                      <li key={i} className="flex items-start">
-                        <span className="text-cyan-500 mr-2 mt-1 flex-shrink-0 leading-none">•</span>
-                        <span>{insight}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+            {/* ==============================================================
+                MODE 2: DATASET OVERVIEW / COLLECTION OVERVIEW
+               ============================================================== */}
+            {(uiType === 'dataset_overview' || uiType === 'collection_overview') && (
+              <div className="space-y-6">
+                {summaryText && <p className="text-zinc-200 text-[15px] leading-relaxed">{summaryText}</p>}
 
-            {/* 4. Visualization Engine */}
-            {result.columns && result.columns.length > 0 && result.rows && (
-              <VisualizationEngine columns={result.columns} rows={result.rows} />
-            )}
-
-            {/* 5. Data Table */}
-            {result.columns && result.columns.length > 0 && result.rows && result.rows.length > 0 && (
-              <div className="mb-8">
-                 <ResultsTable columns={result.columns} rows={result.rows} />
-              </div>
-            )}
-
-            {/* Follow-ups */}
-            <FollowUpSuggestions 
-              suggestions={result.follow_up_suggestions} 
-              onSelect={onFollowUp} 
-              disabled={isLoading}
-            />
-
-            {/* 6. MongoDB Pipeline & Execution Details */}
-            <div className="mt-8 border-t border-white/5 pt-6">
-              <button 
-                onClick={() => setShowTechDetails(!showTechDetails)}
-                className="flex items-center text-xs font-semibold text-zinc-400 hover:text-cyan-400 uppercase tracking-widest transition-colors mb-4 focus:outline-none"
-              >
-                <svg className={`w-4 h-4 mr-2 transition-transform duration-300 ${showTechDetails ? 'rotate-90 text-cyan-400' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
-                MongoDB Pipeline & Telemetry
-              </button>
-              
-              <div className={`transition-all duration-500 overflow-hidden ${showTechDetails ? 'max-h-[1200px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                <div className="space-y-4">
-                  
-                  {/* Execution Metadata */}
-                  <div className="flex flex-wrap gap-4">
-                    <div className="bg-black/30 border border-white/5 rounded-lg px-4 py-3 flex flex-col min-w-[140px]">
-                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-1">Execution Time</span>
-                       <span className="text-zinc-300 font-mono text-sm">{result.execution_time_ms} ms</span>
-                    </div>
-                    <div className="bg-black/30 border border-white/5 rounded-lg px-4 py-3 flex flex-col min-w-[140px]">
-                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-1">Documents Returned</span>
-                       <span className="text-zinc-300 font-mono text-sm">{result.row_count}</span>
+                {pres?.collections_summary && pres.collections_summary.length > 0 ? (
+                  <div>
+                    <h4 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-3">
+                      Collections ({pres.collections_summary.length})
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {pres.collections_summary.map((col) => (
+                        <button
+                          key={col.collection}
+                          onClick={() => onFollowUp(`Show me ${col.collection}`, undefined, col.collection)}
+                          className="text-left bg-zinc-900/60 hover:bg-cyan-500/10 border border-zinc-800 hover:border-cyan-500/30 rounded-xl p-4 transition-all group"
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-mono font-semibold text-zinc-100 group-hover:text-cyan-300 text-sm">
+                              {col.collection}
+                            </span>
+                            <span className="text-xs font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                              {col.documents.toLocaleString('en-IN')} docs
+                            </span>
+                          </div>
+                          <div className="text-xs text-zinc-400 mb-2">{col.fields} schema fields</div>
+                          <div className="text-[11px] text-zinc-500 truncate font-mono">{col.key_fields}</div>
+                        </button>
+                      ))}
                     </div>
                   </div>
+                ) : (
+                  result.rows.length > 0 && <ResultsTable columns={result.columns} rows={result.rows} />
+                )}
+              </div>
+            )}
 
-                  {/* Sources Citation */}
-                  {result.sources && result.sources.length > 0 && (
-                    <div className="bg-black/30 border border-white/5 p-4 rounded-xl text-xs text-zinc-400">
-                      <span className="font-bold text-zinc-500 uppercase tracking-widest text-[10px] mr-2 block mb-2">MongoDB Data Sources</span>
-                      <div className="flex flex-wrap gap-2">
-                        {result.sources.map((s) => (
-                          <div key={s.source_id} className="bg-white/5 px-3 py-1.5 rounded-md flex items-center border border-white/5 shadow-inner min-w-0 max-w-full">
-                            <span className="text-cyan-400/90 font-medium mr-2 truncate">{s.name}</span>
-                            {(s.collection || s.table) && <span className="text-emerald-400/90 font-mono border-l border-white/10 pl-2 mr-2 shrink-0">{s.collection || s.table}</span>}
-                            {s.page && <span className="text-zinc-500 border-l border-white/10 pl-2 shrink-0">Page {s.page}</span>}
-                          </div>
-                        ))}
-                      </div>
+            {/* ==============================================================
+                MODE 3: SINGLE RECORD DETAIL (MAXIMUM / MINIMUM)
+               ============================================================== */}
+            {uiType === 'detail' && (
+              <div className="space-y-6">
+                <div className="bg-gradient-to-br from-zinc-900/90 to-[#0c0c10] border border-cyan-500/20 rounded-2xl p-6">
+                  <div className="text-[11px] font-bold text-cyan-400 uppercase tracking-widest mb-1.5">
+                    {headerTitle}
+                  </div>
+                  <div className="flex items-baseline gap-3 flex-wrap mb-3">
+                    <span className="text-3xl sm:text-4xl font-semibold text-white font-mono">
+                      {pres?.primary_value || result.answer?.value}
+                    </span>
+                    <span className="text-base text-cyan-300 font-medium">
+                      {pres?.primary_unit || result.answer?.unit}
+                    </span>
+                  </div>
+                  {summaryText && <p className="text-zinc-300 text-sm leading-relaxed">{summaryText}</p>}
+
+                  {pres?.highlight_record && (
+                    <div className="mt-5 pt-4 border-t border-zinc-800/80 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {Object.entries(pres.highlight_record).map(([k, v]) => (
+                        <div key={k} className="bg-black/40 border border-zinc-800/70 rounded-lg px-3 py-2">
+                          <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">
+                            {k.replace(/_/g, ' ')}
+                          </span>
+                          <span className="text-xs font-mono text-zinc-200 truncate block mt-0.5">
+                            {typeof v === 'number' ? v.toLocaleString('en-IN') : String(v)}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  )}
-
-                  {/* MongoDB Aggregation Pipeline Panel */}
-                  {mongoPipelineCode && (
-                    <SqlPanel sql={mongoPipelineCode} />
                   )}
                 </div>
               </div>
+            )}
+
+            {/* ==============================================================
+                MODE 4: TABLE / RANKED TABLE / COMPARISON / CHART / SCHEMA
+               ============================================================== */}
+            {(uiType === 'table' ||
+              uiType === 'ranked_table' ||
+              uiType === 'comparison' ||
+              uiType === 'chart' ||
+              uiType === 'schema') && (
+              <div className="space-y-5">
+                {summaryText && (
+                  <p className="text-zinc-200 text-[15px] leading-relaxed">{summaryText}</p>
+                )}
+
+                {(uiType === 'ranked_table' || uiType === 'comparison' || uiType === 'chart') &&
+                  result.columns.length >= 2 &&
+                  result.rows.length > 0 && (
+                    <VisualizationEngine
+                      columns={result.columns}
+                      rows={result.rows}
+                      mode={uiType}
+                    />
+                  )}
+
+                {result.columns.length > 0 && result.rows.length > 0 && (
+                  <ResultsTable columns={result.columns} rows={result.rows} />
+                )}
+              </div>
+            )}
+
+            {/* ==============================================================
+                MODE 5: DOCUMENT RAG ANSWER
+               ============================================================== */}
+            {uiType === 'document_answer' && (
+              <div className="space-y-5">
+                <div className="bg-zinc-900/60 border border-cyan-500/20 rounded-xl p-5">
+                  <div className="text-[11px] font-bold text-cyan-400 uppercase tracking-widest mb-2">
+                    Document Answer • {pres?.primary_value}
+                  </div>
+                  <p className="text-zinc-100 text-[15px] leading-relaxed whitespace-pre-line">
+                    {summaryText}
+                  </p>
+                </div>
+                {result.rows.length > 0 && (
+                  <ResultsTable columns={result.columns} rows={result.rows} />
+                )}
+              </div>
+            )}
+
+            {/* ==============================================================
+                MODE 6: EMPTY RESULT EXPERIENCE
+               ============================================================== */}
+            {uiType === 'empty' && (
+              <div className="flex flex-col items-center justify-center text-center py-10 px-4 bg-zinc-900/30 border border-zinc-800/60 rounded-xl">
+                <svg className="w-10 h-10 text-zinc-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+                <h3 className="text-base font-semibold text-zinc-200 mb-1">No Matching Data</h3>
+                <p className="text-sm text-zinc-400 max-w-md mb-4">
+                  {summaryText || "I couldn't find any documents matching that filter."}
+                </p>
+                {result.collection && (
+                  <button
+                    onClick={() => onFollowUp(`Show me ${result.collection}`, undefined, result.collection)}
+                    className="text-xs bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Show all {result.collection}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Follow-up Question Suggestions */}
+            <div className="mt-6">
+              <FollowUpSuggestions
+                suggestions={result.follow_up_suggestions}
+                onSelect={(q) => onFollowUp(q)}
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Secondary Technical Drawer (Collapsed by default) */}
+            <div className="mt-6 border-t border-white/5 pt-4">
+              <button
+                onClick={() => setShowTechDetails(!showTechDetails)}
+                className="flex items-center text-xs font-semibold text-zinc-500 hover:text-cyan-400 uppercase tracking-widest transition-colors focus:outline-none"
+              >
+                <svg
+                  className={`w-3.5 h-3.5 mr-2 transition-transform duration-200 ${
+                    showTechDetails ? 'rotate-90 text-cyan-400' : ''
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                </svg>
+                MongoDB Query & Telemetry
+              </button>
+
+              {showTechDetails && (
+                <div className="mt-4 space-y-4 animate-in fade-in duration-200">
+                  <div className="flex flex-wrap gap-3">
+                    {result.intent && (
+                      <div className="bg-black/40 border border-white/5 rounded-lg px-3.5 py-2.5 flex flex-col">
+                        <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Intent</span>
+                        <span className="text-cyan-300 font-mono text-xs mt-0.5">{result.intent}</span>
+                      </div>
+                    )}
+                    <div className="bg-black/40 border border-white/5 rounded-lg px-3.5 py-2.5 flex flex-col">
+                      <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
+                        Execution Time
+                      </span>
+                      <span className="text-zinc-300 font-mono text-xs mt-0.5">{result.execution_time_ms} ms</span>
+                    </div>
+                    <div className="bg-black/40 border border-white/5 rounded-lg px-3.5 py-2.5 flex flex-col">
+                      <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
+                        Documents Returned
+                      </span>
+                      <span className="text-zinc-300 font-mono text-xs mt-0.5">{result.row_count}</span>
+                    </div>
+                    {result.collection && (
+                      <div className="bg-black/40 border border-white/5 rounded-lg px-3.5 py-2.5 flex flex-col">
+                        <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Collection</span>
+                        <span className="text-emerald-300 font-mono text-xs mt-0.5">{result.collection}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {mongoPipelineCode && <SqlPanel sql={mongoPipelineCode} />}
+                </div>
+              )}
             </div>
           </>
         )}

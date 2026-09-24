@@ -32,8 +32,18 @@ export const checkAiStatus = async (): Promise<AiStatusResponse> => {
   return response.data;
 };
 
-export const queryDatabase = async (question: string, sourceIds?: string[]): Promise<QueryResponse> => {
-  const response = await apiClient.post<QueryResponse>('/api/query', { question, source_ids: sourceIds } as QueryRequest);
+export const queryDatabase = async (
+  question: string,
+  sourceIds?: string[],
+  activeCollection?: string,
+  conversationContext?: Record<string, any>
+): Promise<QueryResponse> => {
+  const response = await apiClient.post<QueryResponse>('/api/query', {
+    question,
+    source_ids: sourceIds,
+    active_collection: activeCollection,
+    conversation_context: conversationContext,
+  } as QueryRequest);
   return response.data;
 };
 

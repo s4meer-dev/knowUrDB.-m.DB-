@@ -35,15 +35,59 @@ export interface QuerySourceCitation {
 export interface ClarificationCandidate {
   source_id: string;
   name: string;
+  collection?: string;
+}
+
+export interface PresentationContract {
+  type:
+    | 'table'
+    | 'kpi'
+    | 'ranked_table'
+    | 'comparison'
+    | 'chart'
+    | 'detail'
+    | 'dataset_overview'
+    | 'collection_overview'
+    | 'schema'
+    | 'document_answer'
+    | 'clarification'
+    | 'empty'
+    | 'error';
+  title?: string;
+  subtitle?: string;
+  summary?: string;
+  primary_value?: string;
+  primary_unit?: string;
+  chart_type?: string;
+  highlight_record?: Record<string, any>;
+  collections_summary?: Array<{
+    collection: string;
+    documents: number;
+    fields: number;
+    key_fields: string;
+  }>;
+  schema_fields?: Array<{
+    collection: string;
+    field: string;
+    type: string;
+    sample_values: string;
+  }>;
+  show_technical_by_default?: boolean;
 }
 
 export interface QueryRequest {
   question: string;
   source_ids?: string[];
+  active_collection?: string;
+  conversation_context?: Record<string, any>;
 }
 
 export interface QueryResponse {
   question: string;
+  intent?: string;
+  collection?: string;
+  query_plan?: Record<string, any>;
+  presentation?: PresentationContract;
   generated_mongo_query?: string;
   structured_query?: Record<string, any>;
   generated_sql?: string;

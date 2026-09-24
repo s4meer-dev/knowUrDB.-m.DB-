@@ -10,6 +10,12 @@ class NaturalLanguageQueryRequest(BaseModel):
     source_ids: list[str] | None = Field(
         None, description="Explicit source IDs to restrict the query to."
     )
+    active_collection: str | None = Field(
+        None, description="Optional currently selected collection in the UI workspace."
+    )
+    conversation_context: dict[str, Any] | None = Field(
+        None, description="Optional conversational context (last collection, filters, intent)."
+    )
 
 
 class StructuredMongoQuery(BaseModel):
@@ -52,6 +58,7 @@ class QuerySourceCitation(BaseModel):
 class ClarificationCandidate(BaseModel):
     source_id: str
     name: str
+    collection: str | None = None
 
 
 class AnswerModel(BaseModel):
@@ -71,6 +78,18 @@ class AnswerModel(BaseModel):
 
 class NaturalLanguageQueryResponse(BaseModel):
     question: str = Field(..., description="The original natural language question.")
+    intent: str | None = Field(
+        None, description="Detected canonical intent (e.g., 'LIST_RECORDS', 'COUNT', 'DATASET_OVERVIEW')."
+    )
+    collection: str | None = Field(
+        None, description="Resolved target collection name."
+    )
+    query_plan: dict[str, Any] | None = Field(
+        None, description="Internal structured query plan object."
+    )
+    presentation: dict[str, Any] | None = Field(
+        None, description="Deterministic presentation plan contract for UI rendering."
+    )
     generated_mongo_query: str | None = Field(
         None, description="Human-readable MongoDB aggregation pipeline / query string."
     )
