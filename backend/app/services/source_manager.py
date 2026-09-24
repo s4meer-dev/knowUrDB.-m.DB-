@@ -124,6 +124,7 @@ class SourceManager:
             MongoDBManager.set_active_source(source_id)
             schema_summary = self.schema_service.get_schema_summary(source_id).summary
 
+            db_name = ingestion_info["database_name"]
             source_doc = {
                 "source_id": source_id,
                 "name": original_filename,
@@ -135,12 +136,13 @@ class SourceManager:
                 "size_bytes": size_bytes,
                 "uploaded_at": now_iso,
                 "status": SourceStatus.READY.value,
+                "database_name": db_name,
                 "collections": ingestion_info["collections"],
                 "table_count": ingestion_info["table_count"],
                 "record_count": ingestion_info["record_count"],
                 "index_count": ingestion_info.get("index_count", 1),
                 "schema_summary": schema_summary,
-                "storage_location": f"mongodb://knowurdb/{source_id}",
+                "storage_location": f"mongodb://localhost:27017/{db_name}",
             }
 
         db[MongoDBManager.SYS_SOURCES].update_one(
@@ -156,15 +158,20 @@ class SourceManager:
         if not src:
             return
 
-        # Drop associated user collections in MongoDB
-        for col_name in src.get("collections", []):
-            if col_name not in MongoDBManager.SYSTEM_COLLECTIONS:
-                try:
-                    db[col_name].drop()
-                except Exception:
-                    pass
+        # Drop the dedicated MongoDB Database folder for this source
+        db_name = src.get("database_name")
+        if db_name:
+            MongoDBManager.drop_source_db(source_id, db_name)
+        else:
+            source_db = MongoDBManager.get_source_db(source_id)
+            for col_name in src.get("collections", []):
+                if col_name not in MongoDBManager.SYSTEM_COLLECTIONS:
+                    try:
+                        source_db[col_name].drop()
+                    except Exception:
+                        pass
 
-        # Remove metadata & RAG chunks
+        # Remove metadata & RAG chunks from knowurdb_system
         db[MongoDBManager.SYS_COLLECTIONS_METADATA].delete_many({"source_id": source_id})
         db[MongoDBManager.SYS_DOCUMENT_CHUNKS].delete_many({"source_id": source_id})
         db[MongoDBManager.SYS_SOURCES].delete_one({"source_id": source_id})

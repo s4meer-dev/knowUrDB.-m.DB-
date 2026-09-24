@@ -1,6 +1,5 @@
 import datetime
 import random
-import uuid
 from typing import Any
 
 import pymongo
@@ -16,39 +15,51 @@ class DemoGenerator:
     """
 
     def seed_initial_demo_if_empty(self) -> SourceMetadata:
-        db = MongoDBManager.get_db()
-        existing = db[MongoDBManager.SYS_SOURCES].find_one({"source_id": "demo-source-id"})
+        sys_db = MongoDBManager.get_db()
+        existing = sys_db[MongoDBManager.SYS_SOURCES].find_one({"source_id": "demo-source-id"})
         if existing:
             return SourceMetadata(**{k: v for k, v in existing.items() if k != "_id"})
-        return self.generate_And_register_demo(source_id="demo-source-id", name="Enterprise & Campus Intelligence (m.DB)")
+        return self.generate_And_register_demo(
+            source_id="demo-source-id", name="knowUrDB Demo Folder (knowurdb_demo)"
+        )
 
     def generate_demo_database(self) -> tuple[str, str]:
         """
-        Generates a fresh randomized MongoDB demo dataset and returns (source_id, display_name).
+        Generates/refreshes the unified MongoDB Demo folder (`knowurdb_demo` in MongoDB Compass)
+        so all 5 collections (`products`, `customers`, `orders`, `employees`, `students`)
+        stay neatly organized inside a single `knowurdb_demo` database folder.
         """
-        unique_suffix = uuid.uuid4().hex[:6]
-        source_id = f"demo-{unique_suffix}"
-        display_name = f"MongoDB Commerce & Analytics ({unique_suffix})"
+        source_id = "demo-source-id"
+        display_name = "knowUrDB Demo Folder (knowurdb_demo)"
         self.generate_And_register_demo(source_id=source_id, name=display_name)
         return source_id, display_name
 
     def generate_And_register_demo(
-        self, source_id: str = "demo-source-id", name: str = "Enterprise & Campus Intelligence (m.DB)"
+        self, source_id: str = "demo-source-id", name: str = "knowUrDB Demo Folder (knowurdb_demo)"
     ) -> SourceMetadata:
-        db = MongoDBManager.get_db()
-        prefix = "" if source_id == "demo-source-id" else f"{source_id.replace('-', '_')}_"
+        sys_db = MongoDBManager.get_db()
+        db_name = MongoDBManager.allocate_source_db_name("demo", source_id)
+        db = MongoDBManager.get_client()[db_name]
 
-        col_customers = f"{prefix}customers"
-        col_products = f"{prefix}products"
-        col_orders = f"{prefix}orders"
-        col_employees = f"{prefix}employees"
-        col_students = f"{prefix}students"
+        col_customers = "customers"
+        col_products = "products"
+        col_orders = "orders"
+        col_employees = "employees"
+        col_students = "students"
 
         collections = [col_customers, col_products, col_orders, col_employees, col_students]
         for c in collections:
             db[c].drop()
 
-        rng = random.Random(42 if source_id == "demo-source-id" else None)
+        # Remove any old duplicate demo-* sources from _sys_sources
+        sys_db[MongoDBManager.SYS_SOURCES].delete_many(
+            {"source_id": {"$regex": "^demo-", "$ne": source_id}}
+        )
+        sys_db[MongoDBManager.SYS_COLLECTIONS_METADATA].delete_many(
+            {"source_id": {"$regex": "^demo-"}}
+        )
+
+        rng = random.Random(42)
 
         # 1. Products Collection (with tags array & category)
         product_names = [
@@ -252,11 +263,12 @@ class DemoGenerator:
 
         # Register collection metadata in _sys_collections_metadata
         for col_name in collections:
-            db[MongoDBManager.SYS_COLLECTIONS_METADATA].update_one(
+            sys_db[MongoDBManager.SYS_COLLECTIONS_METADATA].update_one(
                 {"source_id": source_id, "collection_name": col_name},
                 {
                     "$set": {
                         "source_id": source_id,
+                        "database_name": db_name,
                         "collection_name": col_name,
                         "document_count": db[col_name].count_documents({}),
                         "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
@@ -269,7 +281,7 @@ class DemoGenerator:
         source_doc = {
             "source_id": source_id,
             "name": name,
-            "original_filename": f"{source_id}.mongodb",
+            "original_filename": "knowurdb_demo.mongodb",
             "file_type": ".mongodb",
             "mime_type": "application/x-mongodb",
             "detected_format": "mongodb",
@@ -277,18 +289,19 @@ class DemoGenerator:
             "size_bytes": total_docs * 380,
             "uploaded_at": now_iso,
             "status": SourceStatus.READY.value,
+            "database_name": db_name,
             "collections": collections,
             "table_count": len(collections),
             "record_count": total_docs,
             "index_count": 16,
             "schema_summary": (
-                f"MongoDB Collections: {', '.join(collections)} ({total_docs} total documents with nested contact/address objects and order items arrays)"
+                f"MongoDB Folder '{db_name}' -> Collections: {', '.join(collections)} ({total_docs} total documents)"
             ),
-            "storage_location": f"mongodb://knowurdb/{source_id}",
+            "storage_location": f"mongodb://localhost:27017/{db_name}",
             "is_demo": True,
         }
 
-        db[MongoDBManager.SYS_SOURCES].update_one(
+        sys_db[MongoDBManager.SYS_SOURCES].update_one(
             {"source_id": source_id},
             {"$set": source_doc},
             upsert=True,

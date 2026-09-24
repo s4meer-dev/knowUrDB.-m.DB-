@@ -42,10 +42,11 @@ class IngestionPipeline:
             "status": "success",
             "format": format_type,
             "dialect": "mongodb",
+            "database_name": conversion_result["database_name"],
             "collections": conversion_result["collections"],
             "table_count": conversion_result["table_count"],
             "record_count": conversion_result["record_count"],
             "index_count": conversion_result.get("index_count", 1),
-            "path": f"mongodb://knowurdb/{sid}",
+            "path": f"mongodb://localhost:27017/{conversion_result['database_name']}",
             "name": original_filename,
         }

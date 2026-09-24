@@ -109,8 +109,8 @@ class MongoSchemaService:
         return list(field_map.values())
 
     def get_schema(self, source_id: str | None = None) -> dict[str, Any]:
-        db = MongoDBManager.get_db()
         active_source_id = source_id or MongoDBManager.get_active_source_id()
+        db = MongoDBManager.get_source_db(active_source_id)
         collection_names = MongoDBManager.list_user_collections(active_source_id)
 
         if not collection_names and not source_id:
@@ -227,8 +227,9 @@ class MongoSchemaService:
     def get_table_sample(
         self, table_name: str, limit: int = 50
     ) -> tuple[list[str], list[dict[str, Any]]]:
-        db = MongoDBManager.get_db()
-        all_cols = MongoDBManager.list_user_collections(None)
+        active_source_id = MongoDBManager.get_active_source_id()
+        db = MongoDBManager.get_source_db(active_source_id)
+        all_cols = MongoDBManager.list_user_collections(active_source_id)
         matched_col = next((c for c in all_cols if c.lower() == table_name.lower()), None)
         if not matched_col:
             raise ValueError(f"Collection '{table_name}' not found.")

@@ -23,10 +23,11 @@ def configure_real_mongodb_test_environment():
 
     yield
 
-    # Clean up test database after suite completion
+    # Clean up test databases after suite completion
     try:
-        for col in db.list_collection_names():
-            if not col.startswith("system."):
-                db[col].drop()
+        client = MongoDBManager.get_client()
+        for db_n in client.list_database_names():
+            if db_n.startswith("knowurdb_test"):
+                client.drop_database(db_n)
     except Exception:
         pass

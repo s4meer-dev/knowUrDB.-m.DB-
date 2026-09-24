@@ -201,7 +201,9 @@ export const SourceLibrary: React.FC = () => {
                       </div>
                       <div className="truncate">
                         <h4 className={`font-semibold truncate ${selectedSourceId === source.source_id ? 'text-zinc-100' : 'text-zinc-300'}`}>{source.name}</h4>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400/80">{source.detected_format} • MongoDB</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400/80">
+                          {source.database_name ? `📁 ${source.database_name}` : `${source.detected_format} • MongoDB`}
+                        </span>
                       </div>
                     </div>
                     <div className="flex-shrink-0 ml-2 mt-1">
@@ -234,6 +236,11 @@ export const SourceLibrary: React.FC = () => {
                          <span className="px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                            {selectedSource.status}
                          </span>
+                         {selectedSource.database_name && (
+                           <span className="px-2 py-0.5 rounded text-xs font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                             Compass Folder: {selectedSource.database_name}
+                           </span>
+                         )}
                          <span className="text-zinc-400 uppercase text-xs tracking-wider border-l border-zinc-700 pl-3">{selectedSource.detected_format}</span>
                          <span className="text-zinc-500 border-l border-zinc-700 pl-3">Uploaded {new Date(selectedSource.uploaded_at).toLocaleDateString()}</span>
                        </div>

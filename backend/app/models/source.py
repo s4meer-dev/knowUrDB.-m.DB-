@@ -35,8 +35,11 @@ class SourceMetadata(BaseModel):
     size_bytes: int = Field(..., description="Size of file in bytes")
     uploaded_at: str = Field(..., description="ISO datetime of upload")
     status: SourceStatus = Field(..., description="Current status of the source")
+    database_name: str | None = Field(
+        default=None, description="Dedicated MongoDB database folder name in MongoDB Compass (e.g. knowurdb_demo)"
+    )
     collections: list[str] = Field(
-        default_factory=list, description="MongoDB collection names created for this source"
+        default_factory=list, description="MongoDB collection names created inside database_name"
     )
     table_count: int | None = Field(
         0, description="Number of MongoDB collections (aliased as table_count for UI compatibility)"

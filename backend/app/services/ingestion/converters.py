@@ -142,9 +142,10 @@ class FormatConverter:
     def convert_to_mongodb(
         file_path: str, format_type: str, source_id: str, original_filename: str
     ) -> dict[str, Any]:
-        db = MongoDBManager.get_db()
+        sys_db = MongoDBManager.get_db()
         base_stem = os.path.splitext(original_filename)[0]
-        prefix = source_id.replace("-", "_")[:8]
+        db_name = MongoDBManager.allocate_source_db_name(base_stem, source_id)
+        db = MongoDBManager.get_client()[db_name]
         collections_created: list[str] = []
         total_records = 0
         total_indexes = 0
@@ -160,7 +161,7 @@ class FormatConverter:
                 for i, c in enumerate(df.columns)
             ]
 
-            col_name = _sanitize_collection_name(table_name, prefix)
+            col_name = _sanitize_collection_name(table_name, "")
             coll = db[col_name]
             coll.drop()
 
@@ -179,11 +180,12 @@ class FormatConverter:
             total_indexes += idx_count
             collections_created.append(col_name)
 
-            db[MongoDBManager.SYS_COLLECTIONS_METADATA].update_one(
+            sys_db[MongoDBManager.SYS_COLLECTIONS_METADATA].update_one(
                 {"source_id": source_id, "collection_name": col_name},
                 {
                     "$set": {
                         "source_id": source_id,
+                        "database_name": db_name,
                         "collection_name": col_name,
                         "original_name": table_name,
                         "document_count": doc_count,
@@ -273,6 +275,7 @@ class FormatConverter:
                 raise ConversionError("No collections could be extracted from the uploaded file.")
 
             return {
+                "database_name": db_name,
                 "collections": collections_created,
                 "table_count": len(collections_created),
                 "record_count": total_records,

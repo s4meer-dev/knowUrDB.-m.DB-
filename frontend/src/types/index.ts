@@ -149,6 +149,7 @@ export interface SourceMetadata {
   size_bytes: number;
   uploaded_at: string;
   status: 'uploading' | 'analyzing' | 'indexing' | 'ready' | 'failed' | 'deleting' | 'deleted';
+  database_name?: string;
   collections?: string[];
   table_count?: number;
   record_count?: number;

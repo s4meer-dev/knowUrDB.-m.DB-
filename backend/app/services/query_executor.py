@@ -31,7 +31,7 @@ class MongoQueryExecutor:
         except ValueError as exc:
             raise QueryExecutionError(f"Database error: {exc}") from exc
 
-        db = MongoDBManager.get_db()
+        db = MongoDBManager.get_source_db()
         collection_name = structured["collection"]
         coll = db[collection_name]
         operation = structured["operation"]

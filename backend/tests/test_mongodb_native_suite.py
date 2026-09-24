@@ -32,8 +32,9 @@ def test_02_csv_ingestion_with_nested_document_modeling():
     src = res.json()
     col_name = src["collections"][0]
 
-    # Verify nested subdocuments (`contact` and `address`) were modeled inside MongoDB
-    doc = MongoDBManager.get_db()[col_name].find_one({"customer_id": "C101"})
+    # Verify nested subdocuments (`contact` and `address`) were modeled inside the dedicated MongoDB folder
+    assert src["database_name"].startswith("knowurdb_")
+    doc = MongoDBManager.get_source_db(src["source_id"])[col_name].find_one({"customer_id": "C101"})
     assert doc is not None
     assert doc["contact"]["email"] == "rohan@example.com"
     assert doc["address"]["city"] == "Bengaluru"
