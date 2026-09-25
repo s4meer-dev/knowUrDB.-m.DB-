@@ -25,6 +25,7 @@ class BasicResponse(BaseModel):
 
 class GenerateDemoRequest(BaseModel):
     domain: str | None = None
+    generation_id: str | None = None
 
 
 @router.get("", response_model=list[SourceMetadata])
@@ -37,7 +38,11 @@ async def generate_demo_source(req: GenerateDemoRequest | None = None):
     generator = DemoGenerator()
     try:
         preferred = req.domain if req else None
-        metadata = generator.generate_new_independent_demo_dataset(preferred_domain=preferred)
+        gen_id = req.generation_id if req else None
+        metadata = generator.generate_new_independent_demo_dataset(
+            preferred_domain=preferred,
+            generation_id=gen_id,
+        )
         return metadata
     except Exception as exc:
         traceback.print_exc()
@@ -52,7 +57,11 @@ async def generate_mongodb_demo_contract(req: GenerateDemoRequest | None = None)
     generator = DemoGenerator()
     try:
         preferred = req.domain if req else None
-        metadata = generator.generate_new_independent_demo_dataset(preferred_domain=preferred)
+        gen_id = req.generation_id if req else None
+        metadata = generator.generate_new_independent_demo_dataset(
+            preferred_domain=preferred,
+            generation_id=gen_id,
+        )
         return {
             "status": "success",
             "source": metadata.model_dump(),

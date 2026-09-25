@@ -52,8 +52,8 @@ DOMAIN_CATALOG: dict[str, dict[str, Any]] = {
             "Healthcare Clinical Network",
             "Healthcare Diagnostics Hub",
         ],
-        "description": "Synthetic hospital operations dataset containing patients, doctors, appointments, prescriptions, and laboratory results.",
-        "collections": ["patients", "doctors", "appointments", "prescriptions", "lab_results"],
+        "description": "Synthetic hospital operations dataset containing patients, doctors, appointments, diagnoses, and medications.",
+        "collections": ["patients", "doctors", "appointments", "diagnoses", "medications"],
     },
     "finance": {
         "display_names": [
@@ -79,8 +79,8 @@ DOMAIN_CATALOG: dict[str, dict[str, Any]] = {
             "University Academic Intelligence",
             "Campus Learning Operations",
         ],
-        "description": "Synthetic academic dataset containing students, courses, faculty, enrollments, and examinations.",
-        "collections": ["students", "courses", "faculty", "enrollments", "examinations"],
+        "description": "Synthetic academic dataset containing students, courses, instructors, enrollments, and exams.",
+        "collections": ["students", "courses", "instructors", "enrollments", "exams"],
     },
     "ecommerce": {
         "display_names": [
@@ -453,21 +453,21 @@ class RandomDatasetEngine:
                 "patients": patients,
                 "doctors": doctors,
                 "appointments": appointments,
-                "prescriptions": prescriptions,
-                "lab_results": lab_results,
+                "diagnoses": lab_results,
+                "medications": prescriptions,
             }
             rels = [
                 {"from": "appointments.patient_id", "to": "patients.patient_id"},
                 {"from": "appointments.doctor_id", "to": "doctors.doctor_id"},
-                {"from": "prescriptions.patient_id", "to": "patients.patient_id"},
-                {"from": "lab_results.patient_id", "to": "patients.patient_id"},
+                {"from": "diagnoses.patient_id", "to": "patients.patient_id"},
+                {"from": "medications.patient_id", "to": "patients.patient_id"},
             ]
             idxs = {
                 "patients": ["patient_id", "city", "primary_diagnosis"],
                 "doctors": ["doctor_id", "specialty"],
                 "appointments": ["appointment_id", "patient_id", "doctor_id", "status"],
-                "prescriptions": ["prescription_id", "patient_id", "doctor_id"],
-                "lab_results": ["lab_id", "patient_id", "status"],
+                "diagnoses": ["lab_id", "patient_id", "status"],
+                "medications": ["prescription_id", "patient_id", "doctor_id"],
             }
             return cols, rels, idxs
 
@@ -769,22 +769,22 @@ class RandomDatasetEngine:
             cols = {
                 "students": students,
                 "courses": courses,
-                "faculty": faculty,
+                "instructors": faculty,
                 "enrollments": enrollments,
-                "examinations": examinations,
+                "exams": examinations,
             }
             rels = [
                 {"from": "enrollments.student_id", "to": "students.student_id"},
                 {"from": "enrollments.course_id", "to": "courses.course_id"},
-                {"from": "examinations.student_id", "to": "students.student_id"},
-                {"from": "courses.faculty_id", "to": "faculty.faculty_id"},
+                {"from": "exams.student_id", "to": "students.student_id"},
+                {"from": "courses.faculty_id", "to": "instructors.faculty_id"},
             ]
             idxs = {
                 "students": ["student_id", "department", "city"],
                 "courses": ["course_id", "department", "faculty_id"],
-                "faculty": ["faculty_id", "department"],
+                "instructors": ["faculty_id", "department"],
                 "enrollments": ["enrollment_id", "student_id", "course_id"],
-                "examinations": ["exam_id", "student_id", "course_id"],
+                "exams": ["exam_id", "student_id", "course_id"],
             }
             return cols, rels, idxs
 
@@ -988,44 +988,110 @@ class DemoGenerator:
                     {"$set": patch},
                 )
                 existing.update(patch)
+            standalone_demo = MongoDBManager.get_client()["demo_database"]
+            for tbl_name, idx_fields in {
+                "customers": ["customer_id", "segment"],
+                "products": ["product_id", "category"],
+                "orders": ["order_id", "customer_id", "product_id"],
+                "employees": ["employee_id", "department"],
+                "students": ["student_id", "department"],
+            }.items():
+                for idx_f in idx_fields:
+                    standalone_demo[tbl_name].create_index(idx_f)
+            if not MongoDBManager.get_active_source_id():
+                MongoDBManager.set_active_source("demo-source-id")
             return SourceMetadata(**{k: v for k, v in existing.items() if k != "_id"})
-        return self._seed_preserved_initial_demo_database()
+        seeded = self._seed_preserved_initial_demo_database()
+        if not MongoDBManager.get_active_source_id():
+            MongoDBManager.set_active_source("demo-source-id")
+        return seeded
 
-    def generate_demo_database(self, preferred_domain: str | None = None) -> tuple[str, str]:
+    def generate_demo_database(
+        self, preferred_domain: str | None = None, generation_id: str | None = None
+    ) -> tuple[str, str]:
         """
         Creates a NEW independent MongoDB database (`demo_<domain>_<short_id>`) on every call.
         Never reuses or overwrites `demo_database` or previous generated databases.
         """
-        metadata = self.generate_new_independent_demo_dataset(preferred_domain=preferred_domain)
+        metadata = self.generate_new_independent_demo_dataset(
+            preferred_domain=preferred_domain,
+            generation_id=generation_id,
+        )
         return metadata.source_id, metadata.name
 
     def generate_new_independent_demo_dataset(
-        self, preferred_domain: str | None = None
+        self,
+        preferred_domain: str | None = None,
+        generation_id: str | None = None,
     ) -> SourceMetadata:
         """
-        Atomic end-to-end provisioning of a new domain-specific MongoDB database:
-          SELECTING DOMAIN -> BUILDING SCHEMA -> CREATING DATABASE ->
-          POPULATING COLLECTIONS -> INDEXING -> VERIFYING -> MANIFEST & REGISTRY -> READY
+        Atomic, idempotent end-to-end provisioning of EXACTLY ONE new domain-specific MongoDB database:
+          USER ACTION -> CREATE/CHECK generation_id -> ACQUIRE LOCK -> SELECT DOMAIN ->
+          CREATE DATABASE -> POPULATE COLLECTIONS -> BUILD INDEXES -> VALIDATE ->
+          REGISTER IN knowurdb.datasets, knowurdb.sources, knowurdb.generations -> READY.
+        Never triggers automatic seeding of a second default dataset.
         """
+        MongoDBManager.validate_connection_isolation()
+
         with _generation_lock:
+            sys_db = MongoDBManager.get_db()
+
+            # 1. Idempotency check on `generation_id` (Sections 18, 19, 26, 27)
+            if generation_id:
+                existing_gen = sys_db[MongoDBManager.SYS_GENERATIONS].find_one(
+                    {"generation_id": generation_id}
+                )
+                if existing_gen and existing_gen.get("status") in ("completed", "ready"):
+                    existing_sid = existing_gen.get("source_id")
+                    if existing_sid:
+                        existing_src = sys_db[MongoDBManager.SYS_SOURCES].find_one(
+                            {"source_id": existing_sid}
+                        )
+                        if existing_src:
+                            return SourceMetadata(
+                                **{k: v for k, v in existing_src.items() if k != "_id"}
+                            )
+
             start_ts = time.perf_counter()
-            # Ensure initial `demo_database` is preserved if DB was completely empty
-            self.seed_initial_demo_if_empty()
+            now_iso = datetime.datetime.now(datetime.UTC).isoformat()
 
             domain, display_title, spec = self.engine.select_domain(preferred_domain=preferred_domain)
             database_name = self.engine.allocate_unique_database_name(domain)
             source_id = f"mongodb_{database_name}"
-            generation_id = f"gen_{uuid.uuid4().hex[:10]}"
+            gen_id = generation_id or f"gen_{uuid.uuid4().hex[:12]}"
+            dataset_id = f"ds_{gen_id}"
             seed_hex = secrets.token_hex(6)
             seed_int = int(seed_hex, 16)
-            now_iso = datetime.datetime.now(datetime.UTC).isoformat()
 
             client = MongoDBManager.get_client()
-            sys_db = MongoDBManager.get_db()
             target_db = client[database_name]
 
+            # Record initial GENERATING state in `knowurdb.generations`
+            sys_db[MongoDBManager.SYS_GENERATIONS].update_one(
+                {"generation_id": gen_id},
+                {
+                    "$set": {
+                        "generation_id": gen_id,
+                        "dataset_id": dataset_id,
+                        "source_id": source_id,
+                        "database_name": database_name,
+                        "display_name": display_title,
+                        "domain": domain,
+                        "seed": seed_hex,
+                        "status": "GENERATING",
+                        "started_at": now_iso,
+                        "completed_at": None,
+                        "duration_ms": None,
+                        "collection_count": 0,
+                        "document_count": 0,
+                        "error": None,
+                    }
+                },
+                upsert=True,
+            )
+
             try:
-                # 1. Generate domain collections & relationships
+                # 2. Generate domain collections & relationships
                 collections_data, relationships, index_specs = self.engine.generate_domain_collections(
                     domain=domain, seed_int=seed_int
                 )
@@ -1033,9 +1099,8 @@ class DemoGenerator:
                 total_docs = 0
                 total_indexes = 0
                 collection_counts: dict[str, int] = {}
-                manifest_collections: list[dict[str, Any]] = []
 
-                # 2. Populate collections via bulk insert_many() & build indexes
+                # 3. Populate collections in the dedicated `demo_<domain>_<id>` database & build indexes
                 for col_name, docs in collections_data.items():
                     if not docs:
                         raise RuntimeError(f"Generated 0 documents for collection '{col_name}'")
@@ -1053,7 +1118,7 @@ class DemoGenerator:
                             pass
                     total_indexes += 1  # _id_ index
 
-                # 3. Post-Generation Validation against MongoDB
+                # 4. Post-Generation Validation against MongoDB
                 actual_col_names = set(target_db.list_collection_names())
                 for expected_col, expected_docs in collections_data.items():
                     if expected_col not in actual_col_names:
@@ -1067,24 +1132,23 @@ class DemoGenerator:
                         )
                     collection_counts[expected_col] = actual_cnt
                     total_docs += actual_cnt
-                    manifest_collections.append(
-                        {"name": expected_col, "document_count": actual_cnt}
-                    )
 
+                completed_iso = datetime.datetime.now(datetime.UTC).isoformat()
                 duration_ms = round((time.perf_counter() - start_ts) * 1000, 2)
 
-                # 4. Atomically export full dataset snapshot to `demo_datasets/<database_name>/`
-                #    (`manifest.json`, `metadata.json`, `schema.json`, `README.md`, `collections/*.jsonl`, `index.json`)
+                # 5. Export full dataset snapshot to `demo_datasets/<database_name>/`
                 exported_manifest = self.exporter.export_database(
                     database_name=database_name,
                     display_name=display_title,
                     domain=domain,
                     description=spec["description"],
                     collections=list(collection_counts.keys()),
-                    generation_id=generation_id,
+                    generation_id=gen_id,
                     seed=seed_int,
                     created_at=now_iso,
                 )
+                exported_manifest["dataset_id"] = dataset_id
+                exported_manifest["generation_id"] = gen_id
                 exported_manifest["duration_ms"] = duration_ms
                 exported_manifest["relationships"] = relationships
 
@@ -1093,13 +1157,14 @@ class DemoGenerator:
                 )
                 dataset_artifacts = exported_manifest.get("dataset_artifacts", [])
 
-                # 5. Register in central `_sys_collections_metadata` and `_sys_sources`
+                # 6. Register collection routing metadata in `knowurdb._system`
                 for col_name, cnt in collection_counts.items():
                     sys_db[MongoDBManager.SYS_COLLECTIONS_METADATA].update_one(
                         {"source_id": source_id, "collection_name": col_name},
                         {
                             "$set": {
                                 "source_id": source_id,
+                                "dataset_id": dataset_id,
                                 "collection_name": col_name,
                                 "container_collection": col_name,
                                 "physical_database": database_name,
@@ -1114,9 +1179,40 @@ class DemoGenerator:
                 col_list = list(collection_counts.keys())
                 size_bytes = total_docs * 390
                 full_display_name = f"{display_title} ({database_name})"
+                _, configured_port, _ = MongoDBManager.parse_configured_endpoint()
 
+                # 7. Register Dataset in `knowurdb.datasets` (Section 17 & 31)
+                dataset_doc: dict[str, Any] = {
+                    "dataset_id": dataset_id,
+                    "generation_id": gen_id,
+                    "source_id": source_id,
+                    "database_name": database_name,
+                    "display_name": display_title,
+                    "domain": domain,
+                    "description": spec["description"],
+                    "source_type": "mongodb",
+                    "status": "ready",
+                    "collection_count": len(col_list),
+                    "document_count": total_docs,
+                    "index_count": total_indexes,
+                    "collections": col_list,
+                    "collection_counts": collection_counts,
+                    "filesystem_path": rel_dataset_path,
+                    "created_at": now_iso,
+                    "updated_at": completed_iso,
+                    "generator_version": RandomDatasetEngine.GENERATOR_VERSION,
+                }
+                sys_db[MongoDBManager.SYS_DATASETS].update_one(
+                    {"database_name": database_name},
+                    {"$set": dataset_doc},
+                    upsert=True,
+                )
+
+                # 8. Register Source in `knowurdb.sources` (Section 18 & 32)
                 source_doc: dict[str, Any] = {
                     "source_id": source_id,
+                    "dataset_id": dataset_id,
+                    "generation_id": gen_id,
                     "name": full_display_name,
                     "display_name": display_title,
                     "domain": domain,
@@ -1145,37 +1241,63 @@ class DemoGenerator:
                     "filesystem_path": rel_dataset_path,
                     "sync_status": "SYNCED",
                     "dataset_artifacts": dataset_artifacts,
-                    "storage_location": f"mongodb://localhost:27017/{database_name}",
+                    "storage_location": f"mongodb://localhost:{configured_port}/{database_name}",
                 }
-
                 sys_db[MongoDBManager.SYS_SOURCES].update_one(
                     {"source_id": source_id},
                     {"$set": source_doc},
                     upsert=True,
                 )
 
-                # 6. Auto-select the newly generated dataset as active source
+                # 9. Finalize Generation Audit Entry in `knowurdb.generations` (Section 19 & 33)
+                sys_db[MongoDBManager.SYS_GENERATIONS].update_one(
+                    {"generation_id": gen_id},
+                    {
+                        "$set": {
+                            "status": "completed",
+                            "completed_at": completed_iso,
+                            "duration_ms": duration_ms,
+                            "collection_count": len(col_list),
+                            "document_count": total_docs,
+                            "error": None,
+                        }
+                    },
+                )
+
+                # 10. Auto-select the newly generated dataset as active source
                 MongoDBManager.set_active_source(source_id)
 
                 logger.info(
-                    "Provisioned independent MongoDB demo dataset: generation_id=%s db=%s domain=%s collections=%d docs=%d filesystem=%s duration_ms=%.2f",
-                    generation_id,
+                    "Provisioned independent MongoDB demo dataset: generation_id=%s dataset_id=%s db=%s domain=%s collections=%d docs=%d duration_ms=%.2f",
+                    gen_id,
+                    dataset_id,
                     database_name,
                     domain,
                     len(col_list),
                     total_docs,
-                    rel_dataset_path,
                     duration_ms,
                 )
                 return SourceMetadata(**source_doc)
 
             except Exception as exc:
-                # Atomic Cleanup on Failure
                 logger.error(
                     "Failed to provision demo database '%s'; executing atomic rollback: %s",
                     database_name,
                     exc,
                 )
+                try:
+                    sys_db[MongoDBManager.SYS_GENERATIONS].update_one(
+                        {"generation_id": gen_id},
+                        {
+                            "$set": {
+                                "status": "failed",
+                                "completed_at": datetime.datetime.now(datetime.UTC).isoformat(),
+                                "error": str(exc),
+                            }
+                        },
+                    )
+                except Exception:
+                    pass
                 try:
                     client.drop_database(database_name)
                 except Exception:
@@ -1186,6 +1308,7 @@ class DemoGenerator:
                     pass
                 try:
                     sys_db[MongoDBManager.SYS_COLLECTIONS_METADATA].delete_many({"source_id": source_id})
+                    sys_db[MongoDBManager.SYS_DATASETS].delete_one({"database_name": database_name})
                     sys_db[MongoDBManager.SYS_SOURCES].delete_one({"source_id": source_id})
                 except Exception:
                     pass
@@ -1193,11 +1316,18 @@ class DemoGenerator:
 
     def reconcile_managed_databases(self) -> None:
         """
-        Reconciles managed `demo_*` databases and `demo_datasets/*` snapshots on startup
-        and backfills any missing filesystem artifacts (`manifest.json`, `metadata.json`,
-        `schema.json`, `README.md`, `collections/*.jsonl`).
+        Startup reconciliation (Sections 39, 40, 55, 56, 57):
+        - Scans managed `demo_*` databases on the dedicated MongoDB instance.
+        - Compares against `knowurdb.datasets` and `knowurdb.sources`.
+        - Removes any stale registry entries whose `demo_*` database no longer exists in MongoDB.
+        - Marks databases without metadata as `ORPHANED` or registers them if valid.
+        - NEVER generates random datasets on startup!
         """
-        # 1. Run bidirectional MongoDB <-> Filesystem reconciliation & backfill
+        from app.core.config import settings
+
+        if MongoDBManager._db_name != settings.MONGODB_CONTROL_DB:
+            return
+
         try:
             self.exporter.reconcile_and_backfill_all()
         except Exception as exc:
@@ -1210,20 +1340,58 @@ class DemoGenerator:
         except Exception:
             return
 
-        # 2. Ensure every managed `demo_*` database in MongoDB is registered in `_sys_sources`
+        # 1. Remove stale registry entries in `knowurdb.sources` and `knowurdb.datasets`
+        #    if their physical `demo_*` database does not exist in MongoDB
+        for src in list(sys_db[MongoDBManager.SYS_SOURCES].find({"source_category": "mongodb"})):
+            src_db = src.get("database_name")
+            if src_db and (src_db == "demo_database" or src_db.startswith("demo_")) and src_db not in db_names:
+                sid = src["source_id"]
+                sys_db[MongoDBManager.SYS_SOURCES].delete_one({"source_id": sid})
+                sys_db[MongoDBManager.SYS_DATASETS].delete_one({"database_name": src_db})
+                sys_db[MongoDBManager.SYS_COLLECTIONS_METADATA].delete_many({"source_id": sid})
+
+        # 2. Reconcile every existing `demo_*` database in MongoDB against `knowurdb.datasets` & `knowurdb.sources`
+        _, configured_port, _ = MongoDBManager.parse_configured_endpoint()
         for db_name in sorted(db_names):
-            if not db_name.startswith("demo_") or db_name == "demo_database":
+            if not db_name.startswith("demo_"):
                 continue
-            source_id = f"mongodb_{db_name}"
+            source_id = "demo-source-id" if db_name == "demo_database" else f"mongodb_{db_name}"
             existing = sys_db[MongoDBManager.SYS_SOURCES].find_one({"source_id": source_id})
             rel_path = self.exporter.manifest_service.get_relative_dataset_path(db_name)
             _valid, _reason, artifacts = self.exporter.manifest_service.verify_dataset_snapshot(db_name)
+
             if existing:
-                if existing.get("filesystem_path") != rel_path or not existing.get("dataset_artifacts"):
+                ds_id = existing.get("dataset_id") or f"ds_{db_name}"
+                gen_id = existing.get("generation_id") or f"gen_{db_name}"
+                sys_db[MongoDBManager.SYS_DATASETS].update_one(
+                    {"database_name": db_name},
+                    {
+                        "$set": {
+                            "dataset_id": ds_id,
+                            "generation_id": gen_id,
+                            "source_id": source_id,
+                            "database_name": db_name,
+                            "display_name": existing.get("display_name") or existing.get("name") or db_name,
+                            "domain": existing.get("domain") or "enterprise",
+                            "source_type": "mongodb",
+                            "status": "ready",
+                            "collection_count": existing.get("table_count", 5),
+                            "document_count": existing.get("record_count", 0),
+                            "filesystem_path": rel_path,
+                            "created_at": existing.get("uploaded_at"),
+                            "updated_at": datetime.datetime.now(datetime.UTC).isoformat(),
+                            "generator_version": RandomDatasetEngine.GENERATOR_VERSION,
+                        }
+                    },
+                    upsert=True,
+                )
+                if existing.get("filesystem_path") != rel_path or not existing.get("dataset_id"):
                     sys_db[MongoDBManager.SYS_SOURCES].update_one(
                         {"source_id": source_id},
                         {
                             "$set": {
+                                "dataset_id": ds_id,
+                                "generation_id": gen_id,
                                 "filesystem_path": rel_path,
                                 "sync_status": "SYNCED",
                                 "dataset_artifacts": artifacts,
@@ -1231,6 +1399,7 @@ class DemoGenerator:
                         },
                     )
                 continue
+
             try:
                 target_db = client[db_name]
                 manifest = target_db["_dataset_manifest"].find_one({}, {"_id": 0})
@@ -1239,7 +1408,25 @@ class DemoGenerator:
                     if manifest_path.exists():
                         with open(manifest_path, encoding="utf-8") as mf:
                             manifest = json.load(mf)
+
                 if not manifest:
+                    # Mark as ORPHANED in `knowurdb.datasets` without duplicating or deleting blindly (Section 39 & 55)
+                    sys_db[MongoDBManager.SYS_DATASETS].update_one(
+                        {"database_name": db_name},
+                        {
+                            "$set": {
+                                "dataset_id": f"ds_orphan_{db_name}",
+                                "generation_id": f"gen_orphan_{db_name}",
+                                "database_name": db_name,
+                                "display_name": f"Orphaned Dataset ({db_name})",
+                                "domain": "unknown",
+                                "source_type": "mongodb",
+                                "status": "ORPHANED",
+                                "updated_at": datetime.datetime.now(datetime.UTC).isoformat(),
+                            }
+                        },
+                        upsert=True,
+                    )
                     continue
 
                 cols = [c["name"] for c in manifest.get("collections", [])]
@@ -1248,6 +1435,8 @@ class DemoGenerator:
                 domain = manifest.get("domain", "enterprise")
                 total_docs = manifest.get("document_count", sum(col_counts.values()))
                 now_iso = manifest.get("created_at") or datetime.datetime.now(datetime.UTC).isoformat()
+                gen_id = manifest.get("generation_id") or f"gen_{db_name}"
+                ds_id = manifest.get("dataset_id") or f"ds_{gen_id}"
 
                 for c_name, cnt in col_counts.items():
                     sys_db[MongoDBManager.SYS_COLLECTIONS_METADATA].update_one(
@@ -1255,6 +1444,7 @@ class DemoGenerator:
                         {
                             "$set": {
                                 "source_id": source_id,
+                                "dataset_id": ds_id,
                                 "collection_name": c_name,
                                 "container_collection": c_name,
                                 "physical_database": db_name,
@@ -1266,8 +1456,33 @@ class DemoGenerator:
                         upsert=True,
                     )
 
+                sys_db[MongoDBManager.SYS_DATASETS].update_one(
+                    {"database_name": db_name},
+                    {
+                        "$set": {
+                            "dataset_id": ds_id,
+                            "generation_id": gen_id,
+                            "source_id": source_id,
+                            "database_name": db_name,
+                            "display_name": display_title,
+                            "domain": domain,
+                            "source_type": "mongodb",
+                            "status": "ready",
+                            "collection_count": len(cols),
+                            "document_count": total_docs,
+                            "filesystem_path": rel_path,
+                            "created_at": now_iso,
+                            "updated_at": now_iso,
+                            "generator_version": RandomDatasetEngine.GENERATOR_VERSION,
+                        }
+                    },
+                    upsert=True,
+                )
+
                 source_doc = {
                     "source_id": source_id,
+                    "dataset_id": ds_id,
+                    "generation_id": gen_id,
                     "name": f"{display_title} ({db_name})",
                     "display_name": display_title,
                     "domain": domain,
@@ -1293,7 +1508,7 @@ class DemoGenerator:
                     "filesystem_path": rel_path,
                     "sync_status": "SYNCED",
                     "dataset_artifacts": artifacts,
-                    "storage_location": f"mongodb://localhost:27017/{db_name}",
+                    "storage_location": f"mongodb://localhost:{configured_port}/{db_name}",
                 }
                 sys_db[MongoDBManager.SYS_SOURCES].update_one(
                     {"source_id": source_id},
@@ -1310,10 +1525,10 @@ class DemoGenerator:
         container_collection: str = "demo_database",
     ) -> SourceMetadata:
         """
-        Seeds the preserved baseline `demo_database` (`demo-source-id`) containing
-        `customers`, `products`, `orders`, `employees`, and `students` (342 documents).
-        Also populates `client['demo_database']` so `demo_database` is visible at the top
-        level of MongoDB Compass alongside newly generated `demo_<domain>_<id>` databases.
+        Seeds the standalone `demo_database` (`demo-source-id`) containing
+        `customers`, `products`, `orders`, `employees`, and `students` (342 documents)
+        ONLY when explicitly invoked (e.g. by test fixtures or `/api/demo/generate`).
+        Stores collections exclusively in `client['demo_database']` — NEVER inside `knowurdb`.
         """
         db = MongoDBManager.get_db()
         client = MongoDBManager.get_client()
@@ -1505,32 +1720,26 @@ class DemoGenerator:
             col_students: students_docs,
         }
 
-        # Store inside `knowurdb.demo_database` grouped container
-        db[container_collection].drop()
-        folder_docs = []
+        # Populate ONLY the standalone `demo_database` in MongoDB (never inside `knowurdb`)
+        standalone_demo = client["demo_database"]
+        idx_map = {
+            "customers": ["customer_id", "segment"],
+            "products": ["product_id", "category"],
+            "orders": ["order_id", "customer_id", "product_id"],
+            "employees": ["employee_id", "department"],
+            "students": ["student_id", "department"],
+        }
         for tbl_name, records in table_map.items():
-            folder_docs.append(
-                {
-                    "_id": tbl_name,
-                    "table_name": tbl_name,
-                    "record_count": len(records),
-                    "records": records,
-                }
-            )
-        db[container_collection].insert_many(folder_docs)
-
-        # Also mirror into standalone `demo_database` in MongoDB so Compass displays `demo_database` at top-level
-        try:
-            standalone_demo = client["demo_database"]
-            for tbl_name, records in table_map.items():
-                if tbl_name not in standalone_demo.list_collection_names():
-                    standalone_demo[tbl_name].insert_many([dict(r) for r in records])
-        except Exception:
-            pass
+            standalone_demo[tbl_name].drop()
+            standalone_demo[tbl_name].insert_many([dict(r) for r in records])
+            for idx_field in idx_map.get(tbl_name, []):
+                standalone_demo[tbl_name].create_index(idx_field)
 
         now_iso = datetime.datetime.now(datetime.UTC).isoformat()
         total_records = sum(len(v) for v in table_map.values())
         col_counts = {k: len(v) for k, v in table_map.items()}
+        dataset_id = "ds_demo_database"
+        generation_id = "gen_demo_database"
 
         for tbl_name, records in table_map.items():
             db[MongoDBManager.SYS_COLLECTIONS_METADATA].update_one(
@@ -1538,10 +1747,11 @@ class DemoGenerator:
                 {
                     "$set": {
                         "source_id": source_id,
+                        "dataset_id": dataset_id,
                         "collection_name": tbl_name,
-                        "container_collection": container_collection,
-                        "physical_database": "knowurdb",
-                        "is_grouped": True,
+                        "container_collection": tbl_name,
+                        "physical_database": "demo_database",
+                        "is_grouped": False,
                         "record_count": len(records),
                         "created_at": now_iso,
                     }
@@ -1558,6 +1768,7 @@ class DemoGenerator:
                 domain="enterprise",
                 description="Foundational multi-domain dataset containing customers, products, orders, employees, and students.",
                 collections=collections,
+                generation_id=generation_id,
                 seed=42,
                 created_at=now_iso,
             )
@@ -1566,9 +1777,35 @@ class DemoGenerator:
             logger.warning("Failed to export initial demo_database snapshot: %s", exc)
 
         rel_path = self.exporter.manifest_service.get_relative_dataset_path("demo_database")
+        _, configured_port, _ = MongoDBManager.parse_configured_endpoint()
+
+        db[MongoDBManager.SYS_DATASETS].update_one(
+            {"database_name": "demo_database"},
+            {
+                "$set": {
+                    "dataset_id": dataset_id,
+                    "generation_id": generation_id,
+                    "source_id": source_id,
+                    "database_name": "demo_database",
+                    "display_name": "Enterprise & Campus Intelligence",
+                    "domain": "enterprise",
+                    "source_type": "mongodb",
+                    "status": "ready",
+                    "collection_count": len(collections),
+                    "document_count": total_records,
+                    "filesystem_path": rel_path,
+                    "created_at": now_iso,
+                    "updated_at": now_iso,
+                    "generator_version": RandomDatasetEngine.GENERATOR_VERSION,
+                }
+            },
+            upsert=True,
+        )
 
         source_doc = {
             "source_id": source_id,
+            "dataset_id": dataset_id,
+            "generation_id": generation_id,
             "name": name,
             "display_name": "Enterprise & Campus Intelligence",
             "domain": "enterprise",
@@ -1583,14 +1820,14 @@ class DemoGenerator:
             "uploaded_at": now_iso,
             "status": SourceStatus.READY.value,
             "database_name": "demo_database",
-            "physical_database": "knowurdb",
+            "physical_database": "demo_database",
             "collections": collections,
             "collection_counts": col_counts,
             "table_count": len(collections),
             "record_count": total_records,
             "index_count": 12,
             "schema_summary": (
-                "MongoDB Demo Collections (`knowurdb / demo_database`): "
+                "MongoDB Demo Collections (`demo_database`): "
                 "`customers` (50 docs), `products` (12 docs), `orders` (120 docs), "
                 "`employees` (60 docs), `students` (100 docs)."
             ),
@@ -1598,7 +1835,7 @@ class DemoGenerator:
             "filesystem_path": rel_path,
             "sync_status": "SYNCED",
             "dataset_artifacts": artifacts,
-            "storage_location": "mongodb://localhost:27017/demo_database",
+            "storage_location": f"mongodb://localhost:{configured_port}/demo_database",
         }
         db[MongoDBManager.SYS_SOURCES].update_one(
             {"source_id": source_id},

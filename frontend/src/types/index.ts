@@ -190,6 +190,8 @@ export interface SchemaSummary {
 
 export interface SourceMetadata {
   source_id: string;
+  dataset_id?: string;
+  generation_id?: string;
   name: string;
   display_name?: string;
   domain?: string;

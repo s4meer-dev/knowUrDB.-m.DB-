@@ -216,7 +216,7 @@ class QueryRouter:
             if s.schema_summary and any(w in str(s.schema_summary).lower() for w in q_words if len(w) > 3):
                 score += 3
             if s.source_id == active_sid:
-                score += 4
+                score += 8
             elif s.source_id != "demo-source-id" and score > 0:
                 score += 2
             if score > best_score:

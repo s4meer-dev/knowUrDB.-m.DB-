@@ -2,80 +2,32 @@
   "schema_version": "1.0",
   "generator_version": "2.0.0",
   "dataset_root": "demo_datasets",
-  "updated_at": "2026-09-25T07:32:16.611863+00:00",
-  "dataset_count": 6,
+  "updated_at": "2026-09-25T08:54:00.831990+00:00",
+  "dataset_count": 2,
   "datasets": [
     {
-      "dataset_id": "demo_database",
-      "database_name": "demo_database",
-      "display_name": "Enterprise & Campus Intelligence",
-      "domain": "enterprise",
+      "dataset_id": "demo_realestate_1c2a",
+      "database_name": "demo_realestate_1c2a",
+      "display_name": "Real Estate Portfolio",
+      "domain": "realestate",
       "status": "ready",
       "collection_count": 5,
-      "document_count": 342,
-      "filesystem_path": "demo_datasets/demo_database",
-      "created_at": "2026-09-25T07:27:59.213519+00:00",
-      "content_hash": "sha256:04356c5e2ebc9d370d88d7e6"
+      "document_count": 508,
+      "filesystem_path": "demo_datasets/demo_realestate_1c2a",
+      "created_at": "2026-09-25T08:53:01.421738+00:00",
+      "content_hash": "sha256:c2e3ce9ac2d467caead2bafd"
     },
     {
-      "dataset_id": "demo_ecommerce_10c6",
-      "database_name": "demo_ecommerce_10c6",
-      "display_name": "E-Commerce Marketplace",
-      "domain": "ecommerce",
+      "dataset_id": "demo_retail_6cd8",
+      "database_name": "demo_retail_6cd8",
+      "display_name": "Omnichannel Retail Operations",
+      "domain": "retail",
       "status": "ready",
       "collection_count": 5,
-      "document_count": 487,
-      "filesystem_path": "demo_datasets/demo_ecommerce_10c6",
-      "created_at": "2026-09-25T07:32:14.260892+00:00",
-      "content_hash": "sha256:0d115110a5b15dbe9fcb1803"
-    },
-    {
-      "dataset_id": "demo_energy_4da0",
-      "database_name": "demo_energy_4da0",
-      "display_name": "Renewable Energy Grid",
-      "domain": "energy",
-      "status": "ready",
-      "collection_count": 5,
-      "document_count": 515,
-      "filesystem_path": "demo_datasets/demo_energy_4da0",
-      "created_at": "2026-09-25T07:32:14.700432+00:00",
-      "content_hash": "sha256:82e471a55674bba40aa2efb7"
-    },
-    {
-      "dataset_id": "demo_finance_b867",
-      "database_name": "demo_finance_b867",
-      "display_name": "Financial Operations",
-      "domain": "finance",
-      "status": "ready",
-      "collection_count": 5,
-      "document_count": 681,
-      "filesystem_path": "demo_datasets/demo_finance_b867",
-      "created_at": "2026-09-25T07:32:16.143571+00:00",
-      "content_hash": "sha256:4e197dbb9f53dd582ffe3c09"
-    },
-    {
-      "dataset_id": "demo_healthcare_277e",
-      "database_name": "demo_healthcare_277e",
-      "display_name": "Healthcare Intelligence",
-      "domain": "healthcare",
-      "status": "ready",
-      "collection_count": 5,
-      "document_count": 585,
-      "filesystem_path": "demo_datasets/demo_healthcare_277e",
-      "created_at": "2026-09-25T07:32:15.662388+00:00",
-      "content_hash": "sha256:18df5651052a948600ff3b86"
-    },
-    {
-      "dataset_id": "demo_telecom_21f0",
-      "database_name": "demo_telecom_21f0",
-      "display_name": "Telecommunications Network",
-      "domain": "telecom",
-      "status": "ready",
-      "collection_count": 5,
-      "document_count": 545,
-      "filesystem_path": "demo_datasets/demo_telecom_21f0",
-      "created_at": "2026-09-25T07:32:15.160602+00:00",
-      "content_hash": "sha256:e6357bef15c5f40162b74ccf"
+      "document_count": 550,
+      "filesystem_path": "demo_datasets/demo_retail_6cd8",
+      "created_at": "2026-09-25T08:53:04.306959+00:00",
+      "content_hash": "sha256:4e5b05b5ea9a55c3d880f191"
     }
   ]
 }

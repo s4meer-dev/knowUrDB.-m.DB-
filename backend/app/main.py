@@ -74,6 +74,11 @@ async def search_documents_endpoint(req: DocumentSearchRequest):
     return {"query": req.query, "source_id": req.source_id, "results": results, "count": len(results)}
 
 
+class GenerateDatasetRequest(BaseModel):
+    domain: str | None = None
+    generation_id: str | None = None
+
+
 @app.post("/api/demo/generate", tags=["demo"])
 async def generate_demo_alias():
     from app.services.demo_generator import DemoGenerator
@@ -83,8 +88,55 @@ async def generate_demo_alias():
     return meta
 
 
+@app.post("/api/datasets/generate", tags=["datasets"])
+async def generate_dataset_endpoint(req: GenerateDatasetRequest | None = None):
+    from app.services.demo_generator import DemoGenerator
+
+    preferred = req.domain if req else None
+    gen_id = req.generation_id if req else None
+    meta = DemoGenerator().generate_new_independent_demo_dataset(
+        preferred_domain=preferred,
+        generation_id=gen_id,
+    )
+    return meta
+
+
+@app.get("/api/datasets", tags=["datasets"])
+async def list_datasets_endpoint():
+    db = MongoDBManager.get_db()
+    datasets = list(db[MongoDBManager.SYS_DATASETS].find({}, {"_id": 0}).sort("created_at", -1))
+    return {"datasets": datasets, "total": len(datasets)}
+
+
+@app.get("/api/generations", tags=["datasets"])
+async def list_generations_endpoint():
+    db = MongoDBManager.get_db()
+    generations = list(db[MongoDBManager.SYS_GENERATIONS].find({}, {"_id": 0}).sort("started_at", -1))
+    return {"generations": generations, "total": len(generations)}
+
+
+@app.delete("/api/datasets/{dataset_id}", tags=["datasets"])
+async def delete_dataset_endpoint(dataset_id: str):
+    from fastapi import HTTPException
+    from app.services.source_manager import SourceManager
+
+    db = MongoDBManager.get_db()
+    ds = db[MongoDBManager.SYS_DATASETS].find_one(
+        {"$or": [{"dataset_id": dataset_id}, {"source_id": dataset_id}, {"database_name": dataset_id}]}
+    )
+    if not ds:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    source_id = ds.get("source_id")
+    if source_id:
+        SourceManager().delete_source(source_id)
+    else:
+        db[MongoDBManager.SYS_DATASETS].delete_one({"dataset_id": ds.get("dataset_id")})
+    return {"status": "success", "message": f"Dataset '{dataset_id}' and its MongoDB database deleted"}
+
+
 @app.get("/api/workspaces", tags=["workspaces"])
 async def list_workspaces():
     db = MongoDBManager.get_db()
     workspaces = list(db[MongoDBManager.SYS_WORKSPACES].find({}, {"_id": 0}))
     return {"workspaces": workspaces}
+

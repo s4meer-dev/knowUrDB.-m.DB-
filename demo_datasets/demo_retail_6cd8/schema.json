@@ -1,0 +1,335 @@
+{
+  "database": "demo_retail_6cd8",
+  "domain": "retail",
+  "schema_version": "1.0",
+  "inspected_at": "2026-09-25T08:53:04.306959+00:00",
+  "collection_count": 5,
+  "total_documents": 550,
+  "collections": {
+    "stores": {
+      "document_count": 106,
+      "field_count": 11,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab63670ae59807ac6e2c2c8"
+        },
+        "store_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "STO-0001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Diya Rao"
+        },
+        "tier": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Platinum"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Bengaluru"
+        },
+        "state": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Karnataka"
+        },
+        "sku_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "SKU-032"
+        },
+        "total_value": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 178037.26
+        },
+        "contact": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "email": "diya.rao1@retaildemo.io"
+          },
+          "nested_fields": {
+            "email": "string"
+          }
+        },
+        "address": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "city": "Bengaluru",
+            "state": "Karnataka",
+            "country": "India"
+          },
+          "nested_fields": {
+            "city": "string",
+            "state": "string",
+            "country": "string"
+          }
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-01-02T03:54:04.310000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "store_id_1",
+        "city_1",
+        "tier_1"
+      ]
+    },
+    "skus": {
+      "document_count": 69,
+      "field_count": 10,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab63670ae59807ac6e2c283"
+        },
+        "sku_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "SKU-001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Retail Sku #1"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Premium"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Delhi"
+        },
+        "state": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "NCR"
+        },
+        "price": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 28821.14
+        },
+        "rating": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 4.28
+        },
+        "active": {
+          "bson_type": "bool",
+          "nullable": false,
+          "sample_value": true
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2025-02-10T08:10:04.310000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "sku_id_1",
+        "category_1",
+        "city_1"
+      ]
+    },
+    "pos_transactions": {
+      "document_count": 147,
+      "field_count": 12,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab63670ae59807ac6e2c332"
+        },
+        "pos_transaction_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "POS-00001"
+        },
+        "store_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "STO-0005"
+        },
+        "entity_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Dev Patel"
+        },
+        "sku_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "SKU-058"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Enterprise"
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "completed"
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 30809.67
+        },
+        "total": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 30809.67
+        },
+        "quantity": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 2
+        },
+        "month": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "January"
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-08-16T02:50:04.310000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "pos_transaction_id_1",
+        "store_id_1",
+        "sku_id_1",
+        "status_1"
+      ]
+    },
+    "suppliers": {
+      "document_count": 110,
+      "field_count": 9,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab63670ae59807ac6e2c3c5"
+        },
+        "supplier_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "SUP-0001"
+        },
+        "store_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "STO-0064"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Supplier Record #1"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Premium"
+        },
+        "score": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 79.98
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 26433.21
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "completed"
+        },
+        "updated_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-06-17T23:17:04.310000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "supplier_id_1",
+        "store_id_1",
+        "status_1"
+      ]
+    },
+    "loyalty_members": {
+      "document_count": 118,
+      "field_count": 8,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab63670ae59807ac6e2c433"
+        },
+        "loyalty_member_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "LOY-0001"
+        },
+        "sku_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "SKU-052"
+        },
+        "title": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Loyalty Member #1"
+        },
+        "rating": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 3.79
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 36684.09
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "processing"
+        },
+        "recorded_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-04-09T06:17:04.310000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "loyalty_member_id_1",
+        "sku_id_1",
+        "status_1"
+      ]
+    }
+  }
+}

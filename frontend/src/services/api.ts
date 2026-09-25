@@ -136,8 +136,13 @@ export const uploadBatchSources = async (files: File[]): Promise<SourceMetadata[
   return response.data;
 };
 
-export const generateDemoDatabase = async (domain?: string): Promise<SourceMetadata> => {
-  const response = await apiClient.post<SourceMetadata>('/api/sources/generate-demo', domain ? { domain } : {});
+export const generateDemoDatabase = async (domain?: string, generationId?: string): Promise<SourceMetadata> => {
+  const genId =
+    generationId ||
+    `gen_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '').slice(0, 8) : Math.random().toString(16).slice(2, 10)}`;
+  const payload: Record<string, string> = { generation_id: genId };
+  if (domain) payload.domain = domain;
+  const response = await apiClient.post<SourceMetadata>('/api/sources/generate-demo', payload);
   return response.data;
 };
 
