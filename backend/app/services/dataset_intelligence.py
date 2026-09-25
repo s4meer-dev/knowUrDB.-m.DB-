@@ -17,19 +17,46 @@ COLLECTION_DESCRIPTIONS: dict[str, str] = {
 KNOWN_COLLECTION_ALIASES: dict[str, set[str]] = {
     "products": {"product", "products", "prodcut", "prodcuts", "porduct", "porducts", "item", "items", "catalog", "merchandise"},
     "customers": {"customer", "customers", "custmer", "custmers", "costumer", "costumers", "client", "clients", "buyer", "buyers"},
-    "orders": {"order", "orders", "ordr", "ordrs", "purchase", "purchases", "transaction", "transactions"},
+    "orders": {"order", "orders", "ordr", "ordrs", "purchase", "purchases"},
     "employees": {"employee", "employees", "employe", "employes", "emplyee", "staff", "worker", "workers", "personnel"},
     "students": {"student", "students", "studnt", "studnts", "stduent", "learner", "learners", "pupil", "pupils"},
+    "patients": {"patient", "patients"},
+    "doctors": {"doctor", "doctors", "physician", "physicians"},
+    "appointments": {"appointment", "appointments", "visit", "visits"},
+    "prescriptions": {"prescription", "prescriptions", "medication", "medications"},
+    "lab_results": {"lab_result", "lab_results", "lab", "labs", "test_result", "test_results"},
+    "accounts": {"account", "accounts"},
+    "transactions": {"transaction", "transactions", "transfer", "transfers"},
+    "investments": {"investment", "investments", "portfolio", "portfolios"},
+    "branches": {"branch", "branches"},
+    "shipments": {"shipment", "shipments", "freight", "cargo"},
+    "vehicles": {"vehicle", "vehicles", "truck", "trucks", "fleet"},
+    "drivers": {"driver", "drivers", "courier", "couriers"},
+    "warehouses": {"warehouse", "warehouses", "depot", "depots"},
+    "deliveries": {"delivery", "deliveries"},
+    "courses": {"course", "courses", "class", "classes"},
+    "faculty": {"faculty", "professor", "professors", "instructor", "instructors"},
+    "enrollments": {"enrollment", "enrollments", "registration", "registrations"},
+    "examinations": {"examination", "examinations", "exam", "exams"},
+    "shoppers": {"shopper", "shoppers"},
+    "catalog_items": {"catalog_item", "catalog_items"},
+    "carts": {"cart", "carts", "basket", "baskets"},
+    "reviews": {"review", "reviews", "feedback"},
 }
 
-# Common domain nouns that users might ask for which do NOT exist in the dataset
+# Domain nouns that, if NOT present in the currently active dataset, trigger not_found clarification
 COMMON_EXTERNAL_ENTITIES = {
     "teacher", "teachers", "professor", "professors", "faculty",
     "hospital", "hospitals", "doctor", "doctors", "patient", "patients",
+    "appointment", "appointments", "prescription", "prescriptions",
+    "account", "accounts", "investment", "investments", "branch", "branches",
+    "shipment", "shipments", "delivery", "deliveries", "driver", "drivers",
     "flight", "flights", "airline", "airlines", "hotel", "hotels",
     "movie", "movies", "song", "songs", "book", "books",
     "vehicle", "vehicles", "car", "cars", "supplier", "suppliers",
     "vendor", "vendors", "invoice", "invoices", "warehouse", "warehouses",
+    "student", "students", "employee", "employees", "product", "products",
+    "customer", "customers", "order", "orders", "course", "courses",
 }
 
 
@@ -72,15 +99,18 @@ class DatasetIntelligenceService:
             cls._catalog_cache.clear()
 
     def get_dataset_catalog(self, source_id: str | None = None) -> dict[str, Any]:
-        cache_key = source_id or "__active__"
+        from app.core.mongodb import MongoDBManager
+
+        effective_source_id = source_id or MongoDBManager.get_active_source_id()
+        cache_key = effective_source_id or "__active__"
         now = time.monotonic()
         cached = self._catalog_cache.get(cache_key)
         if cached and (now - cached[0]) < self._CACHE_TTL_SEC:
             return cached[1]
 
-        schema = self.schema_service.get_schema(source_id)
+        schema = self.schema_service.get_schema(effective_source_id)
         raw_tables = schema.get("tables", [])
-        source_meta = self.source_manager.get_source(source_id) if source_id else None
+        source_meta = self.source_manager.get_source(effective_source_id) if effective_source_id else None
         if not source_meta:
             all_sources = self.source_manager.list_sources()
             source_meta = all_sources[0] if all_sources else None
@@ -95,7 +125,8 @@ class DatasetIntelligenceService:
             if source_meta
             else "Enterprise & Campus Intelligence (demo_database)"
         )
-        resolved_source_id = source_meta.source_id if source_meta else (source_id or "demo-source-id")
+        resolved_source_id = source_meta.source_id if source_meta else (effective_source_id or "demo-source-id")
+
 
         collections_catalog: list[dict[str, Any]] = []
         total_docs = 0

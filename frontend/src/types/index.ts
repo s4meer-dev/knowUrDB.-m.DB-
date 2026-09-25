@@ -191,6 +191,10 @@ export interface SchemaSummary {
 export interface SourceMetadata {
   source_id: string;
   name: string;
+  display_name?: string;
+  domain?: string;
+  description?: string;
+  source_category?: 'mongodb' | 'uploaded_file' | string;
   original_filename: string;
   file_type: string;
   mime_type: string;
@@ -201,10 +205,12 @@ export interface SourceMetadata {
   status: 'uploading' | 'analyzing' | 'indexing' | 'ready' | 'failed' | 'deleting' | 'deleted';
   database_name?: string;
   collections?: string[];
+  collection_counts?: Record<string, number>;
   table_count?: number;
   record_count?: number;
   index_count?: number;
   schema_summary?: any;
+  manifest?: Record<string, any>;
   error_message?: string;
 }
 

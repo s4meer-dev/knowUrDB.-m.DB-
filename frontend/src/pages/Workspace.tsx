@@ -5,7 +5,7 @@ import { QueryResult } from '../components/workspace/QueryResult';
 import TextType from '../components/TextType/TextType';
 import { motion, AnimatePresence } from 'motion/react';
 
-import { queryDatabase, getSources } from '../services/api';
+import { queryDatabase, getSources, activateSource } from '../services/api';
 import type { QueryResponse, SourceMetadata } from '../types';
 
 type QueryMachineState =
@@ -31,7 +31,10 @@ export const Workspace: React.FC = () => {
   const [machineState, setMachineState] = useState<QueryMachineState>('IDLE');
 
   const [sources, setSources] = useState<SourceMetadata[]>([]);
-  const [selectedSourceId, setSelectedSourceId] = useState<string>('all');
+  const [selectedSourceId, setSelectedSourceId] = useState<string>(() => {
+    const stateSourceId = (location.state as { sourceId?: string } | null)?.sourceId;
+    return stateSourceId || localStorage.getItem('knowurdb_active_source_id') || 'all';
+  });
   const [conversationContext, setConversationContext] = useState<Record<string, any>>({});
   const [sessionStack, setSessionStack] = useState<SessionSnapshot[]>([]);
   const [loadingSources, setLoadingSources] = useState(true);
@@ -53,6 +56,18 @@ export const Workspace: React.FC = () => {
       setLoadingSources(true);
       const data = await getSources();
       setSources(data);
+      const stateSourceId = (location.state as { sourceId?: string } | null)?.sourceId;
+      const savedSourceId = localStorage.getItem('knowurdb_active_source_id');
+      const preferred = stateSourceId || savedSourceId;
+      if (preferred && data.some((s) => s.source_id === preferred)) {
+        setSelectedSourceId(preferred);
+        localStorage.setItem('knowurdb_active_source_id', preferred);
+        activateSource(preferred).catch(() => {});
+      } else if (data.length > 0 && (selectedSourceId === 'all' || !data.some((s) => s.source_id === selectedSourceId))) {
+        setSelectedSourceId(data[0].source_id);
+        localStorage.setItem('knowurdb_active_source_id', data[0].source_id);
+        activateSource(data[0].source_id).catch(() => {});
+      }
     } catch (e) {
       console.error('Failed to fetch sources', e);
     } finally {
@@ -61,17 +76,20 @@ export const Workspace: React.FC = () => {
   };
 
   useEffect(() => {
-    const state = location.state as { initialQuestion?: string; sourceId?: string };
-    if (state?.initialQuestion && !loading && !result) {
-      if (state.sourceId) {
-        setSelectedSourceId(state.sourceId);
-        handleQuery(
-          state.initialQuestion,
-          state.sourceId === 'all' ? undefined : [state.sourceId]
-        );
-      } else {
-        handleQuery(state.initialQuestion);
-      }
+    const state = location.state as { initialQuestion?: string; sourceId?: string } | null;
+    if (state?.sourceId) {
+      setSelectedSourceId(state.sourceId);
+      localStorage.setItem('knowurdb_active_source_id', state.sourceId);
+      activateSource(state.sourceId).catch(() => {});
+      setConversationContext({});
+      setResult(null);
+      setMachineState('IDLE');
+    }
+    if (state?.initialQuestion && !loading) {
+      handleQuery(
+        state.initialQuestion,
+        state.sourceId && state.sourceId !== 'all' ? [state.sourceId] : undefined
+      );
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
@@ -149,6 +167,10 @@ export const Workspace: React.FC = () => {
     requestIdRef.current += 1;
     setLoading(false);
     setSelectedSourceId(newSourceId);
+    if (newSourceId !== 'all') {
+      localStorage.setItem('knowurdb_active_source_id', newSourceId);
+      activateSource(newSourceId).catch(() => {});
+    }
     setConversationContext({});
     setSessionStack([]);
     setResult(null);

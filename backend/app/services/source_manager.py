@@ -97,6 +97,8 @@ class SourceManager:
             source_doc: dict[str, Any] = {
                 "source_id": source_id,
                 "name": original_filename,
+                "display_name": original_filename,
+                "source_category": "uploaded_file",
                 "original_filename": original_filename,
                 "file_type": ext,
                 "mime_type": mime_type,
@@ -128,6 +130,8 @@ class SourceManager:
             source_doc = {
                 "source_id": source_id,
                 "name": original_filename,
+                "display_name": original_filename,
+                "source_category": "uploaded_file",
                 "original_filename": original_filename,
                 "file_type": ext,
                 "mime_type": mime_type,
@@ -158,21 +162,42 @@ class SourceManager:
         if not src:
             return
 
-        metas = list(db[MongoDBManager.SYS_COLLECTIONS_METADATA].find({"source_id": source_id}))
-        for m in metas:
-            ccol = m.get("container_collection")
-            if ccol and ccol not in MongoDBManager.SYSTEM_COLLECTIONS:
-                try:
-                    db[ccol].drop()
-                except Exception:
-                    pass
+        client = MongoDBManager.get_client()
+        phys_db = src.get("physical_database") or src.get("database_name")
 
-        for col_name in src.get("collections", []):
-            if col_name not in MongoDBManager.SYSTEM_COLLECTIONS:
-                try:
-                    db[col_name].drop()
-                except Exception:
-                    pass
+        # 1. If this source is an independent managed demo database (e.g. demo_healthcare_a81f),
+        # drop ONLY that independent MongoDB database and remove its manifest folder.
+        if (
+            phys_db
+            and isinstance(phys_db, str)
+            and phys_db.startswith("demo_")
+            and phys_db != "demo_database"
+            and "/" not in phys_db
+        ):
+            try:
+                client.drop_database(phys_db)
+            except Exception:
+                pass
+            manifest_dir = self.storage_dir / "mongodb" / phys_db
+            if manifest_dir.exists() and manifest_dir.is_dir():
+                shutil.rmtree(manifest_dir, ignore_errors=True)
+        else:
+            # 2. Otherwise drop only the collections belonging to this source inside `knowurdb`
+            metas = list(db[MongoDBManager.SYS_COLLECTIONS_METADATA].find({"source_id": source_id}))
+            for m in metas:
+                ccol = m.get("container_collection")
+                if ccol and ccol not in MongoDBManager.SYSTEM_COLLECTIONS:
+                    try:
+                        db[ccol].drop()
+                    except Exception:
+                        pass
+
+            for col_name in src.get("collections", []):
+                if col_name not in MongoDBManager.SYSTEM_COLLECTIONS:
+                    try:
+                        db[col_name].drop()
+                    except Exception:
+                        pass
 
         db[MongoDBManager.SYS_COLLECTIONS_METADATA].delete_many({"source_id": source_id})
         db[MongoDBManager.SYS_DOCUMENT_CHUNKS].delete_many({"source_id": source_id})
@@ -181,3 +206,16 @@ class SourceManager:
         local_dir = self.storage_dir / source_id
         if local_dir.exists() and local_dir.is_dir():
             shutil.rmtree(local_dir, ignore_errors=True)
+
+        # If the deleted source was the active source, switch active source to the next ready source
+        if MongoDBManager.get_active_source_id() == source_id:
+            MongoDBManager._active_source_id = None
+            next_src = db[MongoDBManager.SYS_SOURCES].find_one(
+                {"status": SourceStatus.READY.value},
+                sort=[("uploaded_at", pymongo.DESCENDING)],
+            )
+            if next_src:
+                MongoDBManager.set_active_source(next_src["source_id"])
+            else:
+                MongoDBManager.set_setting("active_source_id", "")
+

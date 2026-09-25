@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getSources, getSourceSchema, getSourceTableSample } from '../services/api';
+import { useLocation } from 'react-router-dom';
+import { getSources, getSourceSchema, getSourceTableSample, activateSource } from '../services/api';
 import type { DatabaseSchema, TableInfo, SourceMetadata } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { ErrorState } from '../components/common/ErrorState';
@@ -7,8 +8,12 @@ import { ResultsTable } from '../components/workspace/ResultsTable';
 import { CustomDropdown } from '../components/common/CustomDropdown';
 
 export const Schema: React.FC = () => {
+  const location = useLocation();
   const [sources, setSources] = useState<SourceMetadata[]>([]);
-  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(() => {
+    const stateSourceId = (location.state as { sourceId?: string } | null)?.sourceId;
+    return stateSourceId || localStorage.getItem('knowurdb_active_source_id');
+  });
   const [summary, setSummary] = useState<DatabaseSchema | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -28,8 +33,15 @@ export const Schema: React.FC = () => {
         setLoading(true);
         const data = await getSources();
         setSources(data);
-        if (data.length > 0) {
+        const stateSourceId = (location.state as { sourceId?: string } | null)?.sourceId;
+        const savedSourceId = localStorage.getItem('knowurdb_active_source_id');
+        const preferred = stateSourceId || savedSourceId;
+        if (preferred && data.some((s) => s.source_id === preferred)) {
+          setSelectedSourceId(preferred);
+          localStorage.setItem('knowurdb_active_source_id', preferred);
+        } else if (data.length > 0) {
           setSelectedSourceId(data[0].source_id);
+          localStorage.setItem('knowurdb_active_source_id', data[0].source_id);
         }
       } catch {
         setError(true);
@@ -38,13 +50,15 @@ export const Schema: React.FC = () => {
       }
     };
     fetchInitialData();
-  }, []);
+  }, [location.state]);
 
   useEffect(() => {
     const fetchSchemaForSource = async () => {
       if (!selectedSourceId) return;
       try {
         setLoading(true);
+        localStorage.setItem('knowurdb_active_source_id', selectedSourceId);
+        activateSource(selectedSourceId).catch(() => {});
         const data = await getSourceSchema(selectedSourceId);
         setSummary(data);
         if (data.tables && data.tables.length > 0) {

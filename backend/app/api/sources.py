@@ -23,19 +23,21 @@ class BasicResponse(BaseModel):
     message: str
 
 
+class GenerateDemoRequest(BaseModel):
+    domain: str | None = None
+
+
 @router.get("", response_model=list[SourceMetadata])
 async def list_sources():
     return source_manager.list_sources()
 
 
 @router.post("/generate-demo", response_model=SourceMetadata)
-async def generate_demo_source():
+async def generate_demo_source(req: GenerateDemoRequest | None = None):
     generator = DemoGenerator()
     try:
-        source_id, display_name = generator.generate_demo_database()
-        metadata = source_manager.get_source(source_id)
-        if not metadata:
-            metadata = generator.generate_And_register_demo(source_id=source_id, name=display_name)
+        preferred = req.domain if req else None
+        metadata = generator.generate_new_independent_demo_dataset(preferred_domain=preferred)
         return metadata
     except Exception as exc:
         traceback.print_exc()
@@ -43,6 +45,43 @@ async def generate_demo_source():
             status_code=500,
             detail={"error_code": "INTERNAL_ERROR", "message": f"Failed to generate MongoDB demo dataset: {exc}"},
         ) from exc
+
+
+@router.post("/mongodb/demo")
+async def generate_mongodb_demo_contract(req: GenerateDemoRequest | None = None):
+    generator = DemoGenerator()
+    try:
+        preferred = req.domain if req else None
+        metadata = generator.generate_new_independent_demo_dataset(preferred_domain=preferred)
+        return {
+            "status": "success",
+            "source": metadata.model_dump(),
+            "database": {
+                "database_name": metadata.database_name,
+                "display_name": metadata.display_name,
+                "domain": metadata.domain,
+                "collection_count": metadata.table_count,
+                "document_count": metadata.record_count,
+                "collections": metadata.collections,
+            },
+            "manifest": metadata.manifest,
+        }
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail={"error_code": "INTERNAL_ERROR", "message": f"Failed to generate MongoDB demo dataset: {exc}"},
+        ) from exc
+
+
+@router.post("/{source_id}/activate", response_model=SourceMetadata)
+async def activate_source(source_id: str):
+    source = source_manager.get_source(source_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    DatabaseManager.set_active_database(source_id)
+    return source
+
 
 
 @router.post("/upload", response_model=SourceMetadata)

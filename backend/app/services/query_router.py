@@ -198,7 +198,10 @@ class QueryRouter:
                     "reasoning": "Multiple sources match the domain term without disambiguation.",
                 }
 
-        # 6. Match Single Source by collection/field schema relevance
+        # 6. Match Single Source by collection/field schema relevance, honoring active_source_id
+        from app.core.mongodb import MongoDBManager
+
+        active_sid = MongoDBManager.get_active_source_id()
         best_source = None
         best_score = -1
         for s in tabular_sources:
@@ -212,15 +215,20 @@ class QueryRouter:
                     score += 10
             if s.schema_summary and any(w in str(s.schema_summary).lower() for w in q_words if len(w) > 3):
                 score += 3
-            # Prefer user-uploaded source over default demo if scores tie and user uploaded data
-            if s.source_id != "demo-source-id" and score > 0:
+            if s.source_id == active_sid:
+                score += 4
+            elif s.source_id != "demo-source-id" and score > 0:
                 score += 2
             if score > best_score:
                 best_score = score
                 best_source = s
 
         if best_source is None and tabular_sources:
-            best_source = tabular_sources[0]
+            best_source = next(
+                (s for s in tabular_sources if s.source_id == active_sid),
+                tabular_sources[0],
+            )
+
 
         if best_source is None and doc_sources:
             best_source = doc_sources[0]

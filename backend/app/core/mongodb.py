@@ -111,18 +111,20 @@ class _SysCursorProxy:
 
 class _KnowUrDBDatabaseFacade:
     """
-    Wraps the single `knowurdb` MongoDB Database so that:
-    - Accessing any `_sys_*` key routes to `_SysCollectionProxy(raw_db['_system'], key)`.
-    - Accessing any user dataset collection (`demo_database`, `brands`, etc.) routes directly
+    Wraps a MongoDB Database (`knowurdb` or an independent `demo_<domain>_<id>` database) so that:
+    - Accessing any `_sys_*` key ALWAYS routes to the central `_SysCollectionProxy(sys_raw_db['_system'], key)`
+      inside `knowurdb`.
+    - Accessing any user dataset collection (`patients`, `accounts`, `demo_database`, etc.) routes directly
       to `raw_db[collection_name]`.
     """
 
-    def __init__(self, raw_db: Database):
+    def __init__(self, raw_db: Database, sys_raw_db: Database | None = None):
         self._raw_db = raw_db
+        self._sys_raw_db = sys_raw_db if sys_raw_db is not None else raw_db
 
     def __getitem__(self, name: str) -> Any:
         if name in MongoDBManager.SYSTEM_COLLECTIONS and name != MongoDBManager.PHYSICAL_SYSTEM_COLLECTION:
-            return _SysCollectionProxy(self._raw_db[MongoDBManager.PHYSICAL_SYSTEM_COLLECTION], name)
+            return _SysCollectionProxy(self._sys_raw_db[MongoDBManager.PHYSICAL_SYSTEM_COLLECTION], name)
         return self._raw_db[name]
 
     def __getattr__(self, item: str) -> Any:
@@ -131,12 +133,11 @@ class _KnowUrDBDatabaseFacade:
 
 class MongoDBManager:
     """
-    Centralized MongoDB connection & hierarchy manager.
-    All data lives inside ONE main database folder in MongoDB Compass: `knowurdb`
-    - `knowurdb._system`: Single collection holding all internal metadata & RAG chunks.
-    - `knowurdb.demo_database` (or `demo_database_2`, ...): Single collection per generated Demo DB,
-      containing the 5 expandable table documents (`products`, `customers`, `orders`, `employees`, `students`).
-    - `knowurdb.<uploaded_name>`: Single collection per uploaded dataset file.
+    Centralized MongoDB connection & multi-database isolation manager.
+    - Central metadata (`_system`) and the preserved initial `demo_database` live in `knowurdb`.
+    - Every generated random demo dataset (`demo_healthcare_a81f`, `demo_finance_39bc`, etc.)
+      is provisioned as a REAL, independent MongoDB database visible at the top level of
+      MongoDB Compass while registered in `knowurdb._system`.
     """
 
     _client: pymongo.MongoClient | mongomock.MongoClient | None = None
@@ -194,10 +195,11 @@ class MongoDBManager:
 
     @classmethod
     def get_db(cls, db_name: str | None = None) -> Any:
-        """Returns the unified `knowurdb` database (with virtualized `_system` collection proxy)."""
+        """Returns the requested MongoDB database wrapped with the central `_system` collection proxy."""
         client = cls.get_client()
+        sys_raw_db = client[cls._db_name]
         raw_db = client[db_name or cls._db_name]
-        wrapped_db = _KnowUrDBDatabaseFacade(raw_db)
+        wrapped_db = _KnowUrDBDatabaseFacade(raw_db, sys_raw_db=sys_raw_db)
         if not cls._initialized and not cls._initializing and db_name is None:
             cls._initializing = True
             try:
@@ -208,16 +210,48 @@ class MongoDBManager:
         return wrapped_db
 
     @classmethod
+    def resolve_physical_database_name(cls, source_id: str | None = None) -> str:
+        """
+        Resolves the physical MongoDB database name for a given `source_id` (or the active source).
+        - For independent generated demo databases (`demo_healthcare_a81f`, `demo_finance_39bc`, etc.),
+          returns that exact physical MongoDB database name.
+        - For `demo-source-id` or uploaded files inside `knowurdb`, returns `cls._db_name` (`knowurdb`).
+        """
+        sid = source_id or cls.get_active_source_id()
+        if not sid:
+            return cls._db_name
+
+        sys_db = cls.get_db()
+        src = sys_db[cls.SYS_SOURCES].find_one({"source_id": sid})
+        if src:
+            phys_db = src.get("physical_database")
+            if phys_db and isinstance(phys_db, str) and not phys_db.startswith("knowurdb"):
+                return phys_db
+            db_name = src.get("database_name")
+            if (
+                db_name
+                and isinstance(db_name, str)
+                and "/" not in db_name
+                and db_name != cls._db_name
+                and db_name != "demo_database"
+            ):
+                return db_name
+        return cls._db_name
+
+    @classmethod
     def get_source_db(cls, source_id: str | None = None) -> Any:
-        """All sources reside inside the single `knowurdb` main database folder."""
-        return cls.get_db()
+        """
+        Returns the MongoDB database corresponding to `source_id` (or the active source).
+        Ensures strict database isolation between independent `demo_<domain>_<id>` databases
+        and `knowurdb`.
+        """
+        target_db_name = cls.resolve_physical_database_name(source_id)
+        return cls.get_db(target_db_name)
 
     @classmethod
     def allocate_collection_folder_name(cls, base_label: str, is_demo: bool = False) -> str:
         """
         Allocates a single clean collection/folder name inside `knowurdb`:
-        - First Demo DB -> `demo_database`
-        - Subsequent Demo DBs -> `demo_database_2`, `demo_database_3`, ...
         - Uploaded file `brands.csv` -> `brands` (or `brands_2` if `brands` already exists)
         """
         raw_db = cls.get_client()[cls._db_name]
@@ -245,29 +279,41 @@ class MongoDBManager:
         cls, table_name: str, source_id: str | None = None
     ) -> tuple[str, bool]:
         """
-        Determines how a logical table/collection (`products`, `customers`, `brands`, etc.)
-        is stored inside `knowurdb`:
+        Determines how a logical table/collection (`patients`, `products`, `customers`, etc.)
+        is stored in its target MongoDB database:
         Returns `(physical_collection_name, is_grouped_container)`.
-        - If `is_grouped_container` is True, the records live inside
-          `db[physical_collection_name]` under document `{"_id": table_name, "records": [...]}`.
-        - If `is_grouped_container` is False, `db[physical_collection_name]` stores the documents directly.
         """
-        db = cls.get_db()
+        sys_db = cls.get_db()
         sid = source_id or cls.get_active_source_id()
 
         if sid:
-            meta = db[cls.SYS_COLLECTIONS_METADATA].find_one(
+            meta = sys_db[cls.SYS_COLLECTIONS_METADATA].find_one(
                 {"source_id": sid, "collection_name": table_name}
             )
-            if meta and meta.get("container_collection"):
-                return meta["container_collection"], bool(meta.get("is_grouped", True))
+            if meta:
+                is_grouped = bool(meta.get("is_grouped", False))
+                container = meta.get("container_collection") or table_name
+                return container, is_grouped
 
-        # Search across all metadata if source_id wasn't specified or didn't match
-        meta_any = db[cls.SYS_COLLECTIONS_METADATA].find_one({"collection_name": table_name})
+            # Check if `sid` is an independent MongoDB database containing `table_name` directly
+            phys_db_name = cls.resolve_physical_database_name(sid)
+            if phys_db_name != cls._db_name:
+                raw_target_db = cls.get_client()[phys_db_name]
+                if table_name in raw_target_db.list_collection_names():
+                    return table_name, False
+
+            # If `sid` is `demo-source-id` (`demo_database`), check grouped container
+            if sid == "demo-source-id":
+                raw_main_db = cls.get_client()[cls._db_name]
+                if "demo_database" in raw_main_db.list_collection_names():
+                    if raw_main_db["demo_database"].count_documents({"_id": table_name}) > 0:
+                        return "demo_database", True
+
+        # Fallback only if source_id was not set
+        meta_any = sys_db[cls.SYS_COLLECTIONS_METADATA].find_one({"collection_name": table_name})
         if meta_any and meta_any.get("container_collection"):
-            return meta_any["container_collection"], bool(meta_any.get("is_grouped", True))
+            return meta_any["container_collection"], bool(meta_any.get("is_grouped", False))
 
-        # Check if `demo_database` contains this table as `_id`
         raw_db = cls.get_client()[cls._db_name]
         if "demo_database" in raw_db.list_collection_names():
             if raw_db["demo_database"].count_documents({"_id": table_name}) > 0:
@@ -335,13 +381,15 @@ class MongoDBManager:
                 }
             )
 
-        if db[cls.SYS_SOURCES].count_documents({}) == 0:
-            try:
-                from app.services.demo_generator import DemoGenerator
+        try:
+            from app.services.demo_generator import DemoGenerator
 
-                DemoGenerator().seed_initial_demo_if_empty()
-            except Exception as exc:
-                logger.warning("Could not auto-seed initial demo source: %s", exc)
+            gen = DemoGenerator()
+            if db[cls.SYS_SOURCES].count_documents({}) == 0:
+                gen.seed_initial_demo_if_empty()
+            gen.reconcile_managed_databases()
+        except Exception as exc:
+            logger.warning("Could not auto-seed or reconcile demo sources: %s", exc)
 
     @classmethod
     def get_setting(cls, key: str, default: str | None = None) -> str | None:
@@ -360,6 +408,12 @@ class MongoDBManager:
     def set_active_source(cls, source_id: str) -> None:
         cls._active_source_id = source_id
         cls.set_setting("active_source_id", source_id)
+        try:
+            from app.services.dataset_intelligence import DatasetIntelligenceService
+
+            DatasetIntelligenceService._catalog_cache.clear()
+        except Exception:
+            pass
 
     @classmethod
     def get_active_source_id(cls) -> str | None:
@@ -382,23 +436,31 @@ class MongoDBManager:
         db = cls.get_db()
         sid = source_id or cls.get_active_source_id()
         if sid:
+            src = db[cls.SYS_SOURCES].find_one({"source_id": sid})
+            if src and src.get("collections"):
+                return [c for c in src["collections"] if not c.startswith("_")]
             metas = list(
                 db[cls.SYS_COLLECTIONS_METADATA].find(
                     {"source_id": sid}, {"collection_name": 1}
                 )
             )
             if metas:
-                return [m["collection_name"] for m in metas]
-            src = db[cls.SYS_SOURCES].find_one({"source_id": sid})
-            if src and src.get("collections"):
-                return list(src["collections"])
+                return [m["collection_name"] for m in metas if not m["collection_name"].startswith("_")]
+            phys_db_name = cls.resolve_physical_database_name(sid)
+            if phys_db_name != cls._db_name:
+                raw_target_db = cls.get_client()[phys_db_name]
+                return [
+                    c
+                    for c in raw_target_db.list_collection_names()
+                    if not c.startswith("_") and not c.startswith("system.")
+                ]
 
         all_metas = list(db[cls.SYS_COLLECTIONS_METADATA].find({}, {"collection_name": 1}))
         if all_metas:
             seen = []
             for m in all_metas:
                 c = m["collection_name"]
-                if c not in seen:
+                if c not in seen and not c.startswith("_"):
                     seen.append(c)
             return seen
 
@@ -408,3 +470,4 @@ class MongoDBManager:
             for c in raw_db.list_collection_names()
             if c not in cls.SYSTEM_COLLECTIONS and not c.startswith("system.")
         ]
+

@@ -136,7 +136,13 @@ export const uploadBatchSources = async (files: File[]): Promise<SourceMetadata[
   return response.data;
 };
 
-export const generateDemoDatabase = async (): Promise<SourceMetadata> => {
-  const response = await apiClient.post<SourceMetadata>('/api/sources/generate-demo');
+export const generateDemoDatabase = async (domain?: string): Promise<SourceMetadata> => {
+  const response = await apiClient.post<SourceMetadata>('/api/sources/generate-demo', domain ? { domain } : {});
   return response.data;
 };
+
+export const activateSource = async (sourceId: string): Promise<SourceMetadata> => {
+  const response = await apiClient.post<SourceMetadata>(`/api/sources/${sourceId}/activate`);
+  return response.data;
+};
+
