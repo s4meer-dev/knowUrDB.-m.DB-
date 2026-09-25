@@ -66,6 +66,18 @@ class SourceMetadata(BaseModel):
     manifest: dict[str, Any] | None = Field(
         default=None, description="Dataset generation manifest metadata"
     )
+    filesystem_path: str | None = Field(
+        default=None,
+        description="Portable project-relative filesystem snapshot path (e.g. demo_datasets/demo_telecom_7aee)",
+    )
+    sync_status: str = Field(
+        default="SYNCED",
+        description="Synchronization status between MongoDB runtime and demo_datasets/ filesystem snapshot (SYNCED, EXPORTING, MISSING_FILES, MISSING_DATABASE, FAILED)",
+    )
+    dataset_artifacts: list[str] = Field(
+        default_factory=list,
+        description="List of relative artifact files inside the dataset snapshot folder",
+    )
     storage_location: str = Field(
         default="mongodb://knowurdb", description="Storage URI or file path", exclude=True
     )

@@ -178,6 +178,12 @@ class SourceManager:
                 client.drop_database(phys_db)
             except Exception:
                 pass
+            try:
+                from app.services.dataset_exporter import DatasetManifestService
+
+                DatasetManifestService().delete_dataset_snapshot(phys_db)
+            except Exception:
+                pass
             manifest_dir = self.storage_dir / "mongodb" / phys_db
             if manifest_dir.exists() and manifest_dir.is_dir():
                 shutil.rmtree(manifest_dir, ignore_errors=True)

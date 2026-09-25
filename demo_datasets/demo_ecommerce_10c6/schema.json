@@ -1,0 +1,335 @@
+{
+  "database": "demo_ecommerce_10c6",
+  "domain": "ecommerce",
+  "schema_version": "1.0",
+  "inspected_at": "2026-09-25T07:32:14.260892+00:00",
+  "collection_count": 5,
+  "total_documents": 487,
+  "collections": {
+    "shoppers": {
+      "document_count": 83,
+      "field_count": 11,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237edac1b5bf7b7ba9c1"
+        },
+        "shopper_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "SHO-0001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Diya Nair"
+        },
+        "tier": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Platinum"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Delhi"
+        },
+        "state": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "NCR"
+        },
+        "catalog_item_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "CAT-021"
+        },
+        "total_value": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 67387.26
+        },
+        "contact": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "email": "diya.nair1@ecommercedemo.io"
+          },
+          "nested_fields": {
+            "email": "string"
+          }
+        },
+        "address": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "city": "Delhi",
+            "state": "NCR",
+            "country": "India"
+          },
+          "nested_fields": {
+            "city": "string",
+            "state": "string",
+            "country": "string"
+          }
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-05-24T09:27:14.260000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "shopper_id_1",
+        "city_1",
+        "tier_1"
+      ]
+    },
+    "catalog_items": {
+      "document_count": 57,
+      "field_count": 10,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237edac1b5bf7b7ba988"
+        },
+        "catalog_item_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "CAT-001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Ecommerce Catalog Item #1"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Enterprise"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Delhi"
+        },
+        "state": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "NCR"
+        },
+        "price": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 65942.84
+        },
+        "rating": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 4.46
+        },
+        "active": {
+          "bson_type": "bool",
+          "nullable": false,
+          "sample_value": true
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-05-18T19:27:14.260000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "catalog_item_id_1",
+        "category_1",
+        "city_1"
+      ]
+    },
+    "carts": {
+      "document_count": 166,
+      "field_count": 12,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237edac1b5bf7b7baa14"
+        },
+        "cart_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "CAR-00001"
+        },
+        "shopper_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "SHO-0035"
+        },
+        "entity_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Priya Joshi"
+        },
+        "catalog_item_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "CAT-005"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Enterprise"
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "active"
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 65422.28
+        },
+        "total": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 65422.28
+        },
+        "quantity": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 6
+        },
+        "month": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "January"
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-08-27T04:09:14.260000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "cart_id_1",
+        "shopper_id_1",
+        "catalog_item_id_1",
+        "status_1"
+      ]
+    },
+    "orders": {
+      "document_count": 105,
+      "field_count": 9,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237edac1b5bf7b7baaba"
+        },
+        "order_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "ORD-0001"
+        },
+        "shopper_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "SHO-0025"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Order Record #1"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Pro"
+        },
+        "score": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 95.79
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 1388.42
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "processing"
+        },
+        "updated_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-09-17T04:09:14.260000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "order_id_1",
+        "shopper_id_1",
+        "status_1"
+      ]
+    },
+    "reviews": {
+      "document_count": 76,
+      "field_count": 8,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237edac1b5bf7b7bab23"
+        },
+        "review_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "REV-0001"
+        },
+        "catalog_item_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "CAT-043"
+        },
+        "title": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Review #1"
+        },
+        "rating": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 4.58
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 12904.7
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "processing"
+        },
+        "recorded_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-08-30T18:52:14.260000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "review_id_1",
+        "catalog_item_id_1",
+        "status_1"
+      ]
+    }
+  }
+}

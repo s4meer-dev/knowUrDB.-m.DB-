@@ -1,0 +1,377 @@
+{
+  "database": "demo_healthcare_277e",
+  "domain": "healthcare",
+  "schema_version": "1.0",
+  "inspected_at": "2026-09-25T07:32:15.662388+00:00",
+  "collection_count": 5,
+  "total_documents": 585,
+  "collections": {
+    "patients": {
+      "document_count": 105,
+      "field_count": 14,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237fdac1b5bf7b7bafb3"
+        },
+        "patient_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "PAT-0001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Arjun Patel"
+        },
+        "age": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 49
+        },
+        "gender": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Female"
+        },
+        "blood_group": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "B-"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Mumbai"
+        },
+        "primary_diagnosis": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Seasonal Influenza"
+        },
+        "total_billed": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 73577.97
+        },
+        "address": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "city": "Mumbai",
+            "state": "Maharashtra",
+            "country": "India"
+          },
+          "nested_fields": {
+            "city": "string",
+            "state": "string",
+            "country": "string"
+          }
+        },
+        "contact": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "email": "arjun.patel1@healthdemo.org"
+          },
+          "nested_fields": {
+            "email": "string"
+          }
+        },
+        "vitals": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "systolic_bp": 151,
+            "heart_rate": 65,
+            "spo2": 95
+          },
+          "nested_fields": {
+            "systolic_bp": "int",
+            "heart_rate": "int",
+            "spo2": "int"
+          }
+        },
+        "allergies": {
+          "bson_type": "array",
+          "nullable": false,
+          "sample_value": [
+            "Latex",
+            "Sulfa"
+          ],
+          "items_bson_type": "string"
+        },
+        "registered_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2025-03-14T10:14:15.662000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "patient_id_1",
+        "city_1",
+        "primary_diagnosis_1"
+      ]
+    },
+    "doctors": {
+      "document_count": 29,
+      "field_count": 11,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237fdac1b5bf7b7baf96"
+        },
+        "doctor_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "DOC-001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Dr. Kavya Bhatia"
+        },
+        "specialty": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Dermatology"
+        },
+        "department": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Dermatology"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Mumbai"
+        },
+        "consultation_fee": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 1610.28
+        },
+        "experience_years": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 17
+        },
+        "rating": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 4.71
+        },
+        "available": {
+          "bson_type": "bool",
+          "nullable": false,
+          "sample_value": false
+        },
+        "joined_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2023-06-13T00:19:15.662000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "doctor_id_1",
+        "specialty_1"
+      ]
+    },
+    "appointments": {
+      "document_count": 158,
+      "field_count": 12,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237fdac1b5bf7b7bb01c"
+        },
+        "appointment_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "APT-0001"
+        },
+        "patient_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "PAT-0070"
+        },
+        "patient_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Nikhil Verma"
+        },
+        "doctor_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "DOC-021"
+        },
+        "doctor_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Dr. Rahul Patel"
+        },
+        "department": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Oncology"
+        },
+        "diagnosis": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Seasonal Influenza"
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "completed"
+        },
+        "fee": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 1512.46
+        },
+        "month": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "July"
+        },
+        "appointment_date": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-06-02T00:31:15.662000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "appointment_id_1",
+        "patient_id_1",
+        "doctor_id_1",
+        "status_1"
+      ]
+    },
+    "prescriptions": {
+      "document_count": 168,
+      "field_count": 10,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237fdac1b5bf7b7bb0ba"
+        },
+        "prescription_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "RX-0001"
+        },
+        "patient_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "PAT-0076"
+        },
+        "doctor_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "DOC-007"
+        },
+        "medication": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Amoxicillin 500mg"
+        },
+        "dosage_mg": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 20
+        },
+        "duration_days": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 5
+        },
+        "cost": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 1949.25
+        },
+        "refills_allowed": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 3
+        },
+        "prescribed_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-09-16T01:46:15.662000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "prescription_id_1",
+        "patient_id_1",
+        "doctor_id_1"
+      ]
+    },
+    "lab_results": {
+      "document_count": 125,
+      "field_count": 9,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237fdac1b5bf7b7bb162"
+        },
+        "lab_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "LAB-0001"
+        },
+        "patient_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "PAT-0073"
+        },
+        "patient_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Rohan Iyer"
+        },
+        "test_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Electrolyte Panel"
+        },
+        "result_value": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 36.88
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "normal"
+        },
+        "lab_charge": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 460.14
+        },
+        "tested_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-08-10T12:42:15.662000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "lab_id_1",
+        "patient_id_1",
+        "status_1"
+      ]
+    }
+  }
+}

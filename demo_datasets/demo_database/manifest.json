@@ -1,0 +1,47 @@
+{
+  "dataset_id": "demo_database",
+  "database_name": "demo_database",
+  "display_name": "Enterprise & Campus Intelligence",
+  "source_type": "mongodb",
+  "domain": "enterprise",
+  "description": "Foundational multi-domain dataset containing customers, products, orders, employees, and students.",
+  "status": "ready",
+  "generator_version": "2.0.0",
+  "template_version": "1.0",
+  "schema_version": "1.0",
+  "generation_id": "gen_03954e94603a",
+  "seed": 42,
+  "created_at": "2026-09-25T07:27:59.213519+00:00",
+  "collection_count": 5,
+  "document_count": 342,
+  "index_count": 5,
+  "content_hash": "sha256:04356c5e2ebc9d370d88d7e6",
+  "filesystem_path": "demo_datasets/demo_database",
+  "collections": [
+    {
+      "name": "customers",
+      "document_count": 50,
+      "file": "collections/customers.jsonl"
+    },
+    {
+      "name": "products",
+      "document_count": 12,
+      "file": "collections/products.jsonl"
+    },
+    {
+      "name": "orders",
+      "document_count": 120,
+      "file": "collections/orders.jsonl"
+    },
+    {
+      "name": "employees",
+      "document_count": 60,
+      "file": "collections/employees.jsonl"
+    },
+    {
+      "name": "students",
+      "document_count": 100,
+      "file": "collections/students.jsonl"
+    }
+  ]
+}

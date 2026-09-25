@@ -14,13 +14,13 @@ type GenerationState =
   | 'FAILED';
 
 const GENERATION_STAGES = [
-  'SELECTING DOMAIN',
-  'BUILDING SCHEMA',
-  'CREATING DATABASE',
-  'POPULATING COLLECTIONS',
-  'INDEXING',
-  'VERIFYING',
-  'READY',
+  '01 / 07 Selecting domain',
+  '02 / 07 Provisioning MongoDB',
+  '03 / 07 Exporting dataset',
+  '04 / 07 Building schema',
+  '05 / 07 Registering source',
+  '06 / 07 Validating',
+  '07 / 07 Ready',
 ];
 
 export const SourceLibrary: React.FC = () => {
@@ -287,6 +287,11 @@ export const SourceLibrary: React.FC = () => {
                   <p className="text-xs text-zinc-400 mt-0.5 font-mono">
                     MongoDB database:{' '}
                     <span className="text-cyan-300">{lastCreatedSource.database_name}</span> •{' '}
+                    <span className="text-emerald-300">
+                      {lastCreatedSource.filesystem_path ||
+                        `demo_datasets/${lastCreatedSource.database_name}`}
+                    </span>{' '}
+                    •{' '}
                     <span className="text-zinc-200">
                       {lastCreatedSource.table_count || lastCreatedSource.collections?.length || 5}{' '}
                       collections
@@ -552,6 +557,11 @@ export const SourceLibrary: React.FC = () => {
                             MongoDB: {selectedSource.database_name}
                           </span>
                         )}
+                        {selectedSource.filesystem_path && (
+                          <span className="px-2.5 py-0.5 rounded text-xs font-mono bg-emerald-950/50 text-emerald-300 border border-emerald-500/25">
+                            Snapshot: {selectedSource.filesystem_path} ({selectedSource.sync_status || 'SYNCED'})
+                          </span>
+                        )}
                         <span className="text-zinc-500 text-xs border-l border-zinc-700 pl-3">
                           Created {new Date(selectedSource.uploaded_at).toLocaleDateString()}
                         </span>
@@ -588,7 +598,7 @@ export const SourceLibrary: React.FC = () => {
                 </div>
 
                 <div className="p-8 space-y-6">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-zinc-950/50 border border-zinc-800/80 p-5 rounded-xl">
                       <div className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-1">
                         MongoDB Documents
@@ -615,6 +625,14 @@ export const SourceLibrary: React.FC = () => {
                         {selectedSource.database_name || 'knowurdb'}
                       </div>
                     </div>
+                    <div className="bg-zinc-950/50 border border-zinc-800/80 p-5 rounded-xl">
+                      <div className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-1">
+                        Filesystem Snapshot
+                      </div>
+                      <div className="text-xs font-mono font-bold text-emerald-300 truncate mt-1.5">
+                        {selectedSource.filesystem_path || (selectedSource.database_name ? `demo_datasets/${selectedSource.database_name}` : 'N/A')}
+                      </div>
+                    </div>
                   </div>
 
                   {selectedSource.collections && selectedSource.collections.length > 0 && (
@@ -639,6 +657,33 @@ export const SourceLibrary: React.FC = () => {
                             </span>
                           );
                         })}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedSource.filesystem_path && (
+                    <div>
+                      <h4 className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-3">
+                        Synchronized Project Filesystem Snapshot ({selectedSource.filesystem_path}/)
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {(selectedSource.dataset_artifacts && selectedSource.dataset_artifacts.length > 0
+                          ? selectedSource.dataset_artifacts
+                          : [
+                              'manifest.json',
+                              'metadata.json',
+                              'schema.json',
+                              'README.md',
+                              ...(selectedSource.collections || []).map((c) => `collections/${c}.jsonl`),
+                            ]
+                        ).map((artifact) => (
+                          <span
+                            key={artifact}
+                            className="px-2.5 py-1 rounded-lg text-xs font-mono bg-zinc-950 text-zinc-300 border border-zinc-800"
+                          >
+                            {artifact}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   )}

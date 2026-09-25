@@ -211,6 +211,9 @@ export interface SourceMetadata {
   index_count?: number;
   schema_summary?: any;
   manifest?: Record<string, any>;
+  filesystem_path?: string;
+  sync_status?: string;
+  dataset_artifacts?: string[];
   error_message?: string;
 }
 

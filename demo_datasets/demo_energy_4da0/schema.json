@@ -1,0 +1,335 @@
+{
+  "database": "demo_energy_4da0",
+  "domain": "energy",
+  "schema_version": "1.0",
+  "inspected_at": "2026-09-25T07:32:14.700432+00:00",
+  "collection_count": 5,
+  "total_documents": 515,
+  "collections": {
+    "power_plants": {
+      "document_count": 75,
+      "field_count": 11,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237edac1b5bf7b7bab99"
+        },
+        "power_plant_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "POW-0001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Ananya Deshmukh"
+        },
+        "tier": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Platinum"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Hyderabad"
+        },
+        "state": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Telangana"
+        },
+        "smart_meter_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "SMA-002"
+        },
+        "total_value": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 297163.31
+        },
+        "contact": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "email": "ananya.deshmukh1@energydemo.io"
+          },
+          "nested_fields": {
+            "email": "string"
+          }
+        },
+        "address": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "city": "Hyderabad",
+            "state": "Telangana",
+            "country": "India"
+          },
+          "nested_fields": {
+            "city": "string",
+            "state": "string",
+            "country": "string"
+          }
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-01-30T10:54:14.700000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "power_plant_id_1",
+        "city_1",
+        "tier_1"
+      ]
+    },
+    "smart_meters": {
+      "document_count": 41,
+      "field_count": 10,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237edac1b5bf7b7bab70"
+        },
+        "smart_meter_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "SMA-001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Energy Smart Meter #1"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Premium"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Pune"
+        },
+        "state": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Maharashtra"
+        },
+        "price": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 23309.43
+        },
+        "rating": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 4.81
+        },
+        "active": {
+          "bson_type": "bool",
+          "nullable": false,
+          "sample_value": true
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-04-27T16:37:14.700000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "smart_meter_id_1",
+        "category_1",
+        "city_1"
+      ]
+    },
+    "grid_substations": {
+      "document_count": 156,
+      "field_count": 12,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237edac1b5bf7b7babe4"
+        },
+        "grid_substation_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "GRI-00001"
+        },
+        "power_plant_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "POW-0002"
+        },
+        "entity_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Vikram Iyer"
+        },
+        "smart_meter_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "SMA-019"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Premium"
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "verified"
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 67613.44
+        },
+        "total": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 67613.44
+        },
+        "quantity": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 10
+        },
+        "month": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "June"
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-05-30T13:38:14.700000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "grid_substation_id_1",
+        "power_plant_id_1",
+        "smart_meter_id_1",
+        "status_1"
+      ]
+    },
+    "energy_readings": {
+      "document_count": 124,
+      "field_count": 9,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237edac1b5bf7b7bac80"
+        },
+        "energy_reading_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "ENE-0001"
+        },
+        "power_plant_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "POW-0051"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Energy Reading Record #1"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Express"
+        },
+        "score": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 86.0
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 43768.31
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "processing"
+        },
+        "updated_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-05-03T08:09:14.700000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "energy_reading_id_1",
+        "power_plant_id_1",
+        "status_1"
+      ]
+    },
+    "outage_events": {
+      "document_count": 119,
+      "field_count": 8,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab6237edac1b5bf7b7bacfc"
+        },
+        "outage_event_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "OUT-0001"
+        },
+        "smart_meter_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "SMA-003"
+        },
+        "title": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Outage Event #1"
+        },
+        "rating": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 3.94
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 20176.04
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "verified"
+        },
+        "recorded_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-07-14T15:33:14.700000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "outage_event_id_1",
+        "smart_meter_id_1",
+        "status_1"
+      ]
+    }
+  }
+}

@@ -1,0 +1,310 @@
+{
+  "database": "demo_finance_b867",
+  "domain": "finance",
+  "schema_version": "1.0",
+  "inspected_at": "2026-09-25T07:32:16.143571+00:00",
+  "collection_count": 5,
+  "total_documents": 681,
+  "collections": {
+    "customers": {
+      "document_count": 114,
+      "field_count": 10,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab62380dac1b5bf7b7bb1f2"
+        },
+        "customer_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "FIN-CUST-0001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Aarav Gupta"
+        },
+        "segment": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Premier"
+        },
+        "credit_score": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 728
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Mumbai"
+        },
+        "branch_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "BRN-011"
+        },
+        "net_worth": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 11934311.6
+        },
+        "contact": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "email": "aarav.gupta1@financedemo.com"
+          },
+          "nested_fields": {
+            "email": "string"
+          }
+        },
+        "onboarded_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2024-07-12T01:33:16.144000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "customer_id_1",
+        "segment_1",
+        "city_1"
+      ]
+    },
+    "accounts": {
+      "document_count": 177,
+      "field_count": 10,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab62380dac1b5bf7b7bb264"
+        },
+        "account_number": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "ACCT-100001"
+        },
+        "customer_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "FIN-CUST-0098"
+        },
+        "customer_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Vikram Joshi"
+        },
+        "branch_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "BRN-003"
+        },
+        "account_type": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Money Market"
+        },
+        "balance": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 2344697.05
+        },
+        "currency": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "INR"
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "active"
+        },
+        "opened_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2025-11-07T06:53:16.144000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "account_number_1",
+        "customer_id_1",
+        "account_type_1"
+      ]
+    },
+    "transactions": {
+      "document_count": 271,
+      "field_count": 11,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab62380dac1b5bf7b7bb315"
+        },
+        "transaction_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "TXN-00001"
+        },
+        "account_number": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "ACCT-100067"
+        },
+        "customer_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "FIN-CUST-0010"
+        },
+        "branch_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "BRN-001"
+        },
+        "transaction_type": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "wire_transfer"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Treasury Yield"
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 136210.19
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "pending"
+        },
+        "month": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "July"
+        },
+        "timestamp": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-06-13T13:27:16.144000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "transaction_id_1",
+        "account_number_1",
+        "customer_id_1",
+        "transaction_type_1"
+      ]
+    },
+    "investments": {
+      "document_count": 101,
+      "field_count": 9,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab62380dac1b5bf7b7bb424"
+        },
+        "investment_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "INV-0001"
+        },
+        "customer_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "FIN-CUST-0095"
+        },
+        "customer_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Riya Chatterjee"
+        },
+        "asset_class": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "REIT"
+        },
+        "principal": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 888795.26
+        },
+        "current_value": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 99178.52
+        },
+        "annual_return_pct": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 14.6
+        },
+        "maturity_date": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-03-09T22:22:16.144000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "investment_id_1",
+        "customer_id_1",
+        "asset_class_1"
+      ]
+    },
+    "branches": {
+      "document_count": 18,
+      "field_count": 7,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab62380dac1b5bf7b7bb1e0"
+        },
+        "branch_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "BRN-001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Ahmedabad Financial Center #1"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Ahmedabad"
+        },
+        "state": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Gujarat"
+        },
+        "assets_under_management": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 192902953.46
+        },
+        "staff_count": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 65
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "branch_id_1",
+        "city_1"
+      ]
+    }
+  }
+}

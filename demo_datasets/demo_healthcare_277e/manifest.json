@@ -1,0 +1,47 @@
+{
+  "dataset_id": "demo_healthcare_277e",
+  "database_name": "demo_healthcare_277e",
+  "display_name": "Healthcare Intelligence",
+  "source_type": "mongodb",
+  "domain": "healthcare",
+  "description": "Synthetic hospital operations dataset containing patients, doctors, appointments, prescriptions, and laboratory results.",
+  "status": "ready",
+  "generator_version": "2.0.0",
+  "template_version": "1.0",
+  "schema_version": "1.0",
+  "generation_id": "gen_5dae80fc30",
+  "seed": 109037948223305,
+  "created_at": "2026-09-25T07:32:15.662388+00:00",
+  "collection_count": 5,
+  "document_count": 585,
+  "index_count": 20,
+  "content_hash": "sha256:18df5651052a948600ff3b86",
+  "filesystem_path": "demo_datasets/demo_healthcare_277e",
+  "collections": [
+    {
+      "name": "patients",
+      "document_count": 105,
+      "file": "collections/patients.jsonl"
+    },
+    {
+      "name": "doctors",
+      "document_count": 29,
+      "file": "collections/doctors.jsonl"
+    },
+    {
+      "name": "appointments",
+      "document_count": 158,
+      "file": "collections/appointments.jsonl"
+    },
+    {
+      "name": "prescriptions",
+      "document_count": 168,
+      "file": "collections/prescriptions.jsonl"
+    },
+    {
+      "name": "lab_results",
+      "document_count": 125,
+      "file": "collections/lab_results.jsonl"
+    }
+  ]
+}

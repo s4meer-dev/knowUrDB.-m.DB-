@@ -1,0 +1,26 @@
+{
+  "dataset_name": "E-Commerce Marketplace",
+  "database_name": "demo_ecommerce_10c6",
+  "domain": "ecommerce",
+  "description": "Synthetic e-commerce marketplace dataset containing shoppers, catalog_items, carts, orders, and reviews.",
+  "synthetic": true,
+  "source_type": "MongoDB",
+  "filesystem_path": "demo_datasets/demo_ecommerce_10c6",
+  "collections": [
+    "shoppers",
+    "catalog_items",
+    "carts",
+    "orders",
+    "reviews"
+  ],
+  "document_counts": {
+    "shoppers": 83,
+    "catalog_items": 57,
+    "carts": 166,
+    "orders": 105,
+    "reviews": 76
+  },
+  "total_documents": 487,
+  "generated_at": "2026-09-25T07:32:14.260892+00:00",
+  "generator_version": "2.0.0"
+}

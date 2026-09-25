@@ -76,7 +76,11 @@ async def search_documents_endpoint(req: DocumentSearchRequest):
 
 @app.post("/api/demo/generate", tags=["demo"])
 async def generate_demo_alias():
-    return await generate_demo_source()
+    from app.services.demo_generator import DemoGenerator
+
+    meta = DemoGenerator().seed_initial_demo_if_empty()
+    MongoDBManager.set_active_source("demo-source-id")
+    return meta
 
 
 @app.get("/api/workspaces", tags=["workspaces"])

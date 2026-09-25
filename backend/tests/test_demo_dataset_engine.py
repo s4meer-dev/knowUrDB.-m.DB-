@@ -132,3 +132,82 @@ def test_same_domain_variation_and_cross_database_isolation():
     # Clean up remaining test sources
     client.delete(f"/api/sources/{hc1['source_id']}")
     client.delete(f"/api/sources/{fin['source_id']}")
+
+
+def test_filesystem_dataset_persistence_and_backfill():
+    import json
+    import shutil
+    from bson import ObjectId, json_util
+    from app.services.dataset_exporter import MongoDatasetExporter, resolve_dataset_root
+
+    abs_root, rel_root = resolve_dataset_root()
+    assert rel_root == "demo_datasets"
+
+    # 1. Reconcile & backfill all existing managed databases in MongoDB
+    exporter = MongoDatasetExporter()
+    exporter.reconcile_and_backfill_all()
+
+    # Verify `demo_datasets/demo_database/` snapshot is present and valid
+    demo_db_dir = abs_root / "demo_database"
+    assert demo_db_dir.exists()
+    assert (demo_db_dir / "manifest.json").exists()
+    assert (demo_db_dir / "metadata.json").exists()
+    assert (demo_db_dir / "schema.json").exists()
+    assert (demo_db_dir / "README.md").exists()
+    assert (demo_db_dir / "collections" / "customers.jsonl").exists()
+
+    # 2. Generate a new Telecom demo dataset and verify 1:1 MongoDB <-> Filesystem parity
+    resp = client.post("/api/sources/generate-demo", json={"domain": "telecom"})
+    assert resp.status_code == 200
+    data = resp.json()
+    db_name = data["database_name"]
+    source_id = data["source_id"]
+
+    # Portable relative path check (no hardcoded C:\ paths)
+    assert data["filesystem_path"] == f"demo_datasets/{db_name}"
+    assert data["sync_status"] == "SYNCED"
+
+    ds_dir = abs_root / db_name
+    assert ds_dir.exists()
+    assert (ds_dir / "manifest.json").exists()
+    assert (ds_dir / "metadata.json").exists()
+    assert (ds_dir / "schema.json").exists()
+    assert (ds_dir / "README.md").exists()
+
+    with open(ds_dir / "manifest.json", encoding="utf-8") as mf:
+        manifest = json.load(mf)
+    assert manifest["database_name"] == db_name
+    assert manifest["filesystem_path"] == f"demo_datasets/{db_name}"
+    assert manifest["content_hash"].startswith("sha256:")
+
+    mongo_client = MongoDBManager.get_client()
+    phys_db = mongo_client[db_name]
+    for col_entry in manifest["collections"]:
+        col_name = col_entry["name"]
+        expected_cnt = phys_db[col_name].count_documents({})
+        jsonl_file = ds_dir / col_entry["file"]
+        assert jsonl_file.exists()
+        with open(jsonl_file, encoding="utf-8") as jf:
+            lines = [line.strip() for line in jf if line.strip()]
+        assert len(lines) == expected_cnt
+        # Verify BSON preservation (`_id` reconstructs to ObjectId)
+        first_doc = json_util.loads(lines[0])
+        assert isinstance(first_doc["_id"], ObjectId)
+
+    # 3. Simulate missing filesystem folder (`MONGODB_ONLY` state) and verify idempotent backfill
+    shutil.rmtree(ds_dir)
+    assert not ds_dir.exists()
+    backfill_summary = exporter.reconcile_and_backfill_all()
+    assert db_name in backfill_summary["backfilled"]
+    assert ds_dir.exists()
+    assert (ds_dir / "manifest.json").exists()
+
+    # 4. Delete source via API and verify both MongoDB database AND filesystem directory are removed
+    del_resp = client.delete(f"/api/sources/{source_id}")
+    assert del_resp.status_code == 200
+    assert not ds_dir.exists()
+    with open(abs_root / "index.json", encoding="utf-8") as idx_f:
+        index_data = json.load(idx_f)
+    indexed_names = {entry["database_name"] for entry in index_data["datasets"]}
+    assert db_name not in indexed_names
+

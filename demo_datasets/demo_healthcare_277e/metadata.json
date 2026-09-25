@@ -1,0 +1,26 @@
+{
+  "dataset_name": "Healthcare Intelligence",
+  "database_name": "demo_healthcare_277e",
+  "domain": "healthcare",
+  "description": "Synthetic hospital operations dataset containing patients, doctors, appointments, prescriptions, and laboratory results.",
+  "synthetic": true,
+  "source_type": "MongoDB",
+  "filesystem_path": "demo_datasets/demo_healthcare_277e",
+  "collections": [
+    "patients",
+    "doctors",
+    "appointments",
+    "prescriptions",
+    "lab_results"
+  ],
+  "document_counts": {
+    "patients": 105,
+    "doctors": 29,
+    "appointments": 158,
+    "prescriptions": 168,
+    "lab_results": 125
+  },
+  "total_documents": 585,
+  "generated_at": "2026-09-25T07:32:15.662388+00:00",
+  "generator_version": "2.0.0"
+}

@@ -1,0 +1,347 @@
+{
+  "database": "demo_database",
+  "domain": "enterprise",
+  "schema_version": "1.0",
+  "inspected_at": "2026-09-25T07:27:59.213519+00:00",
+  "collection_count": 5,
+  "total_documents": 342,
+  "collections": {
+    "customers": {
+      "document_count": 50,
+      "field_count": 10,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab60d2d1a93e67d0a71696e"
+        },
+        "customer_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "CUST-001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Rohan Patel"
+        },
+        "tier": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Silver"
+        },
+        "total_spent": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 123781.1
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Bengaluru"
+        },
+        "state": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Karnataka"
+        },
+        "contact": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "email": "rohan.patel1@example.com",
+            "phone": "+91-9856164955"
+          },
+          "nested_fields": {
+            "email": "string",
+            "phone": "string"
+          }
+        },
+        "address": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "city": "Bengaluru",
+            "state": "Karnataka",
+            "country": "India"
+          },
+          "nested_fields": {
+            "city": "string",
+            "state": "string",
+            "country": "string"
+          }
+        },
+        "joined_at": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "2025-05-11"
+        }
+      },
+      "indexes": [
+        "_id_1"
+      ]
+    },
+    "products": {
+      "document_count": 12,
+      "field_count": 10,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab60d2d1a93e67d0a7169a0"
+        },
+        "product_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "PROD-001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Quantum NVMe SSD 2TB"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Electronics"
+        },
+        "price": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 18500.0
+        },
+        "stock": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 38
+        },
+        "units_sold": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 96
+        },
+        "revenue": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 1776000.0
+        },
+        "rating": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 4.12
+        },
+        "tags": {
+          "bson_type": "array",
+          "nullable": false,
+          "sample_value": [
+            "electronics",
+            "premium"
+          ],
+          "items_bson_type": "string"
+        }
+      },
+      "indexes": [
+        "_id_1"
+      ]
+    },
+    "orders": {
+      "document_count": 120,
+      "field_count": 10,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab60d2d1a93e67d0a7169ac"
+        },
+        "order_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "ORD-0001"
+        },
+        "customer_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "CUST-012"
+        },
+        "customer_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Vikram Patel"
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "processing"
+        },
+        "month": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "January"
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 670500.0
+        },
+        "total": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 670500.0
+        },
+        "items": {
+          "bson_type": "array",
+          "nullable": false,
+          "sample_value": [
+            {
+              "product_id": "PROD-005",
+              "product_name": "CloudSync Enterprise License",
+              "category": "Cloud Software",
+              "quantity": 4
+            },
+            {
+              "product_id": "PROD-001",
+              "product_name": "Quantum NVMe SSD 2TB",
+              "category": "Electronics",
+              "quantity": 3
+            }
+          ],
+          "items_bson_type": "object",
+          "items_nested_fields": {
+            "product_id": "string",
+            "product_name": "string",
+            "category": "string",
+            "quantity": "int",
+            "price": "double",
+            "line_total": "double"
+          }
+        },
+        "created_at": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "2025-01-26"
+        }
+      },
+      "indexes": [
+        "_id_1"
+      ]
+    },
+    "employees": {
+      "document_count": 60,
+      "field_count": 8,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab60d2d1a93e67d0a716a24"
+        },
+        "employee_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "EMP-001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Aarav Verma"
+        },
+        "department": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "AI Research"
+        },
+        "role": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Staff Architect"
+        },
+        "salary": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 208663.52
+        },
+        "performance_score": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 4.64
+        },
+        "hired_at": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "2023-06-15"
+        }
+      },
+      "indexes": [
+        "_id_1"
+      ]
+    },
+    "students": {
+      "document_count": 100,
+      "field_count": 12,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab60d2d1a93e67d0a716a60"
+        },
+        "student_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "STU-0001"
+        },
+        "first_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Vikram"
+        },
+        "last_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Nair"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Vikram Nair"
+        },
+        "department": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Data Science"
+        },
+        "major": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Data Science"
+        },
+        "gpa": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 2.61
+        },
+        "age": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 23
+        },
+        "year": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 3
+        },
+        "credits": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 112
+        },
+        "scholarship": {
+          "bson_type": "bool",
+          "nullable": false,
+          "sample_value": false
+        }
+      },
+      "indexes": [
+        "_id_1"
+      ]
+    }
+  }
+}

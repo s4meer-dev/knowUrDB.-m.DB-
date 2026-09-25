@@ -1,0 +1,47 @@
+{
+  "dataset_id": "demo_energy_4da0",
+  "database_name": "demo_energy_4da0",
+  "display_name": "Renewable Energy Grid",
+  "source_type": "mongodb",
+  "domain": "energy",
+  "description": "Synthetic energy grid dataset containing power_plants, smart_meters, grid_substations, energy_readings, and outage_events.",
+  "status": "ready",
+  "generator_version": "2.0.0",
+  "template_version": "1.0",
+  "schema_version": "1.0",
+  "generation_id": "gen_37e441dfaa",
+  "seed": 218426625046419,
+  "created_at": "2026-09-25T07:32:14.700432+00:00",
+  "collection_count": 5,
+  "document_count": 515,
+  "index_count": 21,
+  "content_hash": "sha256:82e471a55674bba40aa2efb7",
+  "filesystem_path": "demo_datasets/demo_energy_4da0",
+  "collections": [
+    {
+      "name": "power_plants",
+      "document_count": 75,
+      "file": "collections/power_plants.jsonl"
+    },
+    {
+      "name": "smart_meters",
+      "document_count": 41,
+      "file": "collections/smart_meters.jsonl"
+    },
+    {
+      "name": "grid_substations",
+      "document_count": 156,
+      "file": "collections/grid_substations.jsonl"
+    },
+    {
+      "name": "energy_readings",
+      "document_count": 124,
+      "file": "collections/energy_readings.jsonl"
+    },
+    {
+      "name": "outage_events",
+      "document_count": 119,
+      "file": "collections/outage_events.jsonl"
+    }
+  ]
+}

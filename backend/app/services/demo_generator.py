@@ -14,6 +14,7 @@ from bson import ObjectId
 
 from app.core.mongodb import MongoDBManager
 from app.models.source import SourceMetadata, SourceStatus
+from app.services.dataset_exporter import MongoDatasetExporter, resolve_dataset_root
 
 logger = logging.getLogger("knowurdb.demo_generator")
 
@@ -238,9 +239,8 @@ class RandomDatasetEngine:
     TEMPLATE_VERSION = "1.0"
 
     def __init__(self, manifest_root: Path | None = None):
-        base = Path(__file__).resolve().parent.parent.parent.parent
-        self.manifest_root = manifest_root or (base / "database" / "sources" / "mongodb")
-        self.manifest_root.mkdir(parents=True, exist_ok=True)
+        abs_root, _rel_root = resolve_dataset_root(manifest_root)
+        self.manifest_root = abs_root
 
     def select_domain(self, preferred_domain: str | None = None) -> tuple[str, str, dict[str, Any]]:
         """
@@ -926,31 +926,62 @@ class DemoGenerator:
        "Generate Random MongoDB Demo Dataset".
     """
 
-    def __init__(self):
-        self.engine = RandomDatasetEngine()
+    def __init__(self, dataset_root: Path | None = None):
+        self.engine = RandomDatasetEngine(manifest_root=dataset_root)
+        self.exporter = MongoDatasetExporter(dataset_root=dataset_root)
 
     def seed_initial_demo_if_empty(self) -> SourceMetadata:
         """
         Ensures the initial `Enterprise & Campus Intelligence (demo_database)` source
-        exists without ever overwriting or modifying its documents if already present.
+        exists without ever overwriting or modifying its documents if already present,
+        and verifies its `demo_datasets/demo_database` filesystem snapshot is synchronized.
         """
         db = MongoDBManager.get_db()
         existing = db[MongoDBManager.SYS_SOURCES].find_one({"source_id": "demo-source-id"})
         if existing:
-            if not existing.get("display_name") or not existing.get("domain"):
+            expected_counts = {
+                "customers": 50,
+                "products": 12,
+                "orders": 120,
+                "employees": 60,
+                "students": 100,
+            }
+            valid_snap, _reason, artifacts = self.exporter.manifest_service.verify_dataset_snapshot(
+                "demo_database", expected_counts=expected_counts
+            )
+            manifest_data = existing.get("manifest")
+            if not valid_snap:
+                try:
+                    manifest_data = self.exporter.export_database(
+                        database_name="demo_database",
+                        display_name="Enterprise & Campus Intelligence",
+                        domain="enterprise",
+                        description="Foundational multi-domain dataset containing customers, products, orders, employees, and students.",
+                        collections=list(expected_counts.keys()),
+                        created_at=existing.get("uploaded_at"),
+                    )
+                    artifacts = manifest_data.get("dataset_artifacts", [])
+                except Exception as exc:
+                    logger.warning("Could not export initial demo_database snapshot: %s", exc)
+
+            rel_path = self.exporter.manifest_service.get_relative_dataset_path("demo_database")
+            if (
+                not existing.get("display_name")
+                or not existing.get("domain")
+                or existing.get("filesystem_path") != rel_path
+                or not existing.get("dataset_artifacts")
+            ):
                 patch = {
                     "display_name": "Enterprise & Campus Intelligence",
                     "domain": "enterprise",
                     "description": "Foundational multi-domain dataset containing customers, products, orders, employees, and students.",
                     "source_category": "mongodb",
                     "database_name": "demo_database",
-                    "collection_counts": {
-                        "customers": 50,
-                        "products": 12,
-                        "orders": 120,
-                        "employees": 60,
-                        "students": 100,
-                    },
+                    "collection_counts": expected_counts,
+                    "filesystem_path": rel_path,
+                    "sync_status": "SYNCED",
+                    "dataset_artifacts": artifacts,
+                    "manifest": manifest_data,
                 }
                 db[MongoDBManager.SYS_SOURCES].update_one(
                     {"source_id": "demo-source-id"},
@@ -1042,33 +1073,25 @@ class DemoGenerator:
 
                 duration_ms = round((time.perf_counter() - start_ts) * 1000, 2)
 
-                # 4. Build Dataset Manifest & persist to disk + MongoDB
-                manifest: dict[str, Any] = {
-                    "generation_id": generation_id,
-                    "generator_version": RandomDatasetEngine.GENERATOR_VERSION,
-                    "template_version": RandomDatasetEngine.TEMPLATE_VERSION,
-                    "source_id": source_id,
-                    "database_name": database_name,
-                    "display_name": display_title,
-                    "domain": domain,
-                    "description": spec["description"],
-                    "created_at": now_iso,
-                    "seed": seed_hex,
-                    "collection_count": len(collections_data),
-                    "document_count": total_docs,
-                    "index_count": total_indexes,
-                    "duration_ms": duration_ms,
-                    "collections": manifest_collections,
-                    "relationships": relationships,
-                }
+                # 4. Atomically export full dataset snapshot to `demo_datasets/<database_name>/`
+                #    (`manifest.json`, `metadata.json`, `schema.json`, `README.md`, `collections/*.jsonl`, `index.json`)
+                exported_manifest = self.exporter.export_database(
+                    database_name=database_name,
+                    display_name=display_title,
+                    domain=domain,
+                    description=spec["description"],
+                    collections=list(collection_counts.keys()),
+                    generation_id=generation_id,
+                    seed=seed_int,
+                    created_at=now_iso,
+                )
+                exported_manifest["duration_ms"] = duration_ms
+                exported_manifest["relationships"] = relationships
 
-                manifest_dir = self.engine.manifest_root / database_name
-                manifest_dir.mkdir(parents=True, exist_ok=True)
-                with open(manifest_dir / "manifest.json", "w", encoding="utf-8") as mf:
-                    json.dump(manifest, mf, indent=2)
-
-                # Store ownership marker inside the database's `_dataset_manifest`
-                target_db["_dataset_manifest"].insert_one(dict(manifest))
+                rel_dataset_path = self.exporter.manifest_service.get_relative_dataset_path(
+                    database_name
+                )
+                dataset_artifacts = exported_manifest.get("dataset_artifacts", [])
 
                 # 5. Register in central `_sys_collections_metadata` and `_sys_sources`
                 for col_name, cnt in collection_counts.items():
@@ -1118,7 +1141,10 @@ class DemoGenerator:
                         f"{display_title} (`{database_name}`): {len(col_list)} MongoDB collections "
                         f"({', '.join(col_list)}) with {total_docs} synthetic documents."
                     ),
-                    "manifest": manifest,
+                    "manifest": exported_manifest,
+                    "filesystem_path": rel_dataset_path,
+                    "sync_status": "SYNCED",
+                    "dataset_artifacts": dataset_artifacts,
                     "storage_location": f"mongodb://localhost:27017/{database_name}",
                 }
 
@@ -1132,12 +1158,13 @@ class DemoGenerator:
                 MongoDBManager.set_active_source(source_id)
 
                 logger.info(
-                    "Provisioned independent MongoDB demo dataset: generation_id=%s db=%s domain=%s collections=%d docs=%d duration_ms=%.2f",
+                    "Provisioned independent MongoDB demo dataset: generation_id=%s db=%s domain=%s collections=%d docs=%d filesystem=%s duration_ms=%.2f",
                     generation_id,
                     database_name,
                     domain,
                     len(col_list),
                     total_docs,
+                    rel_dataset_path,
                     duration_ms,
                 )
                 return SourceMetadata(**source_doc)
@@ -1154,7 +1181,7 @@ class DemoGenerator:
                 except Exception:
                     pass
                 try:
-                    shutil.rmtree(self.engine.manifest_root / database_name, ignore_errors=True)
+                    self.exporter.manifest_service.delete_dataset_snapshot(database_name)
                 except Exception:
                     pass
                 try:
@@ -1166,9 +1193,16 @@ class DemoGenerator:
 
     def reconcile_managed_databases(self) -> None:
         """
-        Reconciles managed `demo_*` databases and manifests on startup so that
-        independent MongoDB demo databases remain registered and discoverable across restarts.
+        Reconciles managed `demo_*` databases and `demo_datasets/*` snapshots on startup
+        and backfills any missing filesystem artifacts (`manifest.json`, `metadata.json`,
+        `schema.json`, `README.md`, `collections/*.jsonl`).
         """
+        # 1. Run bidirectional MongoDB <-> Filesystem reconciliation & backfill
+        try:
+            self.exporter.reconcile_and_backfill_all()
+        except Exception as exc:
+            logger.warning("Dataset exporter reconciliation warning: %s", exc)
+
         client = MongoDBManager.get_client()
         sys_db = MongoDBManager.get_db()
         try:
@@ -1176,13 +1210,26 @@ class DemoGenerator:
         except Exception:
             return
 
-        # 1. Recover any managed `demo_*` database in MongoDB that has `_dataset_manifest`
+        # 2. Ensure every managed `demo_*` database in MongoDB is registered in `_sys_sources`
         for db_name in sorted(db_names):
             if not db_name.startswith("demo_") or db_name == "demo_database":
                 continue
             source_id = f"mongodb_{db_name}"
             existing = sys_db[MongoDBManager.SYS_SOURCES].find_one({"source_id": source_id})
+            rel_path = self.exporter.manifest_service.get_relative_dataset_path(db_name)
+            _valid, _reason, artifacts = self.exporter.manifest_service.verify_dataset_snapshot(db_name)
             if existing:
+                if existing.get("filesystem_path") != rel_path or not existing.get("dataset_artifacts"):
+                    sys_db[MongoDBManager.SYS_SOURCES].update_one(
+                        {"source_id": source_id},
+                        {
+                            "$set": {
+                                "filesystem_path": rel_path,
+                                "sync_status": "SYNCED",
+                                "dataset_artifacts": artifacts,
+                            }
+                        },
+                    )
                 continue
             try:
                 target_db = client[db_name]
@@ -1243,6 +1290,9 @@ class DemoGenerator:
                     "index_count": manifest.get("index_count", len(cols) * 2),
                     "schema_summary": f"{display_title} (`{db_name}`): {len(cols)} collections ({', '.join(cols)}).",
                     "manifest": manifest,
+                    "filesystem_path": rel_path,
+                    "sync_status": "SYNCED",
+                    "dataset_artifacts": artifacts,
                     "storage_location": f"mongodb://localhost:27017/{db_name}",
                 }
                 sys_db[MongoDBManager.SYS_SOURCES].update_one(
@@ -1499,6 +1549,24 @@ class DemoGenerator:
                 upsert=True,
             )
 
+        exported_manifest = None
+        artifacts: list[str] = []
+        try:
+            exported_manifest = self.exporter.export_database(
+                database_name="demo_database",
+                display_name="Enterprise & Campus Intelligence",
+                domain="enterprise",
+                description="Foundational multi-domain dataset containing customers, products, orders, employees, and students.",
+                collections=collections,
+                seed=42,
+                created_at=now_iso,
+            )
+            artifacts = exported_manifest.get("dataset_artifacts", [])
+        except Exception as exc:
+            logger.warning("Failed to export initial demo_database snapshot: %s", exc)
+
+        rel_path = self.exporter.manifest_service.get_relative_dataset_path("demo_database")
+
         source_doc = {
             "source_id": source_id,
             "name": name,
@@ -1526,6 +1594,10 @@ class DemoGenerator:
                 "`customers` (50 docs), `products` (12 docs), `orders` (120 docs), "
                 "`employees` (60 docs), `students` (100 docs)."
             ),
+            "manifest": exported_manifest,
+            "filesystem_path": rel_path,
+            "sync_status": "SYNCED",
+            "dataset_artifacts": artifacts,
             "storage_location": "mongodb://localhost:27017/demo_database",
         }
         db[MongoDBManager.SYS_SOURCES].update_one(

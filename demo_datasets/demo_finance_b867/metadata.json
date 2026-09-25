@@ -1,0 +1,26 @@
+{
+  "dataset_name": "Financial Operations",
+  "database_name": "demo_finance_b867",
+  "domain": "finance",
+  "description": "Synthetic financial operations dataset containing customers, accounts, transactions, investments, and branches.",
+  "synthetic": true,
+  "source_type": "MongoDB",
+  "filesystem_path": "demo_datasets/demo_finance_b867",
+  "collections": [
+    "customers",
+    "accounts",
+    "transactions",
+    "investments",
+    "branches"
+  ],
+  "document_counts": {
+    "customers": 114,
+    "accounts": 177,
+    "transactions": 271,
+    "investments": 101,
+    "branches": 18
+  },
+  "total_documents": 681,
+  "generated_at": "2026-09-25T07:32:16.143571+00:00",
+  "generator_version": "2.0.0"
+}

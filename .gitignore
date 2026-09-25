@@ -19,6 +19,9 @@ build/
 
 # Local Runtime Storage & Databases
 database/
+demo_datasets/.generating_*
+demo_datasets/.backup_*
+demo_datasets/*.tmp
 *.sqlite
 *.sqlite3
 *.db

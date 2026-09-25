@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     QUERY_TIMEOUT_MS: int = 10000
     MAX_UPLOAD_SIZE_MB: int = 100
 
+    # Filesystem Dataset Persistence Root (relative to project root or absolute path)
+    DEMO_DATASET_ROOT: str = Field(
+        default="demo_datasets",
+        description="Relative or absolute path where generated MongoDB demo dataset snapshots are stored",
+    )
+
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE_PATH), env_file_encoding="utf-8", extra="ignore"
     )
