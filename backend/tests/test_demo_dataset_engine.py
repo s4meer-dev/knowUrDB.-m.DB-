@@ -65,6 +65,68 @@ def test_existing_demo_database_preserved_and_repeated_5_generations():
         assert del_resp.status_code == 200
 
 
+def test_fresh_registry_and_1_click_idempotency_invariant():
+    import pytest
+
+    # Verify port 27017 safety guard blocks shared port when ALLOW_SHARED_MONGODB_27017 is false
+    with pytest.raises(RuntimeError, match="Unsafe MongoDB configuration"):
+        MongoDBManager.validate_connection_isolation("mongodb://localhost:27017")
+
+    # Verify port 27018 passes isolation check
+    MongoDBManager.validate_connection_isolation("mongodb://127.0.0.1:27018")
+
+    # Test 1-click = 1-database invariant and generation_id idempotency
+    before_datasets = client.get("/api/datasets").json()["total"]
+    before_sources = len(client.get("/api/sources").json())
+
+    # Click 1 with explicit generation_id
+    gen_id_1 = "gen_test_idempotent_01"
+    r1 = client.post("/api/sources/generate-demo", json={"domain": "healthcare", "generation_id": gen_id_1})
+    assert r1.status_code == 200
+    d1 = r1.json()
+    assert d1["generation_id"] == gen_id_1
+    assert d1["dataset_id"].startswith("ds_")
+    assert client.get("/api/datasets").json()["total"] == before_datasets + 1
+    assert len(client.get("/api/sources").json()) == before_sources + 1
+
+    # Duplicate request with same generation_id -> must NOT create a second database!
+    r1_dup = client.post("/api/sources/generate-demo", json={"domain": "healthcare", "generation_id": gen_id_1})
+    assert r1_dup.status_code == 200
+    assert r1_dup.json()["source_id"] == d1["source_id"]
+    assert r1_dup.json()["database_name"] == d1["database_name"]
+    assert client.get("/api/datasets").json()["total"] == before_datasets + 1
+    assert len(client.get("/api/sources").json()) == before_sources + 1
+
+    # Click 2 -> exactly 2 new databases
+    r2 = client.post("/api/sources/generate-demo", json={"domain": "finance", "generation_id": "gen_test_idempotent_02"})
+    assert r2.status_code == 200
+    d2 = r2.json()
+    assert client.get("/api/datasets").json()["total"] == before_datasets + 2
+    assert len(client.get("/api/sources").json()) == before_sources + 2
+
+    # Click 3 -> exactly 3 new databases
+    r3 = client.post("/api/sources/generate-demo", json={"domain": "retail", "generation_id": "gen_test_idempotent_03"})
+    assert r3.status_code == 200
+    d3 = r3.json()
+    assert client.get("/api/datasets").json()["total"] == before_datasets + 3
+    assert len(client.get("/api/sources").json()) == before_sources + 3
+
+    # Verify generations registry recorded completed status
+    gens = client.get("/api/generations").json()["generations"]
+    gen_map = {g["generation_id"]: g for g in gens}
+    assert gen_map[gen_id_1]["status"] == "completed"
+    assert gen_map[gen_id_1]["database_name"] == d1["database_name"]
+
+    # Clean up the 3 created datasets and verify knowurdb.datasets + knowurdb.sources drop while knowurdb.generations remains
+    for sid in (d1["source_id"], d2["source_id"], d3["source_id"]):
+        assert client.delete(f"/api/sources/{sid}").status_code == 200
+    assert client.get("/api/datasets").json()["total"] == before_datasets
+    assert len(client.get("/api/sources").json()) == before_sources
+    # Generation history remains for auditability
+    gens_after = {g["generation_id"] for g in client.get("/api/generations").json()["generations"]}
+    assert gen_id_1 in gens_after
+
+
 def test_same_domain_variation_and_cross_database_isolation():
     # 1. Generate two Healthcare datasets and one Finance dataset
     r_hc1 = client.post("/api/sources/generate-demo", json={"domain": "healthcare"})
@@ -87,7 +149,7 @@ def test_same_domain_variation_and_cross_database_isolation():
     schema_resp = client.get(f"/api/sources/{hc1['source_id']}/schema")
     assert schema_resp.status_code == 200
     table_names = {t["name"] for t in schema_resp.json()["tables"]}
-    assert table_names == {"patients", "doctors", "appointments", "prescriptions", "lab_results"}
+    assert table_names == {"patients", "doctors", "appointments", "diagnoses", "medications"}
 
     # Cross-Database Isolation Test:
     # While Finance (fin['source_id']) is selected, ask "How many patients are there?"
