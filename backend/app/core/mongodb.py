@@ -1,7 +1,12 @@
 import datetime
 import logging
 import re
+import socket
+import subprocess
+import time
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import mongomock
 import pymongo
@@ -12,13 +17,20 @@ from app.core.config import settings
 
 logger = logging.getLogger("knowurdb.mongodb")
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
+
+class MongoIsolationSafetyError(RuntimeError):
+    """Raised when knowUrDB detects an unsafe connection to a shared MongoDB instance (e.g. port 27017)."""
+
 
 class _SysCollectionProxy:
     """
-    Virtualizes the 6 internal system collections (`_sys_sources`, `_sys_collections_metadata`,
+    Virtualizes internal control-plane collections (`_sys_collections_metadata`,
     `_sys_query_history`, `_sys_document_chunks`, `_sys_settings`, `_sys_workspaces`)
-    into a SINGLE physical MongoDB collection (`_system`) inside `knowurdb`.
-    This keeps MongoDB Compass completely clean with only one `_system` item under `knowurdb`.
+    into the physical `_system` collection inside `knowurdb`.
+    Meanwhile, `datasets`, `sources`, and `generations` exist as dedicated first-class
+    collections inside `knowurdb` (`knowurdb.datasets`, `knowurdb.sources`, `knowurdb.generations`).
     """
 
     def __init__(self, raw_collection: Any, sys_type: str):
@@ -33,7 +45,6 @@ class _SysCollectionProxy:
         return {"$and": [{"_sys_type": self._sys_type}, flt]}
 
     def create_index(self, keys: Any, **kwargs: Any) -> Any:
-        # Avoid global unique collisions across virtual types by making indexes non-unique on shared collection
         kwargs.pop("unique", None)
         return self._col.create_index(keys, **kwargs)
 
@@ -112,10 +123,10 @@ class _SysCursorProxy:
 class _KnowUrDBDatabaseFacade:
     """
     Wraps a MongoDB Database (`knowurdb` or an independent `demo_<domain>_<id>` database) so that:
-    - Accessing any `_sys_*` key ALWAYS routes to the central `_SysCollectionProxy(sys_raw_db['_system'], key)`
-      inside `knowurdb`.
-    - Accessing any user dataset collection (`patients`, `accounts`, `demo_database`, etc.) routes directly
-      to `raw_db[collection_name]`.
+    - `datasets`, `sources` (or `_sys_sources`), and `generations` ALWAYS route to the physical
+      `knowurdb.datasets`, `knowurdb.sources`, and `knowurdb.generations` collections inside `knowurdb`.
+    - Internal `_sys_*` keys route to `_SysCollectionProxy(sys_raw_db['_system'], key)`.
+    - User dataset collections (`patients`, `students`, `subscribers`, etc.) route directly to `raw_db[name]`.
     """
 
     def __init__(self, raw_db: Database, sys_raw_db: Database | None = None):
@@ -123,7 +134,13 @@ class _KnowUrDBDatabaseFacade:
         self._sys_raw_db = sys_raw_db if sys_raw_db is not None else raw_db
 
     def __getitem__(self, name: str) -> Any:
-        if name in MongoDBManager.SYSTEM_COLLECTIONS and name != MongoDBManager.PHYSICAL_SYSTEM_COLLECTION:
+        if name in ("sources", "_sys_sources"):
+            return self._sys_raw_db["sources"]
+        if name in ("datasets", "_sys_datasets"):
+            return self._sys_raw_db["datasets"]
+        if name in ("generations", "_sys_generations"):
+            return self._sys_raw_db["generations"]
+        if name in MongoDBManager.VIRTUAL_SYSTEM_COLLECTIONS:
             return _SysCollectionProxy(self._sys_raw_db[MongoDBManager.PHYSICAL_SYSTEM_COLLECTION], name)
         return self._raw_db[name]
 
@@ -133,40 +150,148 @@ class _KnowUrDBDatabaseFacade:
 
 class MongoDBManager:
     """
-    Centralized MongoDB connection & multi-database isolation manager.
-    - Central metadata (`_system`) and the preserved initial `demo_database` live in `knowurdb`.
-    - Every generated random demo dataset (`demo_healthcare_a81f`, `demo_finance_39bc`, etc.)
-      is provisioned as a REAL, independent MongoDB database visible at the top level of
-      MongoDB Compass while registered in `knowurdb._system`.
+    Centralized MongoDB connection & multi-database isolation manager for KnowUrDB.
+    - Connects exclusively to the dedicated KnowUrDB MongoDB instance (`mongodb://127.0.0.1:27018` by default).
+    - Enforces a Connection Safety Guard preventing accidental writes to shared `localhost:27017`.
+    - Control database `knowurdb` contains ONLY registry/control collections:
+      `datasets`, `sources`, `generations`, and `_system`.
+    - Every generated demo dataset (`demo_healthcare_xxxx`, `demo_education_xxxx`, etc.) lives in its
+      own independent MongoDB database on the dedicated instance.
     """
 
     _client: pymongo.MongoClient | mongomock.MongoClient | None = None
-    _db_name: str = "knowurdb"
+    _db_name: str = settings.MONGODB_CONTROL_DB or settings.MONGODB_DATABASE or "knowurdb"
     _is_mock: bool = False
     _active_source_id: str | None = None
 
     PHYSICAL_SYSTEM_COLLECTION = "_system"
+    SYS_DATASETS = "datasets"
+    SYS_SOURCES = "sources"
+    SYS_GENERATIONS = "generations"
 
     SYS_WORKSPACES = "_sys_workspaces"
-    SYS_SOURCES = "_sys_sources"
     SYS_COLLECTIONS_METADATA = "_sys_collections_metadata"
     SYS_QUERY_HISTORY = "_sys_query_history"
     SYS_DOCUMENT_CHUNKS = "_sys_document_chunks"
     SYS_SETTINGS = "_sys_settings"
 
-    SYSTEM_COLLECTIONS = {
-        PHYSICAL_SYSTEM_COLLECTION,
+    VIRTUAL_SYSTEM_COLLECTIONS = {
         SYS_WORKSPACES,
-        SYS_SOURCES,
         SYS_COLLECTIONS_METADATA,
         SYS_QUERY_HISTORY,
         SYS_DOCUMENT_CHUNKS,
         SYS_SETTINGS,
     }
 
+    SYSTEM_COLLECTIONS = {
+        PHYSICAL_SYSTEM_COLLECTION,
+        SYS_DATASETS,
+        SYS_SOURCES,
+        "_sys_sources",
+        SYS_GENERATIONS,
+        *VIRTUAL_SYSTEM_COLLECTIONS,
+    }
+
+    @classmethod
+    def get_uri_summary(cls) -> str:
+        return settings.MONGODB_URI.rstrip("/")
+
+    @classmethod
+    def parse_configured_endpoint(cls, uri: str | None = None) -> tuple[str, int, str]:
+        parsed = urlparse(uri or settings.MONGODB_URI)
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or 27018
+        return host, port, cls._db_name
+
+    @classmethod
+    def validate_connection_isolation(cls, uri: str | None = None) -> dict[str, Any]:
+        """
+        Connection Safety Guard (Sections 8 & 9):
+        Verifies MongoDB host, port, and control database before performing write/destructive operations.
+        Refuses to operate on shared port 27017 unless ALLOW_SHARED_MONGODB_27017 is explicitly True.
+        """
+        host, port, control_db = cls.parse_configured_endpoint(uri)
+        if port == 27017 and not settings.ALLOW_SHARED_MONGODB_27017:
+            raise MongoIsolationSafetyError(
+                f"Unsafe MongoDB configuration — Connection Safety Guard: KnowUrDB cannot connect to {host}:{port}, "
+                "which is reserved for other local projects. Please use the dedicated KnowUrDB "
+                "MongoDB instance on localhost:27018 (MONGODB_URI=mongodb://localhost:27018)."
+            )
+        return {
+            "host": host,
+            "port": port,
+            "uri": uri or settings.MONGODB_URI,
+            "control_database": control_db,
+            "isolated": port != 27017,
+        }
+
+    @classmethod
+    def _ensure_dedicated_mongod_running(cls, host: str, port: int) -> None:
+        """
+        If KnowUrDB is configured for its dedicated local port (e.g. 27018) and nothing is
+        listening yet (e.g. Docker is not running), automatically launches a dedicated local
+        `mongod` process bound to `127.0.0.1:27018` with persistent storage in `.mongodb_27018/data`.
+        """
+        if host not in ("127.0.0.1", "localhost") or port == 27017:
+            return
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.4)
+            if sock.connect_ex(("127.0.0.1", port)) == 0:
+                return
+
+        # Locate local mongod binary
+        candidates: list[Path] = []
+        prog_files = Path("C:/Program Files/MongoDB/Server")
+        if prog_files.exists():
+            candidates.extend(sorted(prog_files.glob("*/bin/mongod.exe"), reverse=True))
+        for p in ("/usr/bin/mongod", "/usr/local/bin/mongod", "/opt/homebrew/bin/mongod"):
+            if Path(p).exists():
+                candidates.append(Path(p))
+
+        if not candidates:
+            return
+
+        mongod_bin = str(candidates[0])
+        data_dir = PROJECT_ROOT / f".mongodb_{port}" / "data"
+        log_dir = PROJECT_ROOT / f".mongodb_{port}" / "logs"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / "mongod.log"
+
+        try:
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            subprocess.Popen(
+                [
+                    mongod_bin,
+                    "--port",
+                    str(port),
+                    "--bind_ip",
+                    "127.0.0.1",
+                    "--dbpath",
+                    str(data_dir),
+                    "--logpath",
+                    str(log_file),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=creationflags,
+            )
+            for _ in range(15):
+                time.sleep(0.2)
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(0.3)
+                    if sock.connect_ex(("127.0.0.1", port)) == 0:
+                        logger.info("Started dedicated KnowUrDB mongod instance on 127.0.0.1:%d", port)
+                        break
+        except Exception as exc:
+            logger.warning("Failed auto-starting dedicated mongod on port %d: %s", port, exc)
+
     @classmethod
     def get_client(cls) -> pymongo.MongoClient | mongomock.MongoClient:
+        cls.validate_connection_isolation()
         if cls._client is None:
+            host, port, _ = cls.parse_configured_endpoint()
+            cls._ensure_dedicated_mongod_running(host, port)
             try:
                 client = pymongo.MongoClient(
                     settings.MONGODB_URI,
@@ -177,13 +302,14 @@ class MongoDBManager:
                 cls._client = client
                 cls._is_mock = False
                 logger.info(
-                    "Connected to live MongoDB server at %s (main_db=%s)",
+                    "Connected to dedicated KnowUrDB MongoDB server at %s (control_db=%s)",
                     settings.MONGODB_URI,
                     cls._db_name,
                 )
             except Exception as exc:
                 logger.warning(
-                    "Live MongoDB server unreachable (%s); activating embedded mongomock fallback.",
+                    "Dedicated MongoDB server at %s unreachable (%s); activating embedded mongomock fallback.",
+                    settings.MONGODB_URI,
                     exc,
                 )
                 cls._client = mongomock.MongoClient()
@@ -195,7 +321,7 @@ class MongoDBManager:
 
     @classmethod
     def get_db(cls, db_name: str | None = None) -> Any:
-        """Returns the requested MongoDB database wrapped with the central `_system` collection proxy."""
+        """Returns the requested MongoDB database wrapped with the central `knowurdb` registry facade."""
         client = cls.get_client()
         sys_raw_db = client[cls._db_name]
         raw_db = client[db_name or cls._db_name]
@@ -213,13 +339,19 @@ class MongoDBManager:
     def resolve_physical_database_name(cls, source_id: str | None = None) -> str:
         """
         Resolves the physical MongoDB database name for a given `source_id` (or the active source).
-        - For independent generated demo databases (`demo_healthcare_a81f`, `demo_finance_39bc`, etc.),
-          returns that exact physical MongoDB database name.
-        - For `demo-source-id` or uploaded files inside `knowurdb`, returns `cls._db_name` (`knowurdb`).
+        - For any generated or demo dataset (`demo_healthcare_34cf`, `demo_database`, etc.),
+          returns that dataset's independent physical MongoDB database name.
+        - Never queries `knowurdb` for dataset records unless the source is an uploaded CSV/JSON file
+          explicitly stored inside `knowurdb`.
         """
         sid = source_id or cls.get_active_source_id()
         if not sid:
             return cls._db_name
+
+        if sid == "demo-source-id":
+            return "demo_database"
+        if sid.startswith("mongodb_demo_"):
+            return sid.replace("mongodb_", "", 1)
 
         sys_db = cls.get_db()
         src = sys_db[cls.SYS_SOURCES].find_one({"source_id": sid})
@@ -228,13 +360,7 @@ class MongoDBManager:
             if phys_db and isinstance(phys_db, str) and not phys_db.startswith("knowurdb"):
                 return phys_db
             db_name = src.get("database_name")
-            if (
-                db_name
-                and isinstance(db_name, str)
-                and "/" not in db_name
-                and db_name != cls._db_name
-                and db_name != "demo_database"
-            ):
+            if db_name and isinstance(db_name, str) and "/" not in db_name and db_name != cls._db_name:
                 return db_name
         return cls._db_name
 
@@ -250,10 +376,6 @@ class MongoDBManager:
 
     @classmethod
     def allocate_collection_folder_name(cls, base_label: str, is_demo: bool = False) -> str:
-        """
-        Allocates a single clean collection/folder name inside `knowurdb`:
-        - Uploaded file `brands.csv` -> `brands` (or `brands_2` if `brands` already exists)
-        """
         raw_db = cls.get_client()[cls._db_name]
         existing_cols = set(raw_db.list_collection_names())
 
@@ -279,8 +401,8 @@ class MongoDBManager:
         cls, table_name: str, source_id: str | None = None
     ) -> tuple[str, bool]:
         """
-        Determines how a logical table/collection (`patients`, `products`, `customers`, etc.)
-        is stored in its target MongoDB database:
+        Determines how a logical collection (`patients`, `products`, `customers`, etc.)
+        is stored in its target MongoDB database.
         Returns `(physical_collection_name, is_grouped_container)`.
         """
         sys_db = cls.get_db()
@@ -295,29 +417,15 @@ class MongoDBManager:
                 container = meta.get("container_collection") or table_name
                 return container, is_grouped
 
-            # Check if `sid` is an independent MongoDB database containing `table_name` directly
             phys_db_name = cls.resolve_physical_database_name(sid)
             if phys_db_name != cls._db_name:
                 raw_target_db = cls.get_client()[phys_db_name]
                 if table_name in raw_target_db.list_collection_names():
                     return table_name, False
 
-            # If `sid` is `demo-source-id` (`demo_database`), check grouped container
-            if sid == "demo-source-id":
-                raw_main_db = cls.get_client()[cls._db_name]
-                if "demo_database" in raw_main_db.list_collection_names():
-                    if raw_main_db["demo_database"].count_documents({"_id": table_name}) > 0:
-                        return "demo_database", True
-
-        # Fallback only if source_id was not set
         meta_any = sys_db[cls.SYS_COLLECTIONS_METADATA].find_one({"collection_name": table_name})
         if meta_any and meta_any.get("container_collection"):
             return meta_any["container_collection"], bool(meta_any.get("is_grouped", False))
-
-        raw_db = cls.get_client()[cls._db_name]
-        if "demo_database" in raw_db.list_collection_names():
-            if raw_db["demo_database"].count_documents({"_id": table_name}) > 0:
-                return "demo_database", True
 
         return table_name, False
 
@@ -343,7 +451,9 @@ class MongoDBManager:
 
     @classmethod
     def ping(cls) -> dict[str, Any]:
+        host, port, control_db = cls.parse_configured_endpoint()
         try:
+            cls.validate_connection_isolation()
             client = cls.get_client()
             res = client.admin.command("ping")
             version = "mongomock" if cls._is_mock else client.server_info().get("version", "unknown")
@@ -351,26 +461,63 @@ class MongoDBManager:
                 "connected": bool(res.get("ok") == 1.0),
                 "engine": "mongomock" if cls._is_mock else "mongodb",
                 "version": version,
-                "database": cls._db_name,
+                "database": control_db,
+                "host": host,
+                "port": port,
+                "uri": settings.MONGODB_URI,
             }
-        except PyMongoError as exc:
+        except Exception as exc:
             logger.error("MongoDB ping failed: %s", exc)
             return {
                 "connected": False,
                 "engine": "mongodb",
-                "database": cls._db_name,
-                "error": str(exc),
+                "database": control_db,
+                "host": host,
+                "port": port,
+                "uri": settings.MONGODB_URI,
+                "error": (
+                    f"KnowUrDB could not connect to its dedicated MongoDB instance on {host}:{port}. ({exc})"
+                ),
             }
 
     @classmethod
     def init_db(cls) -> None:
         """
-        Initializes the single `_system` collection inside `knowurdb` and seeds the initial
-        `demo_database` collection if no sources exist.
+        Initializes ONLY the control-plane registry collections inside `knowurdb`:
+          - `knowurdb.datasets`
+          - `knowurdb.sources`
+          - `knowurdb.generations`
+          - `knowurdb._system`
+        NEVER automatically generates a demo dataset on startup (Sections 22, 23, 57, 58).
         """
+        cls.validate_connection_isolation()
         db = cls.get_db()
         raw_db = cls.get_client()[cls._db_name]
-        raw_db[cls.PHYSICAL_SYSTEM_COLLECTION].create_index("_sys_type")
+
+        # Ensure control-plane collections exist and have unique indexes
+        existing_cols = set(raw_db.list_collection_names())
+        for control_col in (cls.SYS_DATASETS, cls.SYS_SOURCES, cls.SYS_GENERATIONS, cls.PHYSICAL_SYSTEM_COLLECTION):
+            if control_col not in existing_cols:
+                try:
+                    raw_db.create_collection(control_col)
+                except Exception:
+                    pass
+
+        try:
+            raw_db[cls.PHYSICAL_SYSTEM_COLLECTION].create_index("_sys_type")
+            raw_db[cls.SYS_DATASETS].create_index("dataset_id", unique=True)
+            raw_db[cls.SYS_DATASETS].create_index("database_name", unique=True)
+            raw_db[cls.SYS_SOURCES].create_index("source_id", unique=True)
+            raw_db[cls.SYS_GENERATIONS].create_index("generation_id", unique=True)
+        except Exception:
+            pass
+
+        # Clean up any legacy duplicate `demo_database` collection inside `knowurdb`
+        if "demo_database" in existing_cols:
+            try:
+                raw_db["demo_database"].drop()
+            except Exception:
+                pass
 
         if db[cls.SYS_WORKSPACES].count_documents({"workspace_id": "default"}) == 0:
             db[cls.SYS_WORKSPACES].insert_one(
@@ -381,15 +528,14 @@ class MongoDBManager:
                 }
             )
 
+        # Read-only reconciliation of existing managed `demo_*` databases in this MongoDB instance
+        # (NEVER generates new demo data on startup!)
         try:
             from app.services.demo_generator import DemoGenerator
 
-            gen = DemoGenerator()
-            if db[cls.SYS_SOURCES].count_documents({}) == 0:
-                gen.seed_initial_demo_if_empty()
-            gen.reconcile_managed_databases()
+            DemoGenerator().reconcile_managed_databases()
         except Exception as exc:
-            logger.warning("Could not auto-seed or reconcile demo sources: %s", exc)
+            logger.warning("Startup dataset registry reconciliation warning: %s", exc)
 
     @classmethod
     def get_setting(cls, key: str, default: str | None = None) -> str | None:
@@ -418,11 +564,17 @@ class MongoDBManager:
     @classmethod
     def get_active_source_id(cls) -> str | None:
         if cls._active_source_id:
-            return cls._active_source_id
+            # Verify active_source_id still exists in knowurdb.sources
+            exists = cls.get_db()[cls.SYS_SOURCES].find_one({"source_id": cls._active_source_id})
+            if exists:
+                return cls._active_source_id
+            cls._active_source_id = None
         saved = cls.get_setting("active_source_id")
         if saved:
-            cls._active_source_id = saved
-            return saved
+            exists = cls.get_db()[cls.SYS_SOURCES].find_one({"source_id": saved})
+            if exists:
+                cls._active_source_id = saved
+                return saved
         first_src = cls.get_db()[cls.SYS_SOURCES].find_one(
             {"status": "ready", "detected_format": {"$nin": ["pdf", "txt", "markdown"]}},
             sort=[("uploaded_at", pymongo.DESCENDING)],
@@ -470,4 +622,3 @@ class MongoDBManager:
             for c in raw_db.list_collection_names()
             if c not in cls.SYSTEM_COLLECTIONS and not c.startswith("system.")
         ]
-

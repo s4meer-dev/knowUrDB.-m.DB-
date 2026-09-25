@@ -219,7 +219,15 @@ class DatasetManifestService:
         temp_index = self.abs_root / f".index_{uuid.uuid4().hex[:8]}.tmp"
         with open(temp_index, "w", encoding="utf-8") as idx_file:
             json.dump(index_payload, idx_file, indent=2)
-        os.replace(temp_index, index_path)
+        try:
+            os.replace(temp_index, index_path)
+        except PermissionError:
+            try:
+                with open(index_path, "w", encoding="utf-8") as idx_file:
+                    json.dump(index_payload, idx_file, indent=2)
+            finally:
+                if temp_index.exists():
+                    temp_index.unlink(missing_ok=True)
         return index_payload
 
     def delete_dataset_snapshot(self, database_name: str) -> bool:
@@ -759,16 +767,14 @@ class MongoDatasetExporter:
             except Exception as exc:
                 logger.warning("Failed reconciling dataset %s: %s", db_name, exc)
 
-        # Check for any filesystem-only datasets in `demo_datasets/*` and restore them if valid
+        # Remove any stale filesystem folders in `demo_datasets/*` that do NOT exist in live MongoDB
+        # (Startup must NEVER automatically create/restore MongoDB databases from disk - Sections 22, 23, 57)
         for child in sorted(self.abs_root.iterdir(), key=lambda p: p.name):
             if not child.is_dir() or child.name.startswith("."):
                 continue
             db_name = child.name
-            if db_name in candidate_dbs:
-                continue
-            restored_manifest = self.restore_database_from_snapshot(db_name)
-            if restored_manifest:
-                summary["restored_to_mongodb"].append(db_name)
+            if db_name not in candidate_dbs:
+                shutil.rmtree(child, ignore_errors=True)
 
         self.manifest_service.rebuild_global_index()
         return summary

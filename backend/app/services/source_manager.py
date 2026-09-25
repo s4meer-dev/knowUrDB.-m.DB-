@@ -146,7 +146,7 @@ class SourceManager:
                 "record_count": ingestion_info["record_count"],
                 "index_count": ingestion_info.get("index_count", 1),
                 "schema_summary": schema_summary,
-                "storage_location": f"mongodb://localhost:27017/{db_name}",
+                "storage_location": f"{MongoDBManager.get_uri_summary()}/{db_name}",
             }
 
         db[MongoDBManager.SYS_SOURCES].update_one(
@@ -164,6 +164,7 @@ class SourceManager:
 
         client = MongoDBManager.get_client()
         phys_db = src.get("physical_database") or src.get("database_name")
+        dataset_id = src.get("dataset_id")
 
         # 1. If this source is an independent managed demo database (e.g. demo_healthcare_a81f),
         # drop ONLY that independent MongoDB database and remove its manifest folder.
@@ -208,6 +209,11 @@ class SourceManager:
         db[MongoDBManager.SYS_COLLECTIONS_METADATA].delete_many({"source_id": source_id})
         db[MongoDBManager.SYS_DOCUMENT_CHUNKS].delete_many({"source_id": source_id})
         db[MongoDBManager.SYS_SOURCES].delete_one({"source_id": source_id})
+        if dataset_id:
+            db[MongoDBManager.SYS_DATASETS].delete_many({"$or": [{"dataset_id": dataset_id}, {"source_id": source_id}]})
+        else:
+            db[MongoDBManager.SYS_DATASETS].delete_many({"source_id": source_id})
+        # Note: knowurdb.generations history is intentionally preserved for auditability
 
         local_dir = self.storage_dir / source_id
         if local_dir.exists() and local_dir.is_dir():

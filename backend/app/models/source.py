@@ -24,6 +24,8 @@ class SourceStatus(str, Enum):
 
 class SourceMetadata(BaseModel):
     source_id: str = Field(..., description="Unique immutable source identifier")
+    dataset_id: str | None = Field(default=None, description="Dataset registry identifier in knowurdb.datasets")
+    generation_id: str | None = Field(default=None, description="Idempotent generation identifier in knowurdb.generations")
     name: str = Field(..., description="Display name of the source")
     display_name: str | None = Field(default=None, description="Human-friendly dataset display title")
     domain: str | None = Field(default=None, description="Dataset domain identifier (e.g. healthcare, finance)")
