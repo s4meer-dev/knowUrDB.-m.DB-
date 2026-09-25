@@ -16,14 +16,22 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:5173"
 
-    # MongoDB Native Configuration
+    # Dedicated KnowUrDB MongoDB Configuration (Isolated on port 27018 by default)
     MONGODB_URI: str = Field(
-        default="mongodb://127.0.0.1:27017",
-        description="MongoDB connection URI",
+        default="mongodb://127.0.0.1:27018",
+        description="Dedicated KnowUrDB MongoDB connection URI (isolated from shared localhost:27017)",
+    )
+    MONGODB_CONTROL_DB: str = Field(
+        default="knowurdb",
+        description="Control / registry database name inside the dedicated MongoDB instance",
     )
     MONGODB_DATABASE: str = Field(
         default="knowurdb",
-        description="Primary MongoDB database name",
+        description="Primary MongoDB control database name",
+    )
+    ALLOW_SHARED_MONGODB_27017: bool = Field(
+        default=False,
+        description="Safety guard preventing accidental connection to shared port 27017 unless explicitly enabled",
     )
     MONGODB_MAX_POOL_SIZE: int = Field(
         default=50,

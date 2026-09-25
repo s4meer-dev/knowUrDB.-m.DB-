@@ -1,47 +1,24 @@
 services:
-  mongodb:
+  knowurdb-mongodb:
     image: mongo:8.0
     container_name: knowurdb-mongodb
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_DATABASE: knowurdb
     volumes:
-      - mongodb_data:/data/db
+      - knowurdb_mongodb_data:/data/db
+      - knowurdb_mongodb_config:/data/configdb
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--port", "27017", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: knowurdb-backend
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      - MONGODB_URI=mongodb://mongodb:27017
-      - MONGODB_DATABASE=knowurdb
-      - ENVIRONMENT=development
-      - FRONTEND_URL=http://localhost:5173
-    depends_on:
-      mongodb:
-        condition: service_healthy
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: knowurdb-frontend
-    restart: unless-stopped
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000
-    depends_on:
-      - backend
+      start_period: 10s
 
 volumes:
-  mongodb_data:
+  knowurdb_mongodb_data:
+    name: knowurdb_mongodb_data
+  knowurdb_mongodb_config:
+    name: knowurdb_mongodb_config

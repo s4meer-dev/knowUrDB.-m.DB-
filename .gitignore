@@ -19,6 +19,7 @@ build/
 
 # Local Runtime Storage & Databases
 database/
+.mongodb_27018/
 demo_datasets/.generating_*
 demo_datasets/.backup_*
 demo_datasets/*.tmp
