@@ -13,6 +13,8 @@ interface QueryInputProps {
   selectedSourceId?: string;
   onSourceChange?: (sourceId: string) => void;
   loadingSources?: boolean;
+  activeCollection?: string | null;
+  onClearCollection?: () => void;
 }
 
 export const QueryInput: React.FC<QueryInputProps> = ({
@@ -24,7 +26,9 @@ export const QueryInput: React.FC<QueryInputProps> = ({
   sources = [],
   selectedSourceId = 'all',
   onSourceChange = () => {},
-  loadingSources = false
+  loadingSources = false,
+  activeCollection = null,
+  onClearCollection = () => {}
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -88,6 +92,23 @@ export const QueryInput: React.FC<QueryInputProps> = ({
               triggerClassName="bg-transparent text-sm font-semibold text-cyan-400 focus:outline-none hover:text-cyan-300 hover:drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] transition-all cursor-pointer disabled:opacity-50 min-w-[150px] flex items-center justify-between group"
               dropdownClassName="w-64 mt-3 -left-4"
             />
+            {activeCollection && (
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-mono">
+                <span className="text-zinc-500">→</span>
+                <span>{activeCollection}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClearCollection();
+                  }}
+                  className="ml-1 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
+                  title="Clear collection filter"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
           {loadingSources && (
             <div className="w-4 h-4 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin shadow-[0_0_10px_rgba(34,211,238,0.2)]"></div>

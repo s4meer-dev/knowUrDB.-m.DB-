@@ -7,6 +7,7 @@ from app.services.dataset_intelligence import (
     CollectionResolver,
     DatasetIntelligenceService,
 )
+from app.services.semantic_field_registry import SemanticConcept, SemanticFieldRegistry
 
 CANONICAL_INTENTS = {
     "DATASET_OVERVIEW",
@@ -35,6 +36,9 @@ CANONICAL_INTENTS = {
     "DOCUMENT_RAG",
     "MULTI_SOURCE",
     "CLARIFICATION",
+    "METRIC_UNAVAILABLE",
+    "METRIC_ALTERNATIVE",
+    "SCOPE_CONTEXT",
     "UNRELATED",
 }
 
@@ -60,10 +64,13 @@ TYPO_CORRECTIONS: dict[str, str] = {
     "ordrs": "orders",
     "colection": "collection",
     "colections": "collections",
+    "colletion": "collection",
+    "colletions": "collections",
     "collcetion": "collection",
     "databse": "database",
     "datbase": "database",
     "datset": "dataset",
+    "datsets": "datasets",
     "dataest": "dataset",
     "recrod": "record",
     "recrods": "records",
@@ -74,24 +81,32 @@ TYPO_CORRECTIONS: dict[str, str] = {
     "salry": "salary",
     "departmnt": "department",
     "banglore": "bangalore",
+    "revene": "revenue",
+    "revnue": "revenue",
+    "reveneu": "revenue",
+    "revenuee": "revenue",
+    "reveue": "revenue",
+    "spnding": "spending",
+    "spnd": "spend",
 }
 
 SEMANTIC_FIELD_SYNONYMS: dict[str, list[str]] = {
-    "expensive": ["price", "amount", "total_amount", "total_spent", "salary"],
-    "cheap": ["price", "amount", "total_amount"],
-    "cheapest": ["price", "amount", "total_amount"],
-    "cost": ["price", "amount", "total_amount"],
-    "price": ["price", "amount", "total_amount"],
-    "revenue": ["revenue", "total_amount", "amount", "price", "total_spent"],
-    "sales": ["units_sold", "total_amount", "amount", "revenue", "price"],
-    "selling": ["units_sold", "total_amount", "amount"],
+    "expensive": ["price", "amount", "total_amount", "salary"],
+    "cheap": ["price", "amount"],
+    "cheapest": ["price", "amount"],
+    "cost": ["price", "amount"],
+    "price": ["price", "unit_price"],
+    "revenue": ["revenue", "total_revenue", "sales_amount", "order_total", "total_amount"],
+    "sales": ["sales", "sales_amount", "total_amount", "revenue"],
+    "selling": ["total_amount", "amount"],
     "sold": ["units_sold"],
     "stock": ["stock", "inventory", "quantity"],
     "inventory": ["stock", "quantity"],
-    "spent": ["total_spent", "total_amount", "amount"],
-    "spend": ["total_spent", "total_amount", "amount"],
+    "spent": ["total_spent", "amount_spent"],
+    "spending": ["total_spent", "amount_spent"],
+    "spend": ["total_spent", "amount_spent"],
     "salary": ["salary", "compensation"],
-    "paid": ["salary", "total_spent", "total_amount"],
+    "paid": ["salary", "total_spent"],
     "earner": ["salary"],
     "gpa": ["gpa", "Attendance_Percentage", "score", "rating"],
     "grade": ["gpa", "score"],
@@ -133,6 +148,8 @@ class QueryPlan:
     presentation_type: str = "table"
     clarification_message: str | None = None
     clarification_options: list[dict[str, Any]] = field(default_factory=list)
+    requested_concept: str | None = None
+    explanation: str | None = None
 
 
 class QuestionNormalizer:
@@ -388,11 +405,64 @@ class QueryPlannerEngine:
             )
 
         # 4. Resolve Mentioned Fields & Semantic Field Synonyms
+        requested_concept: str | None = None
+        if re.search(r"\b(revenue|sales|turnover|gross revenue|net revenue)\b", effective_q_lower):
+            requested_concept = "REVENUE"
+        elif re.search(r"\b(spend|spending|spent|expenditure)\b", effective_q_lower):
+            requested_concept = "SPENDING"
+        elif re.search(r"\b(gpa|academic|grade|score)\b", effective_q_lower):
+            requested_concept = "GPA"
+        elif re.search(r"\b(salary|wage|compensation)\b", effective_q_lower):
+            requested_concept = "SALARY"
+        elif re.search(r"\b(price|unit price)\b", effective_q_lower):
+            requested_concept = "PRICE"
+        elif re.search(r"\b(stock|inventory|quantity)\b", effective_q_lower):
+            requested_concept = "QUANTITY"
+
         matched_numeric: list[str] = []
-        for nf in numeric_fields:
-            nf_clean = nf.lower().replace("_", " ")
-            if re.search(rf"\b({re.escape(nf.lower())}|{re.escape(nf_clean)})\b", effective_q_lower):
-                matched_numeric.append(nf)
+
+        if requested_concept:
+            match_res = SemanticFieldRegistry.match_requested_metric(
+                requested_concept, col_name, col_columns
+            )
+            if match_res.status == "EXACT_MATCH" and match_res.field_name:
+                matched_numeric = [match_res.field_name]
+            elif match_res.status == "RELATED_ALTERNATIVE":
+                return QueryPlan(
+                    original_question=question,
+                    normalized_question=normalized,
+                    intent="METRIC_ALTERNATIVE",
+                    confidence=match_res.confidence,
+                    source_id=source_id,
+                    source_name=source_name,
+                    collection=col_name,
+                    metric_field=match_res.field_name,
+                    requested_concept=requested_concept,
+                    explanation=match_res.explanation,
+                    clarification_message=match_res.explanation,
+                    clarification_options=match_res.alternative_fields,
+                    presentation_type="clarification",
+                )
+            elif match_res.status in ("INCOMPATIBLE", "NOT_FOUND"):
+                return QueryPlan(
+                    original_question=question,
+                    normalized_question=normalized,
+                    intent="METRIC_UNAVAILABLE",
+                    confidence=match_res.confidence,
+                    source_id=source_id,
+                    source_name=source_name,
+                    collection=col_name,
+                    requested_concept=requested_concept,
+                    explanation=match_res.explanation,
+                    clarification_message=match_res.explanation,
+                    presentation_type="warning",
+                )
+
+        if not matched_numeric:
+            for nf in numeric_fields:
+                nf_clean = nf.lower().replace("_", " ")
+                if re.search(rf"\b({re.escape(nf.lower())}|{re.escape(nf_clean)})\b", effective_q_lower):
+                    matched_numeric.append(nf)
 
         if not matched_numeric:
             for word, candidates in SEMANTIC_FIELD_SYNONYMS.items():
@@ -754,6 +824,16 @@ class QueryPlannerEngine:
                 r"\b(sum|total\s+(?:revenue|sales|amount|spent|salary|stock|units))\b",
                 effective_q_lower,
             )
+            or (
+                requested_concept == "REVENUE"
+                and primary_metric
+                and not re.search(r"\b(which|who|list\s+orders|show\s+orders)\b", effective_q_lower)
+            )
+            or (
+                requested_concept == "SPENDING"
+                and primary_metric
+                and re.search(r"\b(how much|total|sum|overall)\b", effective_q_lower)
+            )
         )
         is_trend = bool(re.search(r"\b(trend|monthly|by month|over time)\b", effective_q_lower))
 
@@ -775,6 +855,7 @@ class QueryPlannerEngine:
                 candidate_collections=res.candidates,
                 target_fields=top_level_fields[:8],
                 metric_field=primary_metric,
+                requested_concept=requested_concept,
                 group_field=group_field
                 or ("month" if is_trend and "month" in col_fields else None),
                 filters=filters,
@@ -1087,6 +1168,11 @@ class QueryPlannerEngine:
         proj = {"_id": 0}
         for f in plan.target_fields[:8]:
             proj[f] = 1
+        if plan.metric_field:
+            proj[plan.metric_field] = 1
+        for filter_f in plan.filters:
+            clean_f = filter_f.split(".")[0]
+            proj[clean_f] = 1
         if len(proj) > 1:
             pipeline.append({"$project": proj})
 

@@ -6,7 +6,7 @@ import TextType from '../components/TextType/TextType';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { queryDatabase, getSources, activateSource } from '../services/api';
-import type { QueryResponse, SourceMetadata } from '../types';
+import type { QueryResponse, SourceMetadata, QueryScopeModel } from '../types';
 
 type QueryMachineState =
   | 'IDLE'
@@ -33,8 +33,9 @@ export const Workspace: React.FC = () => {
   const [sources, setSources] = useState<SourceMetadata[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string>(() => {
     const stateSourceId = (location.state as { sourceId?: string } | null)?.sourceId;
-    return stateSourceId || localStorage.getItem('knowurdb_active_source_id') || 'all';
+    return stateSourceId || 'all';
   });
+  const [activeCollection, setActiveCollection] = useState<string | null>(null);
   const [conversationContext, setConversationContext] = useState<Record<string, any>>({});
   const [sessionStack, setSessionStack] = useState<SessionSnapshot[]>([]);
   const [loadingSources, setLoadingSources] = useState(true);
@@ -57,17 +58,12 @@ export const Workspace: React.FC = () => {
       const data = await getSources();
       setSources(data);
       const stateSourceId = (location.state as { sourceId?: string } | null)?.sourceId;
-      const savedSourceId = localStorage.getItem('knowurdb_active_source_id');
-      const preferred = stateSourceId || savedSourceId;
-      if (preferred && data.some((s) => s.source_id === preferred)) {
-        setSelectedSourceId(preferred);
-        localStorage.setItem('knowurdb_active_source_id', preferred);
-        activateSource(preferred).catch(() => {});
-      } else if (data.length > 0 && (selectedSourceId === 'all' || !data.some((s) => s.source_id === selectedSourceId))) {
-        setSelectedSourceId(data[0].source_id);
-        localStorage.setItem('knowurdb_active_source_id', data[0].source_id);
-        activateSource(data[0].source_id).catch(() => {});
+      if (stateSourceId && data.some((s) => s.source_id === stateSourceId)) {
+        setSelectedSourceId(stateSourceId);
+        activateSource(stateSourceId).catch(() => {});
       }
+      // Critical Invariant (Bug #1 Fix): DEFAULT MUST ALWAYS BE ALL SOURCES.
+      // There must be NO automatically selected dataset or collection on initial page load.
     } catch (e) {
       console.error('Failed to fetch sources', e);
     } finally {
@@ -155,9 +151,9 @@ export const Workspace: React.FC = () => {
       conversationContext.pending_question || result?.question || question;
     if (sourceId && selectedSourceId === 'all') {
       setSelectedSourceId(sourceId);
-      localStorage.setItem('knowurdb_active_source_id', sourceId);
       activateSource(sourceId).catch(() => {});
     }
+    setActiveCollection(collectionName);
     const srcIds = sourceId
       ? [sourceId]
       : selectedSourceId === 'all'
@@ -167,13 +163,13 @@ export const Workspace: React.FC = () => {
   };
 
   const handleSourceSwitch = (newSourceId: string) => {
-    // Cancel any in-flight query and reset incompatible collection context (Section 65)
+    // Cancel any in-flight query and reset collection context (Section 40, 41)
     abortControllerRef.current?.abort();
     requestIdRef.current += 1;
     setLoading(false);
     setSelectedSourceId(newSourceId);
+    setActiveCollection(null); // Clear selected collection when switching datasets
     if (newSourceId !== 'all') {
-      localStorage.setItem('knowurdb_active_source_id', newSourceId);
       activateSource(newSourceId).catch(() => {});
     }
     setConversationContext({});
@@ -205,16 +201,33 @@ export const Workspace: React.FC = () => {
     setLoading(true);
     setMachineState('PROCESSING');
 
+    const effectiveCollection = overrideCollection !== undefined ? overrideCollection : activeCollection;
+    if (overrideCollection !== undefined) {
+      setActiveCollection(overrideCollection);
+    }
+
     const finalSourceIds =
       sourceIds || (selectedSourceId === 'all' ? undefined : [selectedSourceId]);
+
+    const targetSrcId = finalSourceIds?.[0] || (selectedSourceId === 'all' ? null : selectedSourceId);
+    const activeSrcMeta = targetSrcId ? sources.find((s) => s.source_id === targetSrcId) : null;
+
+    const scopeObj: QueryScopeModel = {
+      scope_type: !targetSrcId ? 'ALL_SOURCES' : (effectiveCollection ? 'COLLECTION' : 'DATASET'),
+      dataset_id: targetSrcId,
+      dataset_name: activeSrcMeta?.display_name || activeSrcMeta?.name || null,
+      collection_name: effectiveCollection,
+      database_name: activeSrcMeta?.database_name || null,
+    };
 
     try {
       const res = await queryDatabase(
         trimmed,
         finalSourceIds,
-        overrideCollection,
+        effectiveCollection || undefined,
         conversationContext,
-        controller.signal
+        controller.signal,
+        scopeObj
       );
 
       // Discard stale response if a newer query was launched
@@ -347,6 +360,8 @@ export const Workspace: React.FC = () => {
           selectedSourceId={selectedSourceId}
           onSourceChange={handleSourceSwitch}
           loadingSources={loadingSources}
+          activeCollection={activeCollection}
+          onClearCollection={() => setActiveCollection(null)}
         />
       </div>
 

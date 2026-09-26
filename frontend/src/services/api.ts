@@ -10,7 +10,8 @@ import type {
   TableInfo,
   DatabaseSchema,
   BasicResponse,
-  SourceMetadata
+  SourceMetadata,
+  QueryScopeModel
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
@@ -37,12 +38,14 @@ export const queryDatabase = async (
   sourceIds?: string[],
   activeCollection?: string,
   conversationContext?: Record<string, any>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  scope?: QueryScopeModel
 ): Promise<QueryResponse> => {
   const response = await apiClient.post<QueryResponse>(
     '/api/query',
     {
       question,
+      scope,
       source_ids: sourceIds,
       active_collection: activeCollection,
       conversation_context: conversationContext,

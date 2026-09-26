@@ -2,10 +2,15 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.models.scope import QueryScopeModel
+
 
 class NaturalLanguageQueryRequest(BaseModel):
     question: str = Field(
         ..., description="The natural language question to ask MongoDB."
+    )
+    scope: QueryScopeModel | None = Field(
+        None, description="Formal query scope (ALL_SOURCES, DATASET, COLLECTION, DATABASE)."
     )
     source_ids: list[str] | None = Field(
         None, description="Explicit source IDs to restrict the query to."
@@ -144,6 +149,9 @@ class NaturalLanguageQueryResponse(BaseModel):
     )
     candidates: list[ClarificationCandidate] = Field(
         default_factory=list, description="Candidates when clarification is required."
+    )
+    scope: QueryScopeModel | None = Field(
+        None, description="The validated scope under which this query was evaluated."
     )
     confidence: float | None = Field(
         None, description="Confidence score of the routing."

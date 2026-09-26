@@ -575,12 +575,6 @@ class MongoDBManager:
             if exists:
                 cls._active_source_id = saved
                 return saved
-        first_src = cls.get_db()[cls.SYS_SOURCES].find_one(
-            {"status": "ready", "detected_format": {"$nin": ["pdf", "txt", "markdown"]}},
-            sort=[("uploaded_at", pymongo.DESCENDING)],
-        )
-        if first_src:
-            return first_src["source_id"]
         return None
 
     @classmethod

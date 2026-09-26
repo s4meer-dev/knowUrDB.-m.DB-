@@ -116,6 +116,157 @@ class PresentationPlanner:
         }
 
     @staticmethod
+    def build_scope_dataset_explanation(source_meta: Any) -> dict[str, Any]:
+        name = getattr(source_meta, "display_name", None) or getattr(source_meta, "name", None) or "Selected Dataset"
+        cols = getattr(source_meta, "collections", []) or []
+        doc_count = getattr(source_meta, "record_count", 0) or 0
+        col_list_str = ", ".join(cols) if cols else "none"
+        summary = (
+            f"You currently have 1 dataset selected: '{name}'. "
+            f"Within this dataset, there are {len(cols)} collections ({col_list_str}) with {doc_count:,} total records. "
+            f"To view the total count of all registered datasets across KnowUrDB, switch your scope to 'All Sources'."
+        )
+        rows = [{"collection": c} for c in cols]
+        return {
+            "intent": "META_DATASET_SCOPE_CONTEXT",
+            "presentation": {
+                "type": "kpi",
+                "title": "DATASET SCOPED VIEW",
+                "subtitle": f"Active Dataset: {name}",
+                "summary": summary,
+                "primary_value": "1",
+                "primary_unit": "selected dataset",
+                "show_technical_by_default": False,
+            },
+            "answer": {
+                "headline": "DATASET SCOPE",
+                "value": "1",
+                "unit": f"selected dataset ({name})",
+                "summary": summary,
+            },
+            "columns": ["collection"],
+            "rows": rows,
+            "insights": [
+                f"Active Dataset: {name}",
+                f"Contains {len(cols)} collections: {col_list_str}",
+            ],
+            "follow_ups": [
+                f"How many collections in {name}?",
+                f"Show me {cols[0]}" if cols else "Show data",
+                "Show all datasets in KnowUrDB",
+            ],
+        }
+
+    @staticmethod
+    def build_scope_collection_explanation(collection_name: str) -> dict[str, Any]:
+        summary = (
+            f"You're currently viewing the '{collection_name}' collection. "
+            f"A dataset-level count isn't available within a single collection. "
+            f"If you want the total number of datasets across KnowUrDB, switch your scope to 'All Sources'."
+        )
+        return {
+            "intent": "META_COLLECTION_SCOPE_CONTEXT",
+            "presentation": {
+                "type": "kpi",
+                "title": "COLLECTION SCOPED VIEW",
+                "subtitle": f"Active Collection: {collection_name}",
+                "summary": summary,
+                "primary_value": collection_name,
+                "primary_unit": "active collection",
+                "show_technical_by_default": False,
+            },
+            "answer": {
+                "headline": "COLLECTION SCOPE",
+                "value": collection_name,
+                "unit": "active collection",
+                "summary": summary,
+            },
+            "columns": ["collection"],
+            "rows": [{"collection": collection_name}],
+            "insights": [
+                f"Current focus is scoped to collection '{collection_name}'.",
+                "Switch to 'All Sources' to query platform-wide dataset counts.",
+            ],
+            "follow_ups": [
+                f"How many records in {collection_name}?",
+                f"Show me {collection_name}",
+                "Show all datasets in KnowUrDB",
+            ],
+        }
+
+    @staticmethod
+    def build_metric_unavailable_presentation(
+        requested_metric: str,
+        collection_name: str,
+        explanation: str,
+    ) -> dict[str, Any]:
+        title = f"{requested_metric.upper()} NOT AVAILABLE"
+        return {
+            "intent": "METRIC_UNAVAILABLE",
+            "presentation": {
+                "type": "warning",
+                "title": title,
+                "subtitle": f"Collection: {collection_name}",
+                "summary": explanation,
+                "primary_value": "N/A",
+                "primary_unit": f"not in {collection_name}",
+                "show_technical_by_default": False,
+            },
+            "answer": {
+                "headline": title,
+                "value": "N/A",
+                "unit": f"not in {collection_name}",
+                "summary": explanation,
+            },
+            "columns": [],
+            "rows": [],
+            "insights": [explanation],
+            "follow_ups": [
+                f"Show fields in {collection_name}",
+                f"Show me {collection_name}",
+            ],
+        }
+
+    @staticmethod
+    def build_metric_alternative_presentation(
+        requested_metric: str,
+        collection_name: str,
+        explanation: str,
+        alternatives: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        candidates = [
+            {
+                "name": alt.get("name"),
+                "label": alt.get("label") or alt.get("name"),
+                "description": alt.get("description") or f"Calculate {alt.get('name')}",
+                "clarification_type": "field",
+            }
+            for alt in alternatives
+        ]
+        return {
+            "intent": "METRIC_ALTERNATIVE",
+            "presentation": {
+                "type": "clarification",
+                "clarification_type": "field",
+                "title": "METRIC CLARIFICATION",
+                "subtitle": f"Collection: {collection_name}",
+                "summary": explanation,
+                "candidate_collections": candidates,
+            },
+            "answer": {
+                "headline": "METRIC CLARIFICATION",
+                "value": "Clarification needed",
+                "unit": "",
+                "summary": explanation,
+            },
+            "columns": [],
+            "rows": [],
+            "candidates": candidates,
+            "insights": [explanation],
+            "follow_ups": [alt.get("label") for alt in alternatives if alt.get("label")],
+        }
+
+    @staticmethod
     def build_dataset_list(datasets: list[dict[str, Any]]) -> dict[str, Any]:
         count = len(datasets)
         summary = f"Found {count} registered datasets in KnowUrDB."
@@ -651,8 +802,15 @@ class PresentationPlanner:
                 else str(raw_v)
             )
             op_word = "Average" if plan.intent == "AVERAGE" else "Total"
-            title = f"{op_word} {singular_col.title()} {metric.replace('_', ' ').title()}"
-            summary = f"The {op_word.lower()} {metric.replace('_', ' ')} across {doc_cnt} {col_display} is {val_fmt}."
+            if getattr(plan, "requested_concept", None) == "REVENUE" or "revenue" in plan.original_question.lower():
+                title = f"{op_word} Revenue"
+                summary = f"{op_word} revenue is {val_fmt}, calculated from {plan.collection}.{metric} across {doc_cnt:,} records."
+            elif getattr(plan, "requested_concept", None) == "SPENDING" or "spend" in plan.original_question.lower():
+                title = f"{op_word} Spending"
+                summary = f"{op_word} spending is {val_fmt}, calculated from {plan.collection}.{metric} across {doc_cnt:,} records."
+            else:
+                title = f"{op_word} {singular_col.title()} {metric.replace('_', ' ').title()}"
+                summary = f"The {op_word.lower()} {metric.replace('_', ' ')} across {doc_cnt:,} {col_display} is {val_fmt}."
             return {
                 "presentation": {
                     "type": "kpi",

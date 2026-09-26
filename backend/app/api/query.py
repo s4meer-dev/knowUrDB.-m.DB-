@@ -23,6 +23,7 @@ from app.services.history_service import HistoryService
 from app.services.meta_query_router import MetaQueryRouter
 from app.services.mongo_validator import MongoQuerySafetyError, MongoQueryValidator
 from app.services.presentation_planner import PresentationPlanner
+from app.services.result_validator import ResultValidator
 from app.services.query_executor import MongoQueryExecutor, QueryExecutionError
 from app.services.query_intelligence_service import QueryIntelligenceService
 from app.services.query_router import QueryRouter
@@ -128,7 +129,56 @@ async def query_database(request: NaturalLanguageQueryRequest):
         )
 
     # 1. Intelligent Multi-Source & Scope Routing
-    routing_decision = query_router.route_query(request.question, request.source_ids)
+    routing_decision = query_router.route_query(
+        request.question,
+        request.source_ids,
+        active_collection=request.active_collection,
+        scope=request.scope,
+    )
+
+    # 1A-1. COLLECTION SCOPE CONTEXT (Bug #2: Asking dataset count when collection is selected)
+    if routing_decision["decision"] == "COLLECTION_SCOPE_CONTEXT":
+        act_col = routing_decision.get("active_collection") or request.active_collection or "collection"
+        payload = PresentationPlanner.build_scope_collection_explanation(act_col)
+        return NaturalLanguageQueryResponse(
+            question=request.question,
+            intent="META_COLLECTION_SCOPE_CONTEXT",
+            presentation=payload["presentation"],
+            generated_mongo_query="// Active Collection Scope Context",
+            generated_sql="// Active Collection Scope Context",
+            columns=payload["columns"],
+            rows=payload["rows"],
+            row_count=len(payload["rows"]),
+            status="success",
+            answer=AnswerModel(**payload["answer"]),
+            insights=payload.get("insights", []),
+            follow_up_suggestions=payload.get("follow_ups", []),
+            query_source="meta",
+            scope=request.scope,
+            confidence=routing_decision.get("confidence", 0.98),
+        )
+
+    # 1A-2. DATASET SCOPE CONTEXT (Bug #2: Asking dataset count when 1 dataset is selected without global phrasing)
+    if routing_decision["decision"] == "DATASET_SCOPE_CONTEXT":
+        chosen_src = routing_decision.get("selected_source")
+        payload = PresentationPlanner.build_scope_dataset_explanation(chosen_src)
+        return NaturalLanguageQueryResponse(
+            question=request.question,
+            intent="META_DATASET_SCOPE_CONTEXT",
+            presentation=payload["presentation"],
+            generated_mongo_query="// Scoped Dataset Context View",
+            generated_sql="// Scoped Dataset Context View",
+            columns=payload["columns"],
+            rows=payload["rows"],
+            row_count=len(payload["rows"]),
+            status="success",
+            answer=AnswerModel(**payload["answer"]),
+            insights=payload.get("insights", []),
+            follow_up_suggestions=payload.get("follow_ups", []),
+            query_source="meta",
+            scope=request.scope,
+            confidence=routing_decision.get("confidence", 0.98),
+        )
 
     # 1A. PLATFORM SCOPE: Querying platform-level metadata (Datasets, catalogs, databases)
     if routing_decision["decision"] == "PLATFORM":
@@ -726,6 +776,63 @@ async def query_database(request: NaturalLanguageQueryRequest):
             confidence=plan.confidence,
         )
 
+    # 5D-1. METRIC_UNAVAILABLE (e.g. asking revenue on students collection)
+    if plan.intent == "METRIC_UNAVAILABLE":
+        payload = PresentationPlanner.build_metric_unavailable_presentation(
+            requested_metric=plan.requested_concept or "Requested Metric",
+            collection_name=plan.collection or "active collection",
+            explanation=plan.explanation or plan.clarification_message or f"Metric is not available in {plan.collection}.",
+        )
+        return NaturalLanguageQueryResponse(
+            question=request.question,
+            intent="METRIC_UNAVAILABLE",
+            collection=plan.collection,
+            query_plan=asdict(plan),
+            presentation=payload["presentation"],
+            status="error",
+            error=payload["answer"]["summary"],
+            error_code="METRIC_UNAVAILABLE",
+            answer=AnswerModel(**payload["answer"]),
+            insights=payload.get("insights", []),
+            follow_up_suggestions=payload.get("follow_ups", []),
+            query_source="intent_filter",
+            scope=request.scope,
+            confidence=plan.confidence,
+        )
+
+    # 5D-2. METRIC_ALTERNATIVE (e.g. asking revenue on customers collection where total_spent exists)
+    if plan.intent == "METRIC_ALTERNATIVE":
+        payload = PresentationPlanner.build_metric_alternative_presentation(
+            requested_metric=plan.requested_concept or "Requested Metric",
+            collection_name=plan.collection or "active collection",
+            explanation=plan.explanation or plan.clarification_message or f"Did you mean one of the alternative metrics in {plan.collection}?",
+            alternatives=plan.clarification_options or [],
+        )
+        return NaturalLanguageQueryResponse(
+            question=request.question,
+            intent="METRIC_ALTERNATIVE",
+            collection=plan.collection,
+            query_plan=asdict(plan),
+            presentation=payload["presentation"],
+            status="clarification_required",
+            error=payload["answer"]["summary"],
+            candidates=[
+                ClarificationCandidate(
+                    source_id=source_metadata.source_id,
+                    name=c.get("name", ""),
+                    collection=plan.collection,
+                    description=c.get("description"),
+                )
+                for c in payload.get("candidates", [])
+            ],
+            answer=AnswerModel(**payload["answer"]),
+            insights=payload.get("insights", []),
+            follow_up_suggestions=payload.get("follow_ups", []),
+            query_source="intent_filter",
+            scope=request.scope,
+            confidence=plan.confidence,
+        )
+
     # 5E. UNRELATED
     if plan.intent == "UNRELATED":
         error_msg = "I couldn't find data related to that concept in the active MongoDB collections."
@@ -833,6 +940,39 @@ Return ONLY raw JSON (no markdown backticks). Never use $out, $merge, or $where.
         columns, rows, exec_time = query_executor.execute(structured_query)
         planned_ui = PresentationPlanner.plan_presentation(plan, rows, columns, collections)
 
+        # 7A. Result Validation Layer - Validate integrity of metric before returning
+        val_outcome = ResultValidator.validate_result(
+            question=request.question,
+            requested_concept=getattr(plan, "requested_concept", None),
+            target_collection=structured_query.get("collection"),
+            target_field=plan.metric_field,
+            query_result=rows,
+            generated_answer_headline=planned_ui.get("answer", {}).get("headline"),
+            generated_answer_value=planned_ui.get("answer", {}).get("value"),
+        )
+        if not val_outcome.is_valid:
+            unavail_payload = PresentationPlanner.build_metric_unavailable_presentation(
+                requested_metric=plan.requested_concept or "Requested Metric",
+                collection_name=structured_query.get("collection") or "collection",
+                explanation=val_outcome.user_explanation,
+            )
+            return NaturalLanguageQueryResponse(
+                question=request.question,
+                intent="METRIC_UNAVAILABLE",
+                collection=structured_query.get("collection"),
+                query_plan=asdict(plan),
+                presentation=unavail_payload["presentation"],
+                status="error",
+                error=val_outcome.user_explanation,
+                error_code=val_outcome.rejection_code or "METRIC_SEMANTIC_MISMATCH",
+                answer=AnswerModel(**unavail_payload["answer"]),
+                insights=unavail_payload.get("insights", []),
+                follow_up_suggestions=unavail_payload.get("follow_ups", []),
+                query_source="result_validator",
+                scope=request.scope,
+                confidence=0.99,
+            )
+
         final_cols = planned_ui.get("columns", columns)
         final_rows = planned_ui.get("rows", rows)
         row_count = len(final_rows)
@@ -877,6 +1017,7 @@ Return ONLY raw JSON (no markdown backticks). Never use $out, $merge, or $where.
             insights=planned_ui.get("insights", []),
             follow_up_suggestions=planned_ui.get("follow_ups", []),
             sources=citations,
+            scope=request.scope,
             confidence=plan.confidence,
             error=(
                 planned_ui["answer"]["summary"]

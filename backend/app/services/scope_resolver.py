@@ -58,6 +58,12 @@ class ScopeResolver:
         r"\btell\s+(?:me\s+)?(?:the\s+)?number of\s+(?:datasets?|databases?)\b",
     )
 
+    GLOBAL_OVERRIDE_PATTERNS = (
+        r"\b(?:in total|across all(?: sources)?|across the entire platform|all datasets|overall|globally|in knowurdb|in the system|available in total)\b",
+        r"\b(?:how many\s+)?total\s+(?:number of\s+)?datasets?\b",
+        r"\btotal (?:number of )?datasets (?:available|registered|in knowurdb|exist)\b",
+    )
+
     PLATFORM_LIST_PATTERNS = (
         r"\b(?:show|list|display|view)\s+(?:all\s+)?(?:datasets?|databases?|sources?|dbs?)\b",
         r"\bwhat\s+(?:datasets?|databases?|sources?)\s+(?:are\s+)?(?:available|connected|present|registered)\b",
@@ -111,6 +117,7 @@ class ScopeResolver:
         question: str,
         active_source_id: str | None = None,
         is_all_sources: bool = True,
+        active_collection: str | None = None,
     ) -> ScopeResolutionResult:
         normalized = QuestionNormalizer.normalize(question)
         q_lower = normalized.lower().strip()
@@ -136,15 +143,32 @@ class ScopeResolver:
                     reason="Question asks about generated dataset history.",
                 )
 
-        # Crucial: Asking for dataset count or listing datasets is PLATFORM scope
-        # even if a specific dataset is selected (Section 101, 102).
+        # Bug #2 Guardrail (Scope Overrides Generic Intent):
+        # If user explicitly selected a dataset or collection and asks "how many datasets are there?",
+        # do NOT automatically return global count of 4 unless explicit global language is used.
+        is_explicit_global = any(re.search(pat, q_lower) for pat in cls.GLOBAL_OVERRIDE_PATTERNS)
+
         for pat in cls.PLATFORM_COUNT_PATTERNS:
             if re.search(pat, q_lower):
+                if active_collection and not is_explicit_global:
+                    return ScopeResolutionResult(
+                        scope=QueryScope.COLLECTION,
+                        intent="META_COLLECTION_SCOPE_CONTEXT",
+                        confidence=0.97,
+                        reason=f"User is scoped to collection '{active_collection}'. Explaining collection scope mismatch.",
+                    )
+                if not is_all_sources and active_source_id and not is_explicit_global:
+                    return ScopeResolutionResult(
+                        scope=QueryScope.DATASET,
+                        intent="META_DATASET_SCOPE_CONTEXT",
+                        confidence=0.97,
+                        reason=f"User is scoped to single dataset '{active_source_id}'. Explaining dataset scoped context.",
+                    )
                 return ScopeResolutionResult(
                     scope=QueryScope.PLATFORM,
                     intent="META_COUNT_DATASETS",
                     confidence=0.99,
-                    reason="Question asks for the total count of registered KnowUrDB datasets.",
+                    reason="Question asks for the total count of registered KnowUrDB datasets across all sources.",
                 )
 
         for pat in cls.PLATFORM_LIST_PATTERNS:

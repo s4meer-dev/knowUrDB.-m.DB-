@@ -33,7 +33,11 @@ class QueryRouter:
         self.registry_service = RegistryService()
 
     def route_query(
-        self, question: str, explicit_source_ids: list[str] | None = None
+        self,
+        question: str,
+        explicit_source_ids: list[str] | None = None,
+        active_collection: str | None = None,
+        scope: Any = None,
     ) -> dict[str, Any]:
         # Validate safety first so malicious injections are caught immediately
         MongoQueryValidator.validate_question_safety(question)
@@ -44,6 +48,30 @@ class QueryRouter:
 
         all_sources = self.source_manager.list_sources()
         sources = all_sources
+
+        # Respect formal scope if provided from client
+        if scope:
+            if hasattr(scope, "is_all_sources") and scope.is_all_sources():
+                is_all_sources = True
+                explicit_source_ids = None
+                active_collection = None
+            elif hasattr(scope, "scope_type") and str(scope.scope_type) == "ALL_SOURCES":
+                is_all_sources = True
+                explicit_source_ids = None
+                active_collection = None
+            else:
+                is_all_sources = False
+                if getattr(scope, "dataset_id", None):
+                    explicit_source_ids = [scope.dataset_id]
+                if getattr(scope, "collection_name", None):
+                    active_collection = scope.collection_name
+        else:
+            is_all_sources = (
+                explicit_source_ids is None
+                or len(explicit_source_ids) > 1
+                or (len(explicit_source_ids) == 1 and explicit_source_ids[0] in ("all", "all_sources"))
+            )
+
         if explicit_source_ids:
             sources = [
                 s
@@ -53,16 +81,14 @@ class QueryRouter:
                 or s.database_name in explicit_source_ids
             ]
 
-        is_all_sources = (
-            explicit_source_ids is None
-            or len(explicit_source_ids) > 1
-            or (len(explicit_source_ids) == 1 and explicit_source_ids[0] in ("all", "all_sources"))
-        )
-        active_sid = MongoDBManager.get_active_source_id()
+        active_sid = explicit_source_ids[0] if (explicit_source_ids and len(explicit_source_ids) == 1) else MongoDBManager.get_active_source_id()
 
         # 1. SCOPE RESOLVER (Strict first-stage classification)
         scope_res = ScopeResolver.resolve_scope(
-            q, active_source_id=active_sid, is_all_sources=is_all_sources
+            q,
+            active_source_id=active_sid,
+            is_all_sources=is_all_sources,
+            active_collection=active_collection,
         )
 
         # 1A. PLATFORM SCOPE: Always PLATFORM, regardless of active source dropdown
@@ -71,6 +97,31 @@ class QueryRouter:
                 "decision": "PLATFORM",
                 "intent": scope_res.intent,
                 "sources": [],
+                "candidates": [],
+                "confidence": scope_res.confidence,
+                "reasoning": scope_res.reason,
+            }
+
+        # 1B. Bug #2 Handlers: Dataset / Collection Scope Context Responses
+        if scope_res.intent == "META_COLLECTION_SCOPE_CONTEXT":
+            return {
+                "decision": "COLLECTION_SCOPE_CONTEXT",
+                "intent": "META_COLLECTION_SCOPE_CONTEXT",
+                "active_collection": active_collection or "active collection",
+                "sources": [],
+                "candidates": [],
+                "confidence": scope_res.confidence,
+                "reasoning": scope_res.reason,
+            }
+
+        if scope_res.intent == "META_DATASET_SCOPE_CONTEXT":
+            tabular_sources = [s for s in sources if s.detected_format not in ("pdf", "txt", "markdown")]
+            chosen = tabular_sources[0] if tabular_sources else (sources[0] if sources else None)
+            return {
+                "decision": "DATASET_SCOPE_CONTEXT",
+                "intent": "META_DATASET_SCOPE_CONTEXT",
+                "selected_source": chosen,
+                "sources": [{"source_id": chosen.source_id, "name": chosen.name}] if chosen else [],
                 "candidates": [],
                 "confidence": scope_res.confidence,
                 "reasoning": scope_res.reason,

@@ -91,8 +91,17 @@ export interface PresentationContract {
   show_technical_by_default?: boolean;
 }
 
+export interface QueryScopeModel {
+  scope_type: 'ALL_SOURCES' | 'DATASET' | 'COLLECTION' | 'DATABASE';
+  dataset_id?: string | null;
+  dataset_name?: string | null;
+  collection_name?: string | null;
+  database_name?: string | null;
+}
+
 export interface QueryRequest {
   question: string;
+  scope?: QueryScopeModel;
   source_ids?: string[];
   active_collection?: string;
   conversation_context?: Record<string, any>;
@@ -102,6 +111,7 @@ export interface QueryResponse {
   question: string;
   intent?: string;
   collection?: string;
+  scope?: QueryScopeModel;
   query_plan?: Record<string, any>;
   presentation?: PresentationContract;
   generated_mongo_query?: string;

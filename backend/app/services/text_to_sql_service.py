@@ -46,7 +46,16 @@ class MongoQueryService:
             active_collection=active_collection,
             conversation_context=conversation_context,
         )
-        if plan.intent in ("UNRELATED", "CLARIFICATION", "DATASET_OVERVIEW", "COLLECTION_OVERVIEW", "SCHEMA_QUERY"):
+        if plan.intent in (
+            "UNRELATED",
+            "CLARIFICATION",
+            "DATASET_OVERVIEW",
+            "COLLECTION_OVERVIEW",
+            "SCHEMA_QUERY",
+            "METRIC_UNAVAILABLE",
+            "METRIC_ALTERNATIVE",
+            "SCOPE_CONTEXT",
+        ):
             raise ValueError(f"Non-collection query intent: {plan.intent}")
         return self.planner.compile_to_mongo_query(plan)
 
