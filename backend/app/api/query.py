@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 import uuid
 from dataclasses import asdict
@@ -25,6 +26,7 @@ from app.services.presentation_planner import PresentationPlanner
 from app.services.query_executor import MongoQueryExecutor, QueryExecutionError
 from app.services.query_intelligence_service import QueryIntelligenceService
 from app.services.query_router import QueryRouter
+from app.services.registry_service import RegistryService
 from app.services.schema_service import MongoSchemaService
 from app.services.source_manager import SourceManager
 from app.services.text_to_sql_service import MongoQueryService
@@ -42,6 +44,7 @@ history_service = HistoryService()
 query_intelligence_service = QueryIntelligenceService(ai_service, schema_service)
 meta_router = MetaQueryRouter(schema_service, query_executor, ai_provider)
 source_manager = SourceManager()
+registry_service = RegistryService()
 query_router = QueryRouter(ai_provider, source_manager)
 document_processor = DocumentProcessor(ai_provider)
 
@@ -124,8 +127,122 @@ async def query_database(request: NaturalLanguageQueryRequest):
             query_source="security_guard",
         )
 
-    # 1. Intelligent Multi-Source Routing
+    # 1. Intelligent Multi-Source & Scope Routing
     routing_decision = query_router.route_query(request.question, request.source_ids)
+
+    # 1A. PLATFORM SCOPE: Querying platform-level metadata (Datasets, catalogs, databases)
+    if routing_decision["decision"] == "PLATFORM":
+        intent = routing_decision.get("intent", "META_COUNT_DATASETS")
+
+        if intent == "META_COUNT_DATASETS":
+            datasets = registry_service.list_datasets()
+            count = registry_service.count_datasets()
+            payload = PresentationPlanner.build_platform_dataset_count(count, datasets)
+            mongo_query = 'db._sys_datasets.countDocuments({ "status": { "$ne": "deleted" } })'
+            history_service.log_query(
+                question=request.question,
+                query_source="registry",
+                status="success",
+                generated_mongo_query=mongo_query,
+                row_count=len(payload["rows"]),
+            )
+            return NaturalLanguageQueryResponse(
+                question=request.question,
+                intent="META_COUNT_DATASETS",
+                presentation=payload["presentation"],
+                generated_mongo_query=mongo_query,
+                generated_sql=mongo_query,
+                columns=payload["columns"],
+                rows=payload["rows"],
+                row_count=len(payload["rows"]),
+                status="success",
+                answer=AnswerModel(**payload["answer"]),
+                insights=payload.get("insights", []),
+                follow_up_suggestions=payload.get("follow_ups", []),
+                query_source="registry",
+                confidence=routing_decision.get("confidence", 0.99),
+            )
+
+        if intent in ("META_LIST_DATASETS", "META_DATASET_OVERVIEW_ALL"):
+            datasets = registry_service.list_datasets()
+            payload = PresentationPlanner.build_dataset_list(datasets)
+            mongo_query = 'db._sys_datasets.find({ "status": { "$ne": "deleted" } })'
+            history_service.log_query(
+                question=request.question,
+                query_source="registry",
+                status="success",
+                generated_mongo_query=mongo_query,
+                row_count=len(payload["rows"]),
+            )
+            return NaturalLanguageQueryResponse(
+                question=request.question,
+                intent="META_LIST_DATASETS",
+                presentation=payload["presentation"],
+                generated_mongo_query=mongo_query,
+                generated_sql=mongo_query,
+                columns=payload["columns"],
+                rows=payload["rows"],
+                row_count=len(payload["rows"]),
+                status="success",
+                answer=AnswerModel(**payload["answer"]),
+                insights=payload.get("insights", []),
+                follow_up_suggestions=payload.get("follow_ups", []),
+                query_source="registry",
+                confidence=routing_decision.get("confidence", 0.98),
+            )
+
+        if intent == "META_ACTIVE_DATASET":
+            active_ds = registry_service.get_active_dataset()
+            payload = PresentationPlanner.build_active_dataset_presentation(active_ds)
+            mongo_query = 'db._sys_sources.findOne({ "status": "active" })'
+            return NaturalLanguageQueryResponse(
+                question=request.question,
+                intent="META_ACTIVE_DATASET",
+                presentation=payload["presentation"],
+                generated_mongo_query=mongo_query,
+                generated_sql=mongo_query,
+                columns=payload["columns"],
+                rows=payload["rows"],
+                row_count=len(payload["rows"]),
+                status="success",
+                answer=AnswerModel(**payload["answer"]),
+                insights=payload.get("insights", []),
+                follow_up_suggestions=payload.get("follow_ups", []),
+                query_source="registry",
+                confidence=routing_decision.get("confidence", 0.95),
+            )
+
+        if intent == "META_GENERATIONS":
+            gen_count = registry_service.count_generations()
+            summary_text = f"You have performed {gen_count} dataset generations in KnowUrDB."
+            mongo_query = "db._sys_generations.countDocuments({})"
+            return NaturalLanguageQueryResponse(
+                question=request.question,
+                intent="META_GENERATIONS",
+                presentation={
+                    "type": "kpi",
+                    "title": "GENERATION HISTORY",
+                    "subtitle": "KnowUrDB Platform Registry",
+                    "summary": summary_text,
+                    "primary_value": str(gen_count),
+                    "primary_unit": "generations",
+                    "show_technical_by_default": False,
+                },
+                generated_mongo_query=mongo_query,
+                generated_sql=mongo_query,
+                columns=["generation_count"],
+                rows=[{"generation_count": gen_count}],
+                row_count=1,
+                status="success",
+                answer=AnswerModel(
+                    headline="GENERATION HISTORY",
+                    value=str(gen_count),
+                    unit="generations",
+                    summary=summary_text,
+                ),
+                query_source="registry",
+                confidence=routing_decision.get("confidence", 0.95),
+            )
 
     if routing_decision["decision"] == "UNRELATED":
         error_msg = (
@@ -184,18 +301,38 @@ async def query_database(request: NaturalLanguageQueryRequest):
         )
 
     if routing_decision["decision"] == "CLARIFICATION":
+        clar_type = routing_decision.get("clarification_type", "dataset")
+        cand_list = [
+            ClarificationCandidate(
+                source_id=opt.get("source_id") or "",
+                name=opt.get("name") or opt.get("collection", ""),
+                collection=opt.get("collection"),
+                document_count=opt.get("document_count"),
+                field_count=opt.get("field_count"),
+                fields_preview=opt.get("fields_preview", []),
+                description=opt.get("description"),
+            )
+            for opt in routing_decision.get("candidates", [])
+        ]
+        summary_msg = routing_decision.get("reasoning") or (
+            "Multiple datasets contain matching entities. Which dataset would you like to query?"
+            if clar_type == "dataset"
+            else "I found matching collections in multiple sources. Which source should I query?"
+        )
         return NaturalLanguageQueryResponse(
             question=request.question,
             intent="CLARIFICATION",
             presentation={
                 "type": "clarification",
-                "title": "Select Data Source",
-                "summary": "I found matching collections in multiple sources. Which source should I use?",
+                "clarification_type": clar_type,
+                "title": "NEED A LITTLE MORE CONTEXT",
+                "summary": summary_msg,
+                "candidate_collections": routing_decision.get("candidates", []),
             },
             status="clarification_required",
-            error="I found matching collections in multiple sources. Which source should I query?",
-            candidates=routing_decision["candidates"],
-            confidence=routing_decision["confidence"],
+            error=summary_msg,
+            candidates=cand_list,
+            confidence=routing_decision.get("confidence", 0.9),
         )
 
     # 2. MULTI_SOURCE Execution across collections
@@ -405,6 +542,79 @@ async def query_database(request: NaturalLanguageQueryRequest):
         conversation_context=request.conversation_context,
     )
 
+    # 5A-1. META_COUNT_COLLECTIONS ("how many collections in this dataset?", "count collections")
+    is_counting_cols = bool(
+        plan.intent == "META_COUNT_COLLECTIONS"
+        or (not plan.collection and re.search(r"\b(how many|count|number of)\s+collections?\b", request.question.lower()))
+    )
+    if is_counting_cols:
+        start_ms = time.perf_counter()
+        col_names = [c["name"] for c in collections]
+        col_count = len(collections)
+        total_docs = sum(c.get("document_count", 0) for c in collections)
+        summary_text = (
+            f"The dataset '{source_metadata.name}' contains {col_count} collections: "
+            f"{', '.join(col_names)} ({total_docs:,} total documents)."
+        )
+        elapsed_ms = round((time.perf_counter() - start_ms) * 1000.0, 2)
+        pipeline_str = "db.getCollectionInfos() // Collection Count"
+        col_rows = [
+            {
+                "collection": c["name"],
+                "documents": c.get("document_count", 0),
+                "fields": len(c.get("columns", [])),
+            }
+            for c in collections
+        ]
+        history_service.log_query(
+            question=request.question,
+            query_source="meta",
+            source_id=source_metadata.source_id,
+            status="success",
+            generated_mongo_query=pipeline_str,
+            row_count=col_count,
+            execution_time_ms=elapsed_ms,
+        )
+        return NaturalLanguageQueryResponse(
+            question=request.question,
+            intent="META_COUNT_COLLECTIONS",
+            presentation={
+                "type": "kpi",
+                "title": "TOTAL COLLECTIONS",
+                "subtitle": source_metadata.name,
+                "summary": summary_text,
+                "primary_value": str(col_count),
+                "primary_unit": "collections",
+                "collections_summary": col_rows,
+                "show_technical_by_default": False,
+            },
+            generated_mongo_query=pipeline_str,
+            generated_sql=pipeline_str,
+            columns=["collection", "documents", "fields"],
+            rows=col_rows,
+            row_count=col_count,
+            execution_time_ms=elapsed_ms,
+            status="success",
+            query_source="meta",
+            answer=AnswerModel(
+                headline="TOTAL COLLECTIONS",
+                value=str(col_count),
+                unit=f"collections in {source_metadata.name}",
+                summary=summary_text,
+            ),
+            insights=[
+                f"{c['collection']}: {c['documents']:,} documents, {c['fields']} fields"
+                for c in col_rows
+            ],
+            follow_up_suggestions=[
+                f"Show me {col_names[0]}" if col_names else "Show collections",
+                f"How many {col_names[0]} are there?" if col_names else "Count records",
+                "Tell me about this dataset",
+            ],
+            sources=citations,
+            confidence=0.98,
+        )
+
     # 5A. DATASET_OVERVIEW or COLLECTION_OVERVIEW (All Collections)
     if plan.intent in ("DATASET_OVERVIEW", "COLLECTION_OVERVIEW") and not plan.collection:
         start_ms = time.perf_counter()
@@ -483,14 +693,18 @@ async def query_database(request: NaturalLanguageQueryRequest):
             if "." not in c["name"] and "[]" not in c["name"] and c["name"] != "_id"
         ][:8]
 
-    # 5D. CLARIFICATION (Ambiguous collection or non-existent collection)
+    # 5D. CLARIFICATION (Ambiguous collection, field, or non-existent collection)
     if plan.intent == "CLARIFICATION":
+        c_status = getattr(plan, "collection_status", "ambiguous")
+        clar_type = "field" if c_status == "ambiguous_field" else "collection"
+
         return NaturalLanguageQueryResponse(
             question=request.question,
             intent="CLARIFICATION",
             query_plan=asdict(plan),
             presentation={
                 "type": "clarification",
+                "clarification_type": clar_type,
                 "title": "NEED A LITTLE MORE CONTEXT",
                 "summary": plan.clarification_message,
                 "candidate_collections": plan.clarification_options,

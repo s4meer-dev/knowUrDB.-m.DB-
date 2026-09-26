@@ -1,0 +1,335 @@
+{
+  "database": "demo_banking_0cc3",
+  "domain": "banking",
+  "schema_version": "1.0",
+  "inspected_at": "2026-09-26T06:07:22.530045+00:00",
+  "collection_count": 5,
+  "total_documents": 546,
+  "collections": {
+    "clients": {
+      "document_count": 106,
+      "field_count": 11,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab7611adfb51f695483ed1f"
+        },
+        "client_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "CLI-0001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Ananya Patel"
+        },
+        "tier": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Enterprise"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Kolkata"
+        },
+        "state": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "West Bengal"
+        },
+        "loan_account_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "LOA-044"
+        },
+        "total_value": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 102179.75
+        },
+        "contact": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "email": "ananya.patel1@bankingdemo.io"
+          },
+          "nested_fields": {
+            "email": "string"
+          }
+        },
+        "address": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "city": "Kolkata",
+            "state": "West Bengal",
+            "country": "India"
+          },
+          "nested_fields": {
+            "city": "string",
+            "state": "string",
+            "country": "string"
+          }
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2025-12-28T16:17:22.534000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "client_id_1",
+        "city_1",
+        "tier_1"
+      ]
+    },
+    "loan_accounts": {
+      "document_count": 65,
+      "field_count": 10,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab7611adfb51f695483ecde"
+        },
+        "loan_account_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "LOA-001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Banking Loan Account #1"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Express"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Kolkata"
+        },
+        "state": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "West Bengal"
+        },
+        "price": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 60856.06
+        },
+        "rating": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 4.85
+        },
+        "active": {
+          "bson_type": "bool",
+          "nullable": false,
+          "sample_value": true
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2025-05-13T00:33:22.534000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "loan_account_id_1",
+        "category_1",
+        "city_1"
+      ]
+    },
+    "credit_cards": {
+      "document_count": 193,
+      "field_count": 12,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab7611adfb51f695483ed89"
+        },
+        "credit_card_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "CRE-00001"
+        },
+        "client_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "CLI-0036"
+        },
+        "entity_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Pooja Verma"
+        },
+        "loan_account_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "LOA-061"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Ultra"
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "verified"
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 82131.04
+        },
+        "total": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 82131.04
+        },
+        "quantity": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 7
+        },
+        "month": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "February"
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-09-03T07:38:22.534000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "credit_card_id_1",
+        "client_id_1",
+        "loan_account_id_1",
+        "status_1"
+      ]
+    },
+    "wire_transfers": {
+      "document_count": 99,
+      "field_count": 9,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab7611adfb51f695483ee4a"
+        },
+        "wire_transfer_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "WIR-0001"
+        },
+        "client_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "CLI-0069"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Wire Transfer Record #1"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Ultra"
+        },
+        "score": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 99.37
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 42746.72
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "pending"
+        },
+        "updated_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-04-11T04:44:22.534000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "wire_transfer_id_1",
+        "client_id_1",
+        "status_1"
+      ]
+    },
+    "risk_assessments": {
+      "document_count": 83,
+      "field_count": 8,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab7611adfb51f695483eead"
+        },
+        "risk_assessment_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "RIS-0001"
+        },
+        "loan_account_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "LOA-056"
+        },
+        "title": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Risk Assessment #1"
+        },
+        "rating": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 4.62
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 18319.24
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "processing"
+        },
+        "recorded_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-07-09T11:41:22.534000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "risk_assessment_id_1",
+        "loan_account_id_1",
+        "status_1"
+      ]
+    }
+  }
+}

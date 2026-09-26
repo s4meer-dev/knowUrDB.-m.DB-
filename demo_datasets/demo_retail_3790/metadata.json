@@ -1,0 +1,26 @@
+{
+  "dataset_name": "Omnichannel Retail Operations",
+  "database_name": "demo_retail_3790",
+  "domain": "retail",
+  "description": "Synthetic retail store dataset containing stores, skus, pos_transactions, suppliers, and loyalty_members.",
+  "synthetic": true,
+  "source_type": "MongoDB",
+  "filesystem_path": "demo_datasets/demo_retail_3790",
+  "collections": [
+    "stores",
+    "skus",
+    "pos_transactions",
+    "suppliers",
+    "loyalty_members"
+  ],
+  "document_counts": {
+    "stores": 74,
+    "skus": 54,
+    "pos_transactions": 193,
+    "suppliers": 132,
+    "loyalty_members": 118
+  },
+  "total_documents": 571,
+  "generated_at": "2026-09-26T06:03:57.299623+00:00",
+  "generator_version": "2.0.0"
+}

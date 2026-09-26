@@ -1,0 +1,335 @@
+{
+  "database": "demo_hospitality_be5f",
+  "domain": "hospitality",
+  "schema_version": "1.0",
+  "inspected_at": "2026-09-26T06:07:18.410936+00:00",
+  "collection_count": 5,
+  "total_documents": 535,
+  "collections": {
+    "guests": {
+      "document_count": 84,
+      "field_count": 11,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab76116dfb51f695483eb09"
+        },
+        "guest_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "GUE-0001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Priya Bhatia"
+        },
+        "tier": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Gold"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Kolkata"
+        },
+        "state": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "West Bengal"
+        },
+        "hotel_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "HOT-043"
+        },
+        "total_value": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 202537.62
+        },
+        "contact": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "email": "priya.bhatia1@hospitalitydemo.io"
+          },
+          "nested_fields": {
+            "email": "string"
+          }
+        },
+        "address": {
+          "bson_type": "object",
+          "nullable": false,
+          "sample_value": {
+            "city": "Kolkata",
+            "state": "West Bengal",
+            "country": "India"
+          },
+          "nested_fields": {
+            "city": "string",
+            "state": "string",
+            "country": "string"
+          }
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-01-05T12:11:18.415000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "guest_id_1",
+        "city_1",
+        "tier_1"
+      ]
+    },
+    "hotels": {
+      "document_count": 67,
+      "field_count": 10,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab76116dfb51f695483eac6"
+        },
+        "hotel_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "HOT-001"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Hospitality Hotel #1"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Ultra"
+        },
+        "city": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Hyderabad"
+        },
+        "state": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Telangana"
+        },
+        "price": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 84946.55
+        },
+        "rating": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 4.33
+        },
+        "active": {
+          "bson_type": "bool",
+          "nullable": false,
+          "sample_value": true
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-04-01T00:18:18.415000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "hotel_id_1",
+        "category_1",
+        "city_1"
+      ]
+    },
+    "rooms": {
+      "document_count": 167,
+      "field_count": 12,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab76116dfb51f695483eb5d"
+        },
+        "room_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "ROO-00001"
+        },
+        "guest_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "GUE-0039"
+        },
+        "entity_name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Meera Kulkarni"
+        },
+        "hotel_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "HOT-020"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Standard"
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "completed"
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 27156.05
+        },
+        "total": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 27156.05
+        },
+        "quantity": {
+          "bson_type": "int",
+          "nullable": false,
+          "sample_value": 9
+        },
+        "month": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "February"
+        },
+        "created_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-09-06T02:48:18.415000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "room_id_1",
+        "guest_id_1",
+        "hotel_id_1",
+        "status_1"
+      ]
+    },
+    "reservations": {
+      "document_count": 104,
+      "field_count": 9,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab76116dfb51f695483ec04"
+        },
+        "reservation_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "RES-0001"
+        },
+        "guest_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "GUE-0002"
+        },
+        "name": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Reservation Record #1"
+        },
+        "category": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Ultra"
+        },
+        "score": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 94.01
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 37253.84
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "verified"
+        },
+        "updated_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-06-05T06:46:18.415000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "reservation_id_1",
+        "guest_id_1",
+        "status_1"
+      ]
+    },
+    "concierge_services": {
+      "document_count": 113,
+      "field_count": 8,
+      "fields": {
+        "_id": {
+          "bson_type": "ObjectId",
+          "nullable": false,
+          "sample_value": "6ab76116dfb51f695483ec6c"
+        },
+        "concierge_service_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "CON-0001"
+        },
+        "hotel_id": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "HOT-011"
+        },
+        "title": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "Concierge Service #1"
+        },
+        "rating": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 4.82
+        },
+        "amount": {
+          "bson_type": "double",
+          "nullable": false,
+          "sample_value": 3768.49
+        },
+        "status": {
+          "bson_type": "string",
+          "nullable": false,
+          "sample_value": "processing"
+        },
+        "recorded_at": {
+          "bson_type": "date",
+          "nullable": false,
+          "sample_value": "2026-06-02T20:38:18.415000"
+        }
+      },
+      "indexes": [
+        "_id_1",
+        "concierge_service_id_1",
+        "hotel_id_1",
+        "status_1"
+      ]
+    }
+  }
+}

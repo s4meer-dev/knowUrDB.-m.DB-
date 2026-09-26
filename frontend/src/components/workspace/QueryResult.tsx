@@ -163,84 +163,113 @@ export const QueryResult: React.FC<QueryResultProps> = ({
         {isClarification ? (
           <div className="py-2 animate-in fade-in duration-200">
             <p className="text-zinc-200 text-[15px] leading-relaxed mb-6">
-              {result.error || summaryText || 'I found multiple collections in this dataset. Which collection would you like me to use?'}
+              {result.error || summaryText || 'I found multiple options. Which one would you like to use?'}
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-              {candidateCollections.map((c, idx) => {
-                const colKey = c.collection || c.name.toLowerCase();
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => onSelectCollection(colKey, c.source_id)}
-                    className="text-left bg-zinc-900/70 hover:bg-cyan-500/[0.08] border border-zinc-800/90 hover:border-cyan-500/40 rounded-xl p-4 transition-all duration-200 flex flex-col justify-between group focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="font-semibold text-zinc-100 group-hover:text-cyan-300 text-base tracking-tight capitalize transition-colors">
-                          {c.collection || c.name}
-                        </span>
-                        {c.document_count !== undefined && c.document_count !== null && (
-                          <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 shrink-0">
-                            {c.document_count.toLocaleString('en-IN')} docs
-                          </span>
-                        )}
-                      </div>
-                      {c.description && (
-                        <p className="text-xs text-zinc-400 line-clamp-2 mb-3 leading-relaxed">
-                          {c.description}
-                        </p>
-                      )}
-                    </div>
+            {(() => {
+              const clarType =
+                pres?.clarification_type ||
+                (candidateCollections[0] as any)?.clarification_type ||
+                'collection';
+              const actionLabel =
+                clarType === 'field'
+                  ? 'Select field'
+                  : clarType === 'dataset'
+                  ? 'Select dataset'
+                  : 'Select collection';
+              const tipText =
+                clarType === 'field'
+                  ? 'Tip: You can also specify the field directly (e.g., "by loan_amount").'
+                  : clarType === 'dataset'
+                  ? 'Tip: You can also choose the dataset from the Sources dropdown.'
+                  : 'Tip: You can also type the collection name directly above (e.g., "customers").';
 
-                    <div>
-                      {c.fields_preview && c.fields_preview.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-3">
-                          {c.fields_preview.slice(0, 5).map((f) => (
-                            <span
-                              key={f}
-                              className="text-[10px] font-mono bg-black/40 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400"
-                            >
-                              {f}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60 text-xs font-medium text-cyan-400/80 group-hover:text-cyan-300">
-                        <span>Select collection</span>
-                        <svg
-                          className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+              return (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {candidateCollections.map((c, idx) => {
+                      const colKey = c.collection || c.name.toLowerCase();
+                      const handleClick = () => {
+                        if (clarType === 'field') {
+                          onFollowUp(`${result.question} using ${c.name}`);
+                        } else {
+                          onSelectCollection(colKey, c.source_id);
+                        }
+                      };
+
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={handleClick}
+                          className="text-left bg-zinc-900/70 hover:bg-cyan-500/[0.08] border border-zinc-800/90 hover:border-cyan-500/40 rounded-xl p-4 transition-all duration-200 flex flex-col justify-between group focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                         >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                          <div>
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <span className="font-semibold text-zinc-100 group-hover:text-cyan-300 text-base tracking-tight capitalize transition-colors">
+                                {c.collection || c.name}
+                              </span>
+                              {c.document_count !== undefined && c.document_count !== null && (
+                                <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 shrink-0">
+                                  {c.document_count.toLocaleString('en-IN')} docs
+                                </span>
+                              )}
+                            </div>
+                            {c.description && (
+                              <p className="text-xs text-zinc-400 line-clamp-2 mb-3 leading-relaxed">
+                                {c.description}
+                              </p>
+                            )}
+                          </div>
 
-            {onBack && (
-              <div className="mt-6 pt-4 border-t border-zinc-800/60 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={onBack}
-                  className="inline-flex items-center gap-2 text-xs font-medium text-zinc-400 hover:text-zinc-200 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 px-3.5 py-2 rounded-lg transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Back
-                </button>
-                <span className="text-[11px] text-zinc-500">
-                  Tip: You can also type the collection name directly above (e.g., &ldquo;customers&rdquo;).
-                </span>
-              </div>
-            )}
+                          <div>
+                            {c.fields_preview && c.fields_preview.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-3">
+                                {c.fields_preview.slice(0, 5).map((f) => (
+                                  <span
+                                    key={f}
+                                    className="text-[10px] font-mono bg-black/40 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400"
+                                  >
+                                    {f}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60 text-xs font-medium text-cyan-400/80 group-hover:text-cyan-300">
+                              <span>{actionLabel}</span>
+                              <svg
+                                className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {onBack && (
+                    <div className="mt-6 pt-4 border-t border-zinc-800/60 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={onBack}
+                        className="inline-flex items-center gap-2 text-xs font-medium text-zinc-400 hover:text-zinc-200 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 px-3.5 py-2 rounded-lg transition-colors"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Back
+                      </button>
+                      <span className="text-[11px] text-zinc-500">{tipText}</span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         ) : result.status === 'error' ? (
           result.error_code === 'UNRELATED_QUERY' ? (
@@ -386,6 +415,75 @@ export const QueryResult: React.FC<QueryResultProps> = ({
                             {col.key_fields}
                           </div>
                         </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  result.rows.length > 0 && <ResultsTable columns={result.columns} rows={result.rows} />
+                )}
+              </div>
+            )}
+
+            {/* ==============================================================
+                MODE 2B: DATASET LIST (REGISTERED DATASETS)
+               ============================================================== */}
+            {uiType === 'dataset_list' && (
+              <div className="space-y-6">
+                {summaryText && (
+                  <p className="text-zinc-200 text-[15px] leading-relaxed">{summaryText}</p>
+                )}
+
+                {pres?.datasets_summary && pres.datasets_summary.length > 0 ? (
+                  <div>
+                    <h4 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-3">
+                      Registered Datasets ({pres.datasets_summary.length})
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                      {pres.datasets_summary.map((ds) => (
+                        <div
+                          key={ds.dataset}
+                          className="bg-zinc-900/70 border border-zinc-800 hover:border-cyan-500/40 rounded-xl p-4 transition-all duration-200 flex flex-col justify-between group"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <span className="font-semibold text-zinc-100 group-hover:text-cyan-300 text-base tracking-tight">
+                                {ds.dataset}
+                              </span>
+                              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                                {ds.domain}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-zinc-400 mb-3 font-mono">
+                              <span>
+                                {typeof ds.collections === 'number'
+                                  ? `${ds.collections} collections`
+                                  : 'Active Collections'}
+                              </span>
+                              <span>•</span>
+                              <span>{ds.documents.toLocaleString('en-IN')} docs</span>
+                            </div>
+                            {typeof ds.collections === 'string' && ds.collections && (
+                              <p className="text-xs text-zinc-500 font-mono line-clamp-2 mb-3">
+                                {ds.collections}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onFollowUp(
+                                `Tell me about ${ds.dataset}`,
+                                ds.source_id ? [ds.source_id] : undefined
+                              )
+                            }
+                            className="w-full flex items-center justify-center gap-1.5 pt-2.5 border-t border-zinc-800/80 text-xs font-medium text-cyan-400/90 hover:text-cyan-300 transition-colors"
+                          >
+                            <span>Explore Dataset</span>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>

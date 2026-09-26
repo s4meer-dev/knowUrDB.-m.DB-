@@ -401,6 +401,45 @@ class QueryPlannerEngine:
                         if cand in numeric_fields and cand not in matched_numeric:
                             matched_numeric.append(cand)
 
+        if not matched_numeric and len(numeric_fields) > 1:
+            is_vague_numeric = any(
+                p in effective_q_lower
+                for p in (
+                    "total value",
+                    "average value",
+                    "sum value",
+                    "highest value",
+                    "lowest value",
+                    "max value",
+                    "min value",
+                    "total amount",
+                    "average amount",
+                )
+            )
+            # Only trigger if 'amount' or 'value' isn't an actual field in the collection
+            if is_vague_numeric and "value" not in col_fields and "amount" not in col_fields:
+                field_candidates = [
+                    {
+                        "source_id": source_id or "",
+                        "name": nf,
+                        "collection": col_name,
+                        "description": f"Calculate on {nf.replace('_', ' ')}",
+                        "clarification_type": "field",
+                    }
+                    for nf in numeric_fields[:5]
+                ]
+                return QueryPlan(
+                    original_question=question,
+                    normalized_question=normalized,
+                    intent="CLARIFICATION",
+                    collection=col_name,
+                    collection_status="ambiguous_field",
+                    candidate_collections=field_candidates,
+                    clarification_message=f"In `{col_name}`, which field would you like to calculate: {', '.join(numeric_fields[:4])}?",
+                    clarification_options=field_candidates,
+                    presentation_type="clarification",
+                )
+
         primary_metric = (
             matched_numeric[0]
             if matched_numeric

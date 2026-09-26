@@ -61,6 +61,245 @@ class PresentationPlanner:
     """
 
     @staticmethod
+    def build_platform_dataset_count(
+        count: int, datasets: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        if count > 0:
+            names = ", ".join(d.get("display_name") or d.get("database_name") or "Dataset" for d in datasets)
+            summary = f"You currently have {count} registered datasets in KnowUrDB: {names}."
+        else:
+            summary = "There are currently 0 datasets registered in KnowUrDB. Click 'Generate Random MongoDB Demo Dataset' or upload a file to get started."
+
+        rows = [
+            {
+                "dataset": d.get("display_name") or d.get("database_name") or "Dataset",
+                "domain": d.get("domain") or "General",
+                "collections": len(d.get("collections", [])) if d.get("collections") else (d.get("collection_count") or 0),
+                "documents": d.get("document_count") or 0,
+            }
+            for d in datasets
+        ]
+
+        follow_ups = ["List all datasets"]
+        if datasets:
+            first_name = datasets[0].get("display_name") or "this dataset"
+            follow_ups.extend([
+                f"Tell me about {first_name}",
+                f"How many collections in {first_name}?",
+            ])
+
+        return {
+            "intent": "META_COUNT_DATASETS",
+            "presentation": {
+                "type": "kpi",
+                "title": "TOTAL DATASETS",
+                "subtitle": "KnowUrDB Platform Registry",
+                "summary": summary,
+                "primary_value": str(count),
+                "primary_unit": "datasets",
+                "datasets_summary": rows,
+                "show_technical_by_default": False,
+            },
+            "answer": {
+                "headline": "TOTAL DATASETS",
+                "value": str(count),
+                "unit": "datasets",
+                "summary": summary,
+            },
+            "columns": ["dataset", "domain", "collections", "documents"],
+            "rows": rows,
+            "insights": [
+                f"{r['dataset']} ({r['domain']}): {r['collections']} collections, {r['documents']:,} documents"
+                for r in rows
+            ],
+            "follow_ups": follow_ups,
+        }
+
+    @staticmethod
+    def build_dataset_list(datasets: list[dict[str, Any]]) -> dict[str, Any]:
+        count = len(datasets)
+        summary = f"Found {count} registered datasets in KnowUrDB."
+        rows = [
+            {
+                "dataset": d.get("display_name") or d.get("database_name") or "Dataset",
+                "domain": (d.get("domain") or "General").capitalize(),
+                "collections": ", ".join(d.get("collections", [])) if d.get("collections") else str(d.get("collection_count") or 0),
+                "collection_count": len(d.get("collections", [])) if d.get("collections") else (d.get("collection_count") or 0),
+                "documents": d.get("document_count") or 0,
+                "source_id": d.get("source_id") or d.get("dataset_id"),
+            }
+            for d in datasets
+        ]
+
+        follow_ups = [
+            f"Tell me about {d.get('display_name')}"
+            for d in datasets[:3]
+            if d.get("display_name")
+        ]
+
+        return {
+            "intent": "META_LIST_DATASETS",
+            "presentation": {
+                "type": "dataset_list",
+                "title": "Registered Datasets",
+                "subtitle": f"{count} datasets registered",
+                "summary": summary,
+                "primary_value": str(count),
+                "primary_unit": "datasets",
+                "datasets_summary": rows,
+                "show_technical_by_default": False,
+            },
+            "answer": {
+                "headline": "REGISTERED DATASETS",
+                "value": str(count),
+                "unit": "datasets",
+                "summary": summary,
+            },
+            "columns": ["dataset", "domain", "collections", "documents"],
+            "rows": rows,
+            "insights": [
+                f"{r['dataset']}: {r['collection_count']} collections ({r['collections']}), {r['documents']:,} documents"
+                for r in rows
+            ],
+            "follow_ups": follow_ups or ["How many datasets are there?"],
+        }
+
+    @staticmethod
+    def build_active_dataset_presentation(dataset: dict[str, Any] | None) -> dict[str, Any]:
+        if not dataset:
+            summary = "No dataset is currently active. You are viewing 'All Sources' or no sources are connected."
+            return {
+                "intent": "META_ACTIVE_DATASET",
+                "presentation": {
+                    "type": "kpi",
+                    "title": "Active Dataset",
+                    "subtitle": "Scope: All Sources",
+                    "summary": summary,
+                    "primary_value": "All Sources",
+                    "primary_unit": "active scope",
+                    "show_technical_by_default": False,
+                },
+                "answer": {
+                    "headline": "ACTIVE SCOPE",
+                    "value": "All Sources",
+                    "unit": "",
+                    "summary": summary,
+                },
+                "columns": [],
+                "rows": [],
+                "insights": [],
+                "follow_ups": ["List all datasets", "How many datasets are there?"],
+            }
+
+        name = dataset.get("display_name") or dataset.get("database_name") or "Dataset"
+        cols = dataset.get("collections", [])
+        total_docs = dataset.get("document_count", 0)
+        summary = f"The active dataset is '{name}' ({dataset.get('domain', 'general')}), with {len(cols)} collections ({', '.join(cols)}) and {total_docs:,} documents."
+        return {
+            "intent": "META_ACTIVE_DATASET",
+            "presentation": {
+                "type": "kpi",
+                "title": "Active Dataset",
+                "subtitle": name,
+                "summary": summary,
+                "primary_value": name,
+                "primary_unit": f"{len(cols)} collections",
+                "show_technical_by_default": False,
+            },
+            "answer": {
+                "headline": "ACTIVE DATASET",
+                "value": name,
+                "unit": f"({len(cols)} collections)",
+                "summary": summary,
+            },
+            "columns": ["collection"],
+            "rows": [{"collection": c} for c in cols],
+            "insights": [
+                f"Contains {len(cols)} collections: {', '.join(cols)}",
+                f"Total document count: {total_docs:,}",
+            ],
+            "follow_ups": [
+                f"Show me {cols[0]}" if cols else "Show data",
+                f"How many {cols[0]} are there?" if cols else "Count records",
+                "List all datasets",
+            ],
+        }
+
+    @staticmethod
+    def build_dataset_clarification(
+        candidate_datasets: list[dict[str, Any]], original_question: str
+    ) -> dict[str, Any]:
+        candidates = [
+            {
+                "source_id": d.get("source_id") or d.get("dataset_id"),
+                "name": d.get("display_name") or d.get("name"),
+                "collection": d.get("display_name") or d.get("name"),
+                "document_count": d.get("document_count", 0),
+                "field_count": len(d.get("collections", [])),
+                "fields_preview": d.get("collections", [])[:5],
+                "description": d.get("description") or f"Domain: {d.get('domain', 'General')}",
+                "clarification_type": "dataset",
+            }
+            for d in candidate_datasets
+        ]
+        msg = f"Multiple datasets could match '{original_question}'. Which dataset would you like to query?"
+        return {
+            "intent": "CLARIFICATION",
+            "presentation": {
+                "type": "clarification",
+                "clarification_type": "dataset",
+                "title": "NEED A LITTLE MORE CONTEXT",
+                "summary": msg,
+                "candidate_collections": candidates,
+            },
+            "answer": {
+                "headline": "SELECT DATASET",
+                "value": str(len(candidates)),
+                "unit": "candidates",
+                "summary": msg,
+            },
+            "candidates": candidates,
+            "error": msg,
+        }
+
+    @staticmethod
+    def build_field_clarification(
+        collection: str, candidate_fields: list[str], original_question: str, source_id: str | None = None
+    ) -> dict[str, Any]:
+        candidates = [
+            {
+                "source_id": source_id or "",
+                "name": f,
+                "collection": collection,
+                "document_count": None,
+                "field_count": None,
+                "fields_preview": [f],
+                "description": f"Calculate on field '{f}'",
+                "clarification_type": "field",
+            }
+            for f in candidate_fields
+        ]
+        msg = f"In `{collection}`, multiple numeric fields could match '{original_question}'. Which field would you like to calculate?"
+        return {
+            "intent": "CLARIFICATION",
+            "presentation": {
+                "type": "clarification",
+                "clarification_type": "field",
+                "title": "SELECT FIELD",
+                "summary": msg,
+                "candidate_collections": candidates,
+            },
+            "answer": {
+                "headline": "SELECT FIELD",
+                "value": str(len(candidates)),
+                "unit": "candidate fields",
+                "summary": msg,
+            },
+            "candidates": candidates,
+            "error": msg,
+        }
+
+    @staticmethod
     def build_dataset_overview(
         source_name: str, collections: list[dict[str, Any]]
     ) -> dict[str, Any]:

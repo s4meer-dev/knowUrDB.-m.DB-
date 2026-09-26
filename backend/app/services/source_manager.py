@@ -49,7 +49,14 @@ class SourceManager:
 
     def get_source(self, source_id: str) -> SourceMetadata | None:
         db = MongoDBManager.get_db()
-        doc = db[MongoDBManager.SYS_SOURCES].find_one({"source_id": source_id})
+        doc = db[MongoDBManager.SYS_SOURCES].find_one({
+            "$or": [
+                {"source_id": source_id},
+                {"dataset_id": source_id},
+                {"physical_database": source_id},
+                {"database_name": source_id},
+            ]
+        })
         if not doc:
             return None
         return SourceMetadata(**{k: v for k, v in doc.items() if k != "_id"})

@@ -1,0 +1,47 @@
+{
+  "dataset_id": "demo_banking_0cc3",
+  "database_name": "demo_banking_0cc3",
+  "display_name": "Commercial Banking Hub",
+  "source_type": "mongodb",
+  "domain": "banking",
+  "description": "Synthetic banking dataset containing clients, loan_accounts, credit_cards, wire_transfers, and risk_assessments.",
+  "status": "ready",
+  "generator_version": "2.0.0",
+  "template_version": "1.0",
+  "schema_version": "1.0",
+  "generation_id": "gen_1f86e0e1",
+  "seed": 202595505842157,
+  "created_at": "2026-09-26T06:07:22.530045+00:00",
+  "collection_count": 5,
+  "document_count": 546,
+  "index_count": 21,
+  "content_hash": "sha256:d1d5f26dd271e23de5359766",
+  "filesystem_path": "demo_datasets/demo_banking_0cc3",
+  "collections": [
+    {
+      "name": "clients",
+      "document_count": 106,
+      "file": "collections/clients.jsonl"
+    },
+    {
+      "name": "loan_accounts",
+      "document_count": 65,
+      "file": "collections/loan_accounts.jsonl"
+    },
+    {
+      "name": "credit_cards",
+      "document_count": 193,
+      "file": "collections/credit_cards.jsonl"
+    },
+    {
+      "name": "wire_transfers",
+      "document_count": 99,
+      "file": "collections/wire_transfers.jsonl"
+    },
+    {
+      "name": "risk_assessments",
+      "document_count": 83,
+      "file": "collections/risk_assessments.jsonl"
+    }
+  ]
+}

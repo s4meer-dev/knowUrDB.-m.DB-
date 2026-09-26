@@ -153,6 +153,11 @@ export const Workspace: React.FC = () => {
   const handleSelectCollection = (collectionName: string, sourceId?: string) => {
     const baseQuestion =
       conversationContext.pending_question || result?.question || question;
+    if (sourceId && selectedSourceId === 'all') {
+      setSelectedSourceId(sourceId);
+      localStorage.setItem('knowurdb_active_source_id', sourceId);
+      activateSource(sourceId).catch(() => {});
+    }
     const srcIds = sourceId
       ? [sourceId]
       : selectedSourceId === 'all'

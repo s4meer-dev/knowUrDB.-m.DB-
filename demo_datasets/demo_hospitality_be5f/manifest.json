@@ -1,0 +1,47 @@
+{
+  "dataset_id": "demo_hospitality_be5f",
+  "database_name": "demo_hospitality_be5f",
+  "display_name": "Hospitality & Resort Management",
+  "source_type": "mongodb",
+  "domain": "hospitality",
+  "description": "Synthetic hospitality dataset containing guests, hotels, rooms, reservations, and concierge_services.",
+  "status": "ready",
+  "generator_version": "2.0.0",
+  "template_version": "1.0",
+  "schema_version": "1.0",
+  "generation_id": "gen_0c076638",
+  "seed": 199535808406105,
+  "created_at": "2026-09-26T06:07:18.410936+00:00",
+  "collection_count": 5,
+  "document_count": 535,
+  "index_count": 21,
+  "content_hash": "sha256:4d8536cbb77e37ff854f5ec5",
+  "filesystem_path": "demo_datasets/demo_hospitality_be5f",
+  "collections": [
+    {
+      "name": "guests",
+      "document_count": 84,
+      "file": "collections/guests.jsonl"
+    },
+    {
+      "name": "hotels",
+      "document_count": 67,
+      "file": "collections/hotels.jsonl"
+    },
+    {
+      "name": "rooms",
+      "document_count": 167,
+      "file": "collections/rooms.jsonl"
+    },
+    {
+      "name": "reservations",
+      "document_count": 104,
+      "file": "collections/reservations.jsonl"
+    },
+    {
+      "name": "concierge_services",
+      "document_count": 113,
+      "file": "collections/concierge_services.jsonl"
+    }
+  ]
+}

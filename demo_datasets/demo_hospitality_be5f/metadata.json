@@ -1,0 +1,26 @@
+{
+  "dataset_name": "Hospitality & Resort Management",
+  "database_name": "demo_hospitality_be5f",
+  "domain": "hospitality",
+  "description": "Synthetic hospitality dataset containing guests, hotels, rooms, reservations, and concierge_services.",
+  "synthetic": true,
+  "source_type": "MongoDB",
+  "filesystem_path": "demo_datasets/demo_hospitality_be5f",
+  "collections": [
+    "guests",
+    "hotels",
+    "rooms",
+    "reservations",
+    "concierge_services"
+  ],
+  "document_counts": {
+    "guests": 84,
+    "hotels": 67,
+    "rooms": 167,
+    "reservations": 104,
+    "concierge_services": 113
+  },
+  "total_documents": 535,
+  "generated_at": "2026-09-26T06:07:18.410936+00:00",
+  "generator_version": "2.0.0"
+}

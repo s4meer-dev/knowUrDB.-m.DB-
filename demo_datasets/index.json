@@ -2,32 +2,56 @@
   "schema_version": "1.0",
   "generator_version": "2.0.0",
   "dataset_root": "demo_datasets",
-  "updated_at": "2026-09-25T08:54:00.831990+00:00",
-  "dataset_count": 2,
+  "updated_at": "2026-09-26T06:51:57.781444+00:00",
+  "dataset_count": 4,
   "datasets": [
     {
-      "dataset_id": "demo_realestate_1c2a",
-      "database_name": "demo_realestate_1c2a",
-      "display_name": "Real Estate Portfolio",
-      "domain": "realestate",
+      "dataset_id": "demo_banking_0cc3",
+      "database_name": "demo_banking_0cc3",
+      "display_name": "Commercial Banking Hub",
+      "domain": "banking",
       "status": "ready",
       "collection_count": 5,
-      "document_count": 508,
-      "filesystem_path": "demo_datasets/demo_realestate_1c2a",
-      "created_at": "2026-09-25T08:53:01.421738+00:00",
-      "content_hash": "sha256:c2e3ce9ac2d467caead2bafd"
+      "document_count": 546,
+      "filesystem_path": "demo_datasets/demo_banking_0cc3",
+      "created_at": "2026-09-26T06:07:22.530045+00:00",
+      "content_hash": "sha256:d1d5f26dd271e23de5359766"
     },
     {
-      "dataset_id": "demo_retail_6cd8",
-      "database_name": "demo_retail_6cd8",
+      "dataset_id": "demo_database",
+      "database_name": "demo_database",
+      "display_name": "Enterprise & Campus Intelligence",
+      "domain": "enterprise",
+      "status": "ready",
+      "collection_count": 5,
+      "document_count": 342,
+      "filesystem_path": "demo_datasets/demo_database",
+      "created_at": "2026-09-26T06:51:42.370681+00:00",
+      "content_hash": "sha256:654bea7909e008fdd6fd827b"
+    },
+    {
+      "dataset_id": "demo_hospitality_be5f",
+      "database_name": "demo_hospitality_be5f",
+      "display_name": "Hospitality & Resort Management",
+      "domain": "hospitality",
+      "status": "ready",
+      "collection_count": 5,
+      "document_count": 535,
+      "filesystem_path": "demo_datasets/demo_hospitality_be5f",
+      "created_at": "2026-09-26T06:07:18.410936+00:00",
+      "content_hash": "sha256:4d8536cbb77e37ff854f5ec5"
+    },
+    {
+      "dataset_id": "demo_retail_3790",
+      "database_name": "demo_retail_3790",
       "display_name": "Omnichannel Retail Operations",
       "domain": "retail",
       "status": "ready",
       "collection_count": 5,
-      "document_count": 550,
-      "filesystem_path": "demo_datasets/demo_retail_6cd8",
-      "created_at": "2026-09-25T08:53:04.306959+00:00",
-      "content_hash": "sha256:4e5b05b5ea9a55c3d880f191"
+      "document_count": 571,
+      "filesystem_path": "demo_datasets/demo_retail_3790",
+      "created_at": "2026-09-26T06:03:57.299623+00:00",
+      "content_hash": "sha256:7f89c6b0ec44c1a6a4a895c3"
     }
   ]
 }

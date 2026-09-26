@@ -23,8 +23,8 @@ def test_dataset_overview(client: TestClient):
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "success"
-        assert data["intent"] in ("DATASET_OVERVIEW", "COLLECTION_OVERVIEW")
-        assert data["presentation"]["type"] == "dataset_overview"
+        assert data["intent"] in ("DATASET_OVERVIEW", "COLLECTION_OVERVIEW", "META_COUNT_COLLECTIONS")
+        assert data["presentation"]["type"] in ("dataset_overview", "kpi")
         assert data["row_count"] == 5
         assert "collections" in data["answer"]["summary"].lower()
 
