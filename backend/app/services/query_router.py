@@ -72,6 +72,17 @@ class QueryRouter:
                 or (len(explicit_source_ids) == 1 and explicit_source_ids[0] in ("all", "all_sources"))
             )
 
+        if active_collection and not explicit_source_ids:
+            # Auto-resolve unique source containing active_collection
+            matching_sources = [
+                s for s in all_sources
+                if active_collection.lower() in [c.lower() for c in (s.collections or [])]
+            ]
+            if len(matching_sources) == 1:
+                explicit_source_ids = [matching_sources[0].source_id]
+                sources = matching_sources
+                is_all_sources = False
+
         if explicit_source_ids:
             sources = [
                 s

@@ -5,6 +5,7 @@ from typing import Any
 
 from app.services.schema_service import MongoSchemaService
 from app.services.source_manager import SourceManager
+from app.services.semantic_filter_extractor import SemanticFilterExtractor
 
 COLLECTION_DESCRIPTIONS: dict[str, str] = {
     "products": "Product catalog with pricing, categories, stock levels, ratings, and units sold",
@@ -255,18 +256,42 @@ class CollectionResolver:
         q_clean = re.sub(r"[^\w\s]", " ", q_lower).strip()
         q_words = set(q_clean.split())
 
-        candidate_cards = [
-            {
-                "source_id": catalog["dataset"]["source_id"],
-                "collection": c["name"],
-                "name": c["display_name"],
-                "document_count": c["document_count"],
-                "field_count": c["field_count"],
-                "fields_preview": c["fields_preview"],
-                "description": c["description"],
-            }
-            for c in collections
-        ]
+        # Check if question specifies a filter field (e.g. status)
+        extracted_filters = SemanticFilterExtractor.extract_filters(q_raw)
+        filter_req_field = extracted_filters[0].raw_field if extracted_filters else None
+
+        candidate_cards = []
+        for c in collections:
+            col_col_names = {f["name"].lower() for f in c.get("columns", [])}
+            col_col_names.update(f["name"].split(".")[-1].lower() for f in c.get("columns", []))
+            has_filter_field = (filter_req_field.lower() in col_col_names) if filter_req_field else None
+            filter_status = f"{filter_req_field} ✓" if has_filter_field is True else (f"{filter_req_field} ✕" if has_filter_field is False else None)
+
+            desc = c["description"]
+            if has_filter_field is True:
+                desc = f"Contains '{filter_req_field}' field • {desc}"
+            elif has_filter_field is False:
+                desc = f"No '{filter_req_field}' field • {desc}"
+
+            candidate_cards.append(
+                {
+                    "source_id": catalog["dataset"]["source_id"],
+                    "collection": c["name"],
+                    "name": c["display_name"],
+                    "document_count": c["document_count"],
+                    "field_count": c["field_count"],
+                    "fields_preview": c["fields_preview"],
+                    "description": desc,
+                    "has_filter_field": has_filter_field,
+                    "filter_field_status": filter_status,
+                }
+            )
+
+        if filter_req_field:
+            candidate_cards.sort(
+                key=lambda card: (card.get("has_filter_field") is True, card.get("document_count", 0)),
+                reverse=True,
+            )
 
         col_by_name = {c["name"].lower(): c for c in collections}
 

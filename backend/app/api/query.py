@@ -776,6 +776,43 @@ async def query_database(request: NaturalLanguageQueryRequest):
             confidence=plan.confidence,
         )
 
+    # 5D-0. FIELD_NOT_AVAILABLE (e.g. asking status on restaurants collection where status does not exist)
+    if plan.intent == "FIELD_NOT_AVAILABLE":
+        payload = PresentationPlanner.build_field_unavailable_presentation(
+            collection_name=plan.collection or "collection",
+            missing_field=plan.missing_filter_field or "filter field",
+            available_fields=plan.available_fields,
+            candidate_collections=plan.candidate_collections,
+        )
+        return NaturalLanguageQueryResponse(
+            question=request.question,
+            intent="FIELD_NOT_AVAILABLE",
+            collection=plan.collection,
+            query_plan=asdict(plan),
+            presentation=payload["presentation"],
+            status="clarification_required",
+            error=payload["answer"]["summary"],
+            error_code="FIELD_NOT_AVAILABLE",
+            candidates=[
+                ClarificationCandidate(
+                    source_id=opt.get("source_id") or source_metadata.source_id,
+                    name=opt.get("name") or opt.get("collection", ""),
+                    collection=opt.get("collection"),
+                    document_count=opt.get("document_count"),
+                    field_count=opt.get("field_count"),
+                    fields_preview=opt.get("fields_preview", []),
+                    description=opt.get("description"),
+                )
+                for opt in plan.candidate_collections
+            ],
+            answer=AnswerModel(**payload["answer"]),
+            insights=payload.get("insights", []),
+            follow_up_suggestions=payload.get("follow_ups", []),
+            query_source="intent_filter",
+            scope=request.scope,
+            confidence=plan.confidence,
+        )
+
     # 5D-1. METRIC_UNAVAILABLE (e.g. asking revenue on students collection)
     if plan.intent == "METRIC_UNAVAILABLE":
         payload = PresentationPlanner.build_metric_unavailable_presentation(
@@ -858,6 +895,17 @@ async def query_database(request: NaturalLanguageQueryRequest):
     try:
         structured_query = mongo_query_service.planner.compile_to_mongo_query(plan)
         structured_query = MongoQueryValidator.validate_against_db(structured_query)
+
+        # 6A. Pre-execution Filter Guard - Enforce Filter Preservation Invariant
+        pre_filter_val = ResultValidator.validate_pre_execution_filter(plan, structured_query)
+        if not pre_filter_val.is_valid:
+            return NaturalLanguageQueryResponse(
+                question=request.question,
+                intent="ERROR",
+                status="error",
+                error=pre_filter_val.user_explanation,
+                error_code=pre_filter_val.rejection_code or "FILTER_PRESERVATION_VIOLATION",
+            )
     except MongoQuerySafetyError as exc:
         error_msg = "The generated query was rejected because it did not meet MongoDB safety requirements."
         history_service.log_query(
@@ -938,6 +986,66 @@ Return ONLY raw JSON (no markdown backticks). Never use $out, $merge, or $where.
 
     try:
         columns, rows, exec_time = query_executor.execute(structured_query)
+
+        # 7-0. Post-Execution Filter Integrity Gatekeeper - Assert zero data leakage
+        post_filter_val = ResultValidator.validate_post_execution_filter(plan, rows)
+        if not post_filter_val.is_valid:
+            return NaturalLanguageQueryResponse(
+                question=request.question,
+                intent="ERROR",
+                status="error",
+                error=post_filter_val.user_explanation,
+                error_code=post_filter_val.rejection_code or "RESULT_FILTER_INTEGRITY_ERROR",
+                query_source="result_validator",
+            )
+
+        # 7-1. Zero-Match Filter Handling: Field exists in schema, but no documents match requested value
+        if len(rows) == 0 and plan.filters:
+            filtered_field = next(iter(plan.filters.keys())).split(".")[0]
+            db = MongoDBManager.get_source_db(source_metadata.source_id)
+            try:
+                distinct_vals = [
+                    v for v in db[structured_query["collection"]].distinct(filtered_field)
+                    if v is not None
+                ][:10]
+            except Exception:
+                distinct_vals = []
+
+            req_val = ""
+            if plan.requested_filters:
+                req_val = plan.requested_filters[0].get("value", "")
+
+            no_match_payload = PresentationPlanner.build_no_matches_presentation(
+                collection_name=structured_query["collection"],
+                filter_descriptions=plan.filter_descriptions,
+                field_name=filtered_field,
+                requested_value=req_val,
+                available_values=distinct_vals,
+                candidate_collections=plan.candidate_collections,
+            )
+            return NaturalLanguageQueryResponse(
+                question=request.question,
+                intent="NO_MATCHING_RECORDS",
+                collection=structured_query["collection"],
+                query_plan=asdict(plan),
+                presentation=no_match_payload["presentation"],
+                generated_mongo_query=formatted_pipeline,
+                structured_query=structured_query,
+                generated_sql=formatted_pipeline,
+                columns=no_match_payload["columns"],
+                rows=no_match_payload["rows"],
+                row_count=0,
+                execution_time_ms=round(exec_time, 2),
+                status="success",
+                query_source=query_source,
+                answer=AnswerModel(**no_match_payload["answer"]),
+                insights=no_match_payload.get("insights", []),
+                follow_up_suggestions=no_match_payload.get("follow_ups", []),
+                sources=citations,
+                scope=request.scope,
+                confidence=plan.confidence,
+            )
+
         planned_ui = PresentationPlanner.plan_presentation(plan, rows, columns, collections)
 
         # 7A. Result Validation Layer - Validate integrity of metric before returning

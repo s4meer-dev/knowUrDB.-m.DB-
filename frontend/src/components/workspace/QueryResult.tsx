@@ -94,9 +94,23 @@ export const QueryResult: React.FC<QueryResultProps> = ({
   const pres = result.presentation;
   const uiType =
     pres?.type || (result.row_count === 1 && result.columns.length === 1 ? 'kpi' : 'table');
-  const isClarification = result.status === 'clarification_required' || uiType === 'clarification';
+  const isFieldUnavailable =
+    result.intent === 'FIELD_NOT_AVAILABLE' ||
+    result.error_code === 'FIELD_NOT_AVAILABLE' ||
+    uiType === 'field_unavailable';
+  const isNoMatches =
+    result.intent === 'NO_MATCHING_RECORDS' ||
+    uiType === 'no_matches';
+  const isClarification =
+    (result.status === 'clarification_required' || uiType === 'clarification') &&
+    !isFieldUnavailable &&
+    !isNoMatches;
   const headerTitle = isClarification
     ? 'NEED A LITTLE MORE CONTEXT'
+    : isFieldUnavailable
+    ? 'FIELD NOT AVAILABLE'
+    : isNoMatches
+    ? 'NO MATCHING RECORDS'
     : pres?.title || result.answer?.headline || 'Results';
   const summaryText = pres?.summary || result.answer?.summary || '';
   const candidateCollections: ClarificationCandidate[] =
@@ -139,7 +153,7 @@ export const QueryResult: React.FC<QueryResultProps> = ({
             <span className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-500/25">
               {result.collection}
             </span>
-            {candidateCollections.length > 1 && onChangeCollection && (
+            {onChangeCollection && (
               <button
                 type="button"
                 onClick={onChangeCollection}
@@ -206,9 +220,22 @@ export const QueryResult: React.FC<QueryResultProps> = ({
                         >
                           <div>
                             <div className="flex items-center justify-between gap-2 mb-2">
-                              <span className="font-semibold text-zinc-100 group-hover:text-cyan-300 text-base tracking-tight capitalize transition-colors">
-                                {c.collection || c.name}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-zinc-100 group-hover:text-cyan-300 text-base tracking-tight capitalize transition-colors">
+                                  {c.collection || c.name}
+                                </span>
+                                {c.filter_field_status && (
+                                  <span
+                                    className={`text-[10px] font-mono font-medium px-1.5 py-0.5 rounded border ${
+                                      c.has_filter_field !== false
+                                        ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                                        : 'bg-zinc-800/80 text-zinc-400 border-zinc-700/60'
+                                    }`}
+                                  >
+                                    {c.filter_field_status}
+                                  </span>
+                                )}
+                              </div>
                               {c.document_count !== undefined && c.document_count !== null && (
                                 <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 shrink-0">
                                   {c.document_count.toLocaleString('en-IN')} docs
@@ -270,6 +297,272 @@ export const QueryResult: React.FC<QueryResultProps> = ({
                 </>
               );
             })()}
+          </div>
+        ) : isFieldUnavailable ? (
+          <div className="py-2 animate-in fade-in duration-200 space-y-6">
+            <div className="bg-amber-500/[0.06] border border-amber-500/30 rounded-2xl p-6 sm:p-7 relative overflow-hidden">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                  <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-lg font-semibold text-zinc-100 mb-1.5 flex items-center gap-2">
+                    Field Not Available
+                    {pres?.missing_field && (
+                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                        {pres.missing_field}
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-zinc-300 text-sm leading-relaxed">
+                    {summaryText || result.error || `The '${result.collection}' collection does not contain a '${pres?.missing_field || 'requested'}' field.`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Available Fields in Current Collection */}
+              {pres?.available_fields && pres.available_fields.length > 0 && (
+                <div className="mt-5 pt-5 border-t border-amber-500/20">
+                  <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2.5">
+                    Available fields in {result.collection || 'this collection'} ({pres.available_fields.length}):
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {pres.available_fields.map((fld) => (
+                      <span
+                        key={fld}
+                        className="text-xs font-mono bg-black/50 border border-zinc-800 px-2.5 py-1 rounded-md text-zinc-300 hover:border-cyan-500/30 transition-colors"
+                      >
+                        {fld}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Candidate Collections that DO have this field */}
+            {candidateCollections.length > 0 && (
+              <div>
+                <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">
+                  Collections containing '{pres?.missing_field || 'this field'}'
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {candidateCollections.map((c, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => onSelectCollection(c.collection || c.name.toLowerCase(), c.source_id)}
+                      className="text-left bg-zinc-900/70 hover:bg-cyan-500/[0.08] border border-zinc-800 hover:border-cyan-500/40 rounded-xl p-4 transition-all duration-200 flex flex-col justify-between group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="font-semibold text-zinc-100 group-hover:text-cyan-300 text-base tracking-tight capitalize transition-colors">
+                            {c.collection || c.name}
+                          </span>
+                          {c.filter_field_status && (
+                            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+                              {c.filter_field_status}
+                            </span>
+                          )}
+                        </div>
+                        {c.document_count !== undefined && c.document_count !== null && (
+                          <div className="text-xs font-mono text-zinc-400 mb-2">
+                            {c.document_count.toLocaleString('en-IN')} documents
+                          </div>
+                        )}
+                        {c.description && (
+                          <p className="text-xs text-zinc-400 line-clamp-2 mb-3 leading-relaxed">
+                            {c.description}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60 text-xs font-medium text-cyan-400 group-hover:text-cyan-300">
+                        <span>Select this collection</span>
+                        <svg className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex flex-wrap items-center gap-3">
+              {onBack && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="inline-flex items-center gap-2 text-xs font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-4 py-2 rounded-lg transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
+                </button>
+              )}
+              {onChangeCollection && (
+                <button
+                  type="button"
+                  onClick={onChangeCollection}
+                  className="text-xs bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/80 px-4 py-2 rounded-lg transition-colors"
+                >
+                  Choose Another Collection
+                </button>
+              )}
+              {result.collection && (
+                <button
+                  type="button"
+                  onClick={() => onFollowUp(`Show all ${result.collection}`)}
+                  className="text-xs bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 px-4 py-2 rounded-lg transition-colors"
+                >
+                  Show All {result.collection} (Unfiltered)
+                </button>
+              )}
+            </div>
+          </div>
+        ) : isNoMatches ? (
+          <div className="py-2 animate-in fade-in duration-200 space-y-6">
+            <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-6 sm:p-7 relative overflow-hidden">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-lg font-semibold text-zinc-100 mb-1.5 flex items-center gap-2">
+                    0 Matching Records
+                    {pres?.field && pres?.requested_value && (
+                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                        {pres.field} = '{pres.requested_value}'
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-zinc-300 text-sm leading-relaxed">
+                    {summaryText || `No records in '${result.collection}' match your filter.`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Available Distinct Values */}
+              {pres?.available_values && pres.available_values.length > 0 && (
+                <div className="mt-5 pt-5 border-t border-zinc-800/80">
+                  <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2.5">
+                    Available {pres.field || 'distinct'} values in {result.collection || 'collection'}:
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {pres.available_values.map((val) => (
+                      <button
+                        key={String(val)}
+                        type="button"
+                        onClick={() =>
+                          onFollowUp(
+                            `Show all ${result.collection} where ${pres.field || 'status'} is ${val}`,
+                            undefined,
+                            result.collection
+                          )
+                        }
+                        className="inline-flex items-center gap-1.5 text-xs font-mono bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-3 py-1.5 rounded-lg transition-all group"
+                      >
+                        <span>'{String(val)}'</span>
+                        <svg className="w-3 h-3 text-cyan-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-zinc-500 mt-2">
+                    Click any value above to filter records by that value.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Candidate Collections */}
+            {candidateCollections.length > 0 && (
+              <div>
+                <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">
+                  Other collections you can check
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {candidateCollections.map((c, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => onSelectCollection(c.collection || c.name.toLowerCase(), c.source_id)}
+                      className="text-left bg-zinc-900/70 hover:bg-cyan-500/[0.08] border border-zinc-800 hover:border-cyan-500/40 rounded-xl p-4 transition-all duration-200 flex flex-col justify-between group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="font-semibold text-zinc-100 group-hover:text-cyan-300 text-base tracking-tight capitalize transition-colors">
+                            {c.collection || c.name}
+                          </span>
+                          {c.filter_field_status && (
+                            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+                              {c.filter_field_status}
+                            </span>
+                          )}
+                        </div>
+                        {c.document_count !== undefined && c.document_count !== null && (
+                          <div className="text-xs font-mono text-zinc-400 mb-2">
+                            {c.document_count.toLocaleString('en-IN')} documents
+                          </div>
+                        )}
+                        {c.description && (
+                          <p className="text-xs text-zinc-400 line-clamp-2 mb-3 leading-relaxed">
+                            {c.description}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60 text-xs font-medium text-cyan-400 group-hover:text-cyan-300">
+                        <span>Select this collection</span>
+                        <svg className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex flex-wrap items-center gap-3">
+              {onBack && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="inline-flex items-center gap-2 text-xs font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-4 py-2 rounded-lg transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
+                </button>
+              )}
+              {onChangeCollection && (
+                <button
+                  type="button"
+                  onClick={onChangeCollection}
+                  className="text-xs bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/80 px-4 py-2 rounded-lg transition-colors"
+                >
+                  Change Collection
+                </button>
+              )}
+              {result.collection && (
+                <button
+                  type="button"
+                  onClick={() => onFollowUp(`Show all ${result.collection}`)}
+                  className="text-xs bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 px-4 py-2 rounded-lg transition-colors"
+                >
+                  Show All {result.collection}
+                </button>
+              )}
+            </div>
           </div>
         ) : result.status === 'error' ? (
           result.error_code === 'UNRELATED_QUERY' ? (

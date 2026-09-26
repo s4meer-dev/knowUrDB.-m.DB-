@@ -41,6 +41,8 @@ export interface ClarificationCandidate {
   fields_preview?: string[];
   description?: string;
   clarification_type?: 'dataset' | 'collection' | 'field' | string;
+  has_filter_field?: boolean;
+  filter_field_status?: string;
 }
 
 export interface PresentationContract {
@@ -57,6 +59,8 @@ export interface PresentationContract {
     | 'schema'
     | 'document_answer'
     | 'clarification'
+    | 'field_unavailable'
+    | 'no_matches'
     | 'empty'
     | 'error';
   clarification_type?: 'dataset' | 'collection' | 'field' | string;
@@ -69,6 +73,11 @@ export interface PresentationContract {
   highlight_record?: Record<string, any>;
   candidate_collections?: ClarificationCandidate[];
   multi_collection_sources?: string[];
+  missing_field?: string;
+  available_fields?: string[];
+  field?: string;
+  requested_value?: string;
+  available_values?: string[];
   datasets_summary?: Array<{
     dataset: string;
     domain: string;

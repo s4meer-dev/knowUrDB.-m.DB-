@@ -75,3 +75,133 @@ class ResultValidator:
             is_valid=True,
             reason="Result satisfies semantic criteria and scope.",
         )
+
+    @classmethod
+    def validate_pre_execution_filter(
+        cls,
+        plan: Any,
+        structured_query: dict[str, Any],
+    ) -> ValidationOutcome:
+        """
+        Guarantees the Filter Preservation Invariant before any query touches MongoDB.
+        If the user requested filters, the compiled MongoDB query MUST include a $match stage.
+        """
+        if getattr(plan, "filters", None):
+            pipeline = structured_query.get("pipeline", [])
+            has_match = any("$match" in stage for stage in pipeline)
+            if not has_match:
+                return ValidationOutcome(
+                    is_valid=False,
+                    reason="Filter preservation invariant violated: compiled query has no $match stage.",
+                    rejection_code="FILTER_PRESERVATION_VIOLATION",
+                    user_explanation="The query engine attempted to execute an unfiltered query despite user filter criteria.",
+                )
+        return ValidationOutcome(is_valid=True, reason="Pre-execution filter validation passed.")
+
+    @classmethod
+    def validate_post_execution_filter(
+        cls,
+        plan: Any,
+        rows: list[dict[str, Any]],
+    ) -> ValidationOutcome:
+        """
+        Guarantees Zero Data Leakage after MongoDB returns documents.
+        Asserts that every returned document strictly matches the user's requested filter.
+        """
+        requested_filters = getattr(plan, "requested_filters", [])
+        intent = getattr(plan, "intent", "")
+        if intent in ("COUNT", "SUM", "AVERAGE", "MINIMUM", "MAXIMUM", "AGGREGATION") or getattr(plan, "operation", "") == "count":
+            return ValidationOutcome(is_valid=True, reason="Aggregation totals do not contain raw document fields.")
+
+        if not rows or not requested_filters:
+            return ValidationOutcome(is_valid=True, reason="No rows or no filters to validate.")
+
+        for rf in requested_filters:
+            field_name = rf.get("field")
+            op = rf.get("operator", "eq")
+            expected_val = rf.get("value")
+
+            if not field_name:
+                continue
+
+            for doc in rows:
+                # Handle nested dot path (e.g. address.city)
+                val = doc
+                for part in field_name.split("."):
+                    if isinstance(val, dict):
+                        val = val.get(part)
+                    else:
+                        val = None
+                        break
+
+                if op == "eq":
+                    if isinstance(expected_val, str):
+                        if str(val).strip().lower() != expected_val.strip().lower():
+                            return ValidationOutcome(
+                                is_valid=False,
+                                reason=f"Row leaked data: document has {field_name}='{val}', expected '{expected_val}'.",
+                                rejection_code="RESULT_FILTER_INTEGRITY_ERROR",
+                                user_explanation=f"A document with {field_name}='{val}' was returned, which violates the filter {field_name}='{expected_val}'.",
+                            )
+                    elif expected_val is not None:
+                        try:
+                            if float(val) != float(expected_val):
+                                return ValidationOutcome(
+                                    is_valid=False,
+                                    reason=f"Row leaked data: document has {field_name}={val}, expected {expected_val}.",
+                                    rejection_code="RESULT_FILTER_INTEGRITY_ERROR",
+                                    user_explanation=f"A document violates the filter {field_name}={expected_val}.",
+                                )
+                        except (ValueError, TypeError):
+                            if val != expected_val:
+                                return ValidationOutcome(
+                                    is_valid=False,
+                                    reason=f"Row leaked data: document has {field_name}={val}, expected {expected_val}.",
+                                    rejection_code="RESULT_FILTER_INTEGRITY_ERROR",
+                                    user_explanation=f"A document violates the filter {field_name}={expected_val}.",
+                                )
+                elif op == "ne":
+                    if isinstance(expected_val, str):
+                        if str(val).strip().lower() == expected_val.strip().lower():
+                            return ValidationOutcome(
+                                is_valid=False,
+                                reason=f"Row leaked negated data: document has {field_name}='{val}', expected != '{expected_val}'.",
+                                rejection_code="RESULT_FILTER_INTEGRITY_ERROR",
+                                user_explanation=f"A document with {field_name}='{val}' was returned, violating the negated filter.",
+                            )
+                elif op == "gt":
+                    if val is not None:
+                        try:
+                            if float(val) <= float(expected_val):
+                                return ValidationOutcome(
+                                    is_valid=False,
+                                    reason=f"Row leaked data: document has {field_name}={val} <= {expected_val}.",
+                                    rejection_code="RESULT_FILTER_INTEGRITY_ERROR",
+                                    user_explanation=f"A document with {field_name}={val} was returned, which is not > {expected_val}.",
+                                )
+                        except (ValueError, TypeError):
+                            pass
+                elif op == "lt":
+                    if val is not None:
+                        try:
+                            if float(val) >= float(expected_val):
+                                return ValidationOutcome(
+                                    is_valid=False,
+                                    reason=f"Row leaked data: document has {field_name}={val} >= {expected_val}.",
+                                    rejection_code="RESULT_FILTER_INTEGRITY_ERROR",
+                                    user_explanation=f"A document with {field_name}={val} was returned, which is not < {expected_val}.",
+                                )
+                        except (ValueError, TypeError):
+                            pass
+                elif op == "in":
+                    if isinstance(expected_val, list):
+                        exp_low = [str(x).lower() for x in expected_val]
+                        if str(val).strip().lower() not in exp_low:
+                            return ValidationOutcome(
+                                is_valid=False,
+                                reason=f"Row leaked data: {val} not in {expected_val}.",
+                                rejection_code="RESULT_FILTER_INTEGRITY_ERROR",
+                                user_explanation=f"A document with {field_name}='{val}' was returned, not in {expected_val}.",
+                            )
+
+        return ValidationOutcome(is_valid=True, reason="All documents satisfy the filter criteria.")

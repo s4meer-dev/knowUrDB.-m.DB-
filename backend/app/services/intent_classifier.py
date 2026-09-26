@@ -8,6 +8,7 @@ from app.services.dataset_intelligence import (
     DatasetIntelligenceService,
 )
 from app.services.semantic_field_registry import SemanticConcept, SemanticFieldRegistry
+from app.services.semantic_filter_extractor import SemanticFilterExtractor, StructuredFilter
 
 CANONICAL_INTENTS = {
     "DATASET_OVERVIEW",
@@ -38,6 +39,8 @@ CANONICAL_INTENTS = {
     "CLARIFICATION",
     "METRIC_UNAVAILABLE",
     "METRIC_ALTERNATIVE",
+    "FIELD_NOT_AVAILABLE",
+    "NO_MATCHING_RECORDS",
     "SCOPE_CONTEXT",
     "UNRELATED",
 }
@@ -125,9 +128,9 @@ SEMANTIC_FIELD_SYNONYMS: dict[str, list[str]] = {
 
 @dataclass
 class QueryPlan:
-    original_question: str
-    normalized_question: str
-    intent: str
+    original_question: str = ""
+    normalized_question: str = ""
+    intent: str = "FILTER"
     confidence: float = 0.95
     source_id: str | None = None
     source_name: str | None = None
@@ -150,6 +153,9 @@ class QueryPlan:
     clarification_options: list[dict[str, Any]] = field(default_factory=list)
     requested_concept: str | None = None
     explanation: str | None = None
+    requested_filters: list[dict[str, Any]] = field(default_factory=list)
+    missing_filter_field: str | None = None
+    available_fields: list[str] = field(default_factory=list)
 
 
 class QuestionNormalizer:
@@ -557,9 +563,10 @@ class QueryPlannerEngine:
             if "month" in col_fields:
                 group_field = "month"
 
-        # 5. Build Filter Conditions ($match)
+        # 5. Build Filter Conditions ($match) with SemanticFilterExtractor
         filters: dict[str, Any] = {}
         filter_descriptions: list[str] = []
+        requested_filters: list[dict[str, Any]] = []
 
         if (
             not res.is_collection_switch
@@ -574,114 +581,74 @@ class QueryPlannerEngine:
                 if isinstance(prev_filters, dict) and prev_filters:
                     filters.update(prev_filters)
 
-        q_no_top = re.sub(r"\b(?:top|bottom|first|last|limit)\s+\d+", "", effective_q_lower)
-        q_no_top_clean = q_no_top.replace(",", "").replace("₹", "").replace("$", "")
-
-        m_lakh = re.search(r"(\d+(?:\.\d+)?)\s*lakh", q_no_top_clean)
-        threshold_val: float | None = None
-        if m_lakh:
-            threshold_val = float(m_lakh.group(1)) * 100000.0
-        else:
-            m_k = re.search(r"(\d+(?:\.\d+)?)\s*k\b", q_no_top_clean)
-            if m_k:
-                threshold_val = float(m_k.group(1)) * 1000.0
-            else:
-                m_num = re.search(
-                    r"(?:above|over|more than|greater than|exceeding|at least|>=|>|below|under|less than|fewer than|<=|<|=)\s*(\d+(?:\.\d+)?)",
-                    q_no_top_clean,
-                )
-                if m_num:
-                    threshold_val = float(m_num.group(1))
-
-        if threshold_val is not None and primary_metric:
-            disp_val = (
-                f"{int(threshold_val):,}"
-                if threshold_val.is_integer()
-                else f"{threshold_val:,.2f}"
+        # 5A. Extract Natural Language Filters & Validate Against Target Collection Schema
+        extracted_filters = SemanticFilterExtractor.extract_filters(normalized)
+        for ef in extracted_filters:
+            target_f, mongo_cond, desc = SemanticFilterExtractor.resolve_filter_to_collection(
+                ef, col_columns, primary_numeric_field=primary_metric
             )
-            if any(
-                w in q_no_top
-                for w in ("above", "over", "more than", "greater than", "exceeding", ">")
-            ):
-                filters[primary_metric] = {"$gt": threshold_val}
-                filter_descriptions.append(f"{primary_metric} > {disp_val}")
-            elif any(w in q_no_top for w in ("below", "under", "less than", "fewer than", "<")):
-                filters[primary_metric] = {"$lt": threshold_val}
-                filter_descriptions.append(f"{primary_metric} < {disp_val}")
-            elif "at least" in q_no_top or ">=" in q_no_top:
-                filters[primary_metric] = {"$gte": threshold_val}
-                filter_descriptions.append(f"{primary_metric} >= {disp_val}")
+            if target_f is None:
+                # FAIL-CLOSED: Field does not exist in target collection!
+                missing_name = desc or ef.raw_field
+                col_field_names = [c["name"] for c in col_columns]
+                return QueryPlan(
+                    original_question=question,
+                    normalized_question=normalized,
+                    intent="FIELD_NOT_AVAILABLE",
+                    confidence=0.98,
+                    source_id=source_id,
+                    source_name=source_name,
+                    collection=col_name,
+                    candidate_collections=res.candidates,
+                    missing_filter_field=missing_name,
+                    available_fields=col_field_names,
+                    clarification_message=f"The `{col_name}` collection does not contain a `{missing_name}` field, so I couldn't apply your requested filter.",
+                    explanation=f"The `{col_name}` collection does not contain a `{missing_name}` field, so I couldn't apply your requested filter.",
+                    presentation_type="field_unavailable",
+                )
             else:
-                filters[primary_metric] = threshold_val
-                filter_descriptions.append(f"{primary_metric} = {disp_val}")
-        elif "low stock" in effective_q_lower and "stock" in col_fields:
-            filters["stock"] = {"$lt": 25}
-            filter_descriptions.append("stock < 25")
+                filters.update(mongo_cond)
+                if desc and desc not in filter_descriptions:
+                    filter_descriptions.append(desc)
+                requested_filters.append(
+                    {
+                        "field": target_f,
+                        "operator": ef.operator,
+                        "value": ef.value,
+                        "description": desc,
+                        "raw_field": ef.raw_field,
+                    }
+                )
 
-        city_synonyms = {
-            "bangalore": ["Bangalore", "Bengaluru"],
-            "bengaluru": ["Bangalore", "Bengaluru"],
-            "mumbai": ["Mumbai", "Bombay"],
-            "bombay": ["Mumbai", "Bombay"],
-            "chennai": ["Chennai", "Madras"],
-            "kolkata": ["Kolkata", "Calcutta"],
-        }
-        for city_key, city_vals in city_synonyms.items():
-            if re.search(rf"\b{re.escape(city_key)}\b", effective_q_lower):
-                if "city" in col_fields:
-                    filters["city"] = {"$in": city_vals}
-                    filter_descriptions.append(f"city = '{city_vals[0]}'")
-                elif "address.city" in col_fields:
-                    filters["address.city"] = {"$in": city_vals}
-                    filter_descriptions.append(f"city = '{city_vals[0]}'")
-                break
-
+        # 5B. Auxiliary Fallback: Schema sample values if no filter for that field was extracted
         for col_info in col_columns:
             fname = col_info["name"]
             if (
                 fname in numeric_fields
                 or fname == "_id"
-                or (
-                    fname in ("city", "address.city")
-                    and ("city" in filters or "address.city" in filters)
-                )
+                or fname == "month"
+                or (fname in ("city", "address.city") and ("city" in filters or "address.city" in filters))
+                or fname in filters
             ):
                 continue
             for sv in col_info.get("sample_values", []) or []:
                 sv_str = str(sv).strip()
                 if len(sv_str) >= 3 and re.search(rf"\b{re.escape(sv_str.lower())}\b", effective_q_lower):
                     clean_path = fname.replace("[].", ".")
-                    filters[clean_path] = sv_str
-                    filter_descriptions.append(f"{clean_path.split('.')[-1]} = '{sv_str}'")
+                    if clean_path not in filters:
+                        filters[clean_path] = sv_str
+                        f_desc = f"{clean_path.split('.')[-1]} = '{sv_str}'"
+                        filter_descriptions.append(f_desc)
+                        requested_filters.append(
+                            {
+                                "field": clean_path,
+                                "operator": "eq",
+                                "value": sv_str,
+                                "description": f_desc,
+                                "raw_field": clean_path,
+                            }
+                        )
                     break
-
-        if (
-            ("city" in col_fields or "address.city" in col_fields)
-            and "city" not in filters
-            and "address.city" not in filters
-        ):
-            m_city = re.search(r"\b(?:from|in)\s+([a-zA-Z]+)\b", effective_q_lower)
-            if m_city:
-                city_cand = m_city.group(1).capitalize()
-                if city_cand.lower() not in {
-                    "the",
-                    "this",
-                    "collection",
-                    "database",
-                    "dataset",
-                    "january",
-                    "february",
-                    "march",
-                    "orders",
-                    "products",
-                    "customers",
-                }:
-                    target_city_field = "city" if "city" in col_fields else "address.city"
-                    filters[target_city_field] = {
-                        "$regex": f"^{re.escape(city_cand)}$",
-                        "$options": "i",
-                    }
-                    filter_descriptions.append(f"city = '{city_cand}'")
 
         months_mentioned = [
             m.capitalize()
@@ -701,11 +668,20 @@ class QueryPlannerEngine:
             )
             if re.search(rf"\b{m}\b", effective_q_lower)
         ]
-        if months_mentioned and "month" in col_fields:
-            filters["month"] = (
-                {"$in": months_mentioned} if len(months_mentioned) > 1 else months_mentioned[0]
+        if months_mentioned and "month" in col_fields and "month" not in filters:
+            m_val = months_mentioned if len(months_mentioned) > 1 else months_mentioned[0]
+            filters["month"] = {"$in": months_mentioned} if len(months_mentioned) > 1 else months_mentioned[0]
+            m_desc = f"month in {months_mentioned}"
+            filter_descriptions.append(m_desc)
+            requested_filters.append(
+                {
+                    "field": "month",
+                    "operator": "in" if len(months_mentioned) > 1 else "eq",
+                    "value": m_val,
+                    "description": m_desc,
+                    "raw_field": "month",
+                }
             )
-            filter_descriptions.append(f"month in {months_mentioned}")
 
         # 6. Determine Exact Intent
         if (
@@ -726,6 +702,7 @@ class QueryPlannerEngine:
                 candidate_collections=res.candidates,
                 filters=filters,
                 filter_descriptions=filter_descriptions,
+                requested_filters=requested_filters,
                 limit=10,
                 operation="aggregate",
                 aggregation_op="count",
@@ -751,6 +728,7 @@ class QueryPlannerEngine:
                 metric_field=sort_f,
                 filters=filters,
                 filter_descriptions=filter_descriptions,
+                requested_filters=requested_filters,
                 sort={sort_f: 1 if is_bottom else -1},
                 limit=n_val,
                 operation="aggregate",
@@ -790,6 +768,7 @@ class QueryPlannerEngine:
                 metric_field=primary_metric,
                 filters=filters,
                 filter_descriptions=filter_descriptions,
+                requested_filters=requested_filters,
                 sort={primary_metric: sort_dir},
                 limit=1,
                 operation="aggregate",
@@ -813,6 +792,7 @@ class QueryPlannerEngine:
                 group_field=group_field,
                 filters=filters,
                 filter_descriptions=filter_descriptions,
+                requested_filters=requested_filters,
                 limit=25,
                 operation="aggregate",
                 presentation_type="comparison",
@@ -860,6 +840,7 @@ class QueryPlannerEngine:
                 or ("month" if is_trend and "month" in col_fields else None),
                 filters=filters,
                 filter_descriptions=filter_descriptions,
+                requested_filters=requested_filters,
                 limit=50,
                 operation="aggregate",
                 aggregation_op=agg_op,
@@ -883,6 +864,7 @@ class QueryPlannerEngine:
                 group_field=dist_field,
                 filters=filters,
                 filter_descriptions=filter_descriptions,
+                requested_filters=requested_filters,
                 limit=50,
                 operation="aggregate",
                 presentation_type="table",
@@ -912,6 +894,7 @@ class QueryPlannerEngine:
                 metric_field=sort_f,
                 filters=filters,
                 filter_descriptions=filter_descriptions,
+                requested_filters=requested_filters,
                 sort={sort_f: sort_dir},
                 limit=50,
                 operation="aggregate",
@@ -932,6 +915,7 @@ class QueryPlannerEngine:
                 metric_field=primary_metric,
                 filters=filters,
                 filter_descriptions=filter_descriptions,
+                requested_filters=requested_filters,
                 sort=None,
                 limit=50,
                 operation="aggregate",
@@ -951,6 +935,7 @@ class QueryPlannerEngine:
             metric_field=None,
             filters={},
             filter_descriptions=[],
+            requested_filters=[],
             sort=None,
             limit=50,
             operation="aggregate",
@@ -961,6 +946,8 @@ class QueryPlannerEngine:
         """Compiles a structured QueryPlan into an executable MongoDB aggregation dictionary."""
         if not plan.collection:
             raise ValueError("QueryPlan has no target collection.")
+        if plan.intent == "FIELD_NOT_AVAILABLE":
+            raise ValueError("Cannot compile MongoDB query for FIELD_NOT_AVAILABLE intent.")
 
         # Multi-Collection $lookup query (e.g. "which customers placed the most orders?")
         if plan.intent == "MULTI_COLLECTION":
@@ -1175,6 +1162,9 @@ class QueryPlannerEngine:
             proj[clean_f] = 1
         if len(proj) > 1:
             pipeline.append({"$project": proj})
+
+        if plan.filters and not any("$match" in stage for stage in pipeline):
+            raise ValueError("Filter preservation invariant violated: compiled pipeline is missing $match stage!")
 
         return {
             "collection": plan.collection,

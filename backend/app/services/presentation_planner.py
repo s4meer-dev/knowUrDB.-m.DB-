@@ -267,6 +267,100 @@ class PresentationPlanner:
         }
 
     @staticmethod
+    def build_field_unavailable_presentation(
+        collection_name: str,
+        missing_field: str,
+        available_fields: list[str],
+        candidate_collections: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        clean_fields = [f for f in available_fields if f != "_id" and not f.endswith("_id")]
+        summary = (
+            f"The `{collection_name}` collection does not contain a `{missing_field}` field, "
+            f"so I couldn't apply your requested filter."
+        )
+        return {
+            "intent": "FIELD_NOT_AVAILABLE",
+            "presentation": {
+                "type": "field_unavailable",
+                "title": "FIELD NOT AVAILABLE",
+                "subtitle": f"Collection: {collection_name}",
+                "summary": summary,
+                "missing_field": missing_field,
+                "available_fields": clean_fields[:15],
+                "candidate_collections": candidate_collections or [],
+                "show_technical_by_default": False,
+            },
+            "answer": {
+                "headline": "FIELD NOT AVAILABLE",
+                "value": f"No '{missing_field}' field",
+                "unit": f"in {collection_name}",
+                "summary": summary,
+            },
+            "columns": ["field_name"],
+            "rows": [{"field_name": f} for f in clean_fields[:15]],
+            "insights": [
+                f"Collection `{collection_name}` contains {len(available_fields)} fields: {', '.join(clean_fields[:8])}.",
+                f"Filter on `{missing_field}` cannot be evaluated against `{collection_name}`.",
+            ],
+            "follow_ups": [
+                f"Show schema of {collection_name}",
+                f"Show all {collection_name}",
+                "Choose another collection",
+            ],
+        }
+
+    @staticmethod
+    def build_no_matches_presentation(
+        collection_name: str,
+        filter_descriptions: list[str],
+        field_name: str,
+        requested_value: Any,
+        available_values: list[Any],
+        candidate_collections: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        col_disp = collection_name.replace("_", " ")
+        if available_values:
+            vals_str = ", ".join(f"'{v}'" for v in available_values[:8])
+            summary = (
+                f"No {col_disp} have {field_name} = '{requested_value}'. "
+                f"Available {field_name} values in `{collection_name}` are: {vals_str}."
+            )
+        else:
+            summary = f"No documents in `{collection_name}` match ({', '.join(filter_descriptions)})."
+
+        return {
+            "intent": "NO_MATCHING_RECORDS",
+            "presentation": {
+                "type": "no_matches",
+                "title": "NO MATCHING RECORDS",
+                "subtitle": f"Collection: {collection_name}",
+                "summary": summary,
+                "field": field_name,
+                "requested_value": str(requested_value),
+                "available_values": available_values[:10],
+                "candidate_collections": candidate_collections or [],
+                "show_technical_by_default": False,
+            },
+            "answer": {
+                "headline": "NO MATCHING RECORDS",
+                "value": "0",
+                "unit": f"matching {col_disp}",
+                "summary": summary,
+            },
+            "columns": [field_name],
+            "rows": [],
+            "insights": [
+                f"Searched collection `{collection_name}` with filter: {', '.join(filter_descriptions)}.",
+                f"Total matching documents: 0.",
+            ],
+            "follow_ups": [
+                f"Show all {collection_name}",
+                f"Show {available_values[0]} {collection_name}" if available_values else f"Count {collection_name}",
+                "Choose another collection",
+            ],
+        }
+
+    @staticmethod
     def build_dataset_list(datasets: list[dict[str, Any]]) -> dict[str, Any]:
         count = len(datasets)
         summary = f"Found {count} registered datasets in KnowUrDB."
@@ -663,8 +757,8 @@ class PresentationPlanner:
 
         # 2. LIST_RECORDS / SEARCH / FILTER / SORT -> Clean Table (NEVER 'Top Result by Price'!)
         if plan.intent in ("LIST_RECORDS", "SEARCH", "FILTER", "SORT", "DISTINCT_VALUES"):
-            if plan.intent == "FILTER" and plan.filter_descriptions:
-                title = f"Filtered {col_display.title()}"
+            if (plan.intent == "FILTER" or plan.filter_descriptions) and plan.filter_descriptions:
+                title = f"{row_count} MATCHING {col_display.upper()}" if row_count > 0 else f"Filtered {col_display.title()}"
                 summary = f"Showing {row_count:,} matching {col_display} ({', '.join(plan.filter_descriptions)})."
             elif plan.intent == "SORT" and plan.metric_field:
                 title = f"{col_display.title()} Sorted by {plan.metric_field.replace('_', ' ').title()}"
